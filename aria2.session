@@ -1,0 +1,35 @@
+magnet:?xt=urn:btih:D76608F3A23CD901815B106D2B3A020413D019EE&dn=ICARUS%3A+Complete+the+Set+Bundle+%28v2.3.20.145714+%2B+18+DLCs%2C+MULTi10%29+%5BFitGirl+Repack%2C+Selective+Download+-+from+23+GB%5D&tr=udp%3A%2F%2Fopentor.net%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce&tr=udp%3A%2F%2Ftracker.torrent.eu.org%3A451%2Fannounce&tr=udp%3A%2F%2Ftracker.qu.ax%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.fnix.net%3A6969%2Fannounce&tr=udp%3A%2F%2Fevan.im%3A6969%2Fannounce&tr=udp%3A%2F%2Fmartin-gebhardt.eu%3A25%2Fannounce&tr=https%3A%2F%2Fshahidrazi.online%3A443%2Fannounce&tr=http%3A%2F%2Fwegkxfcivgx.ydns.eu%3A80%2Fannounce&tr=http%3A%2F%2Flucke.fenesisu.moe%3A6969%2Fannounce&tr=udp%3A%2F%2Fextracker.dahrkael.net%3A6969%2Fannounce&tr=https%3A%2F%2Ftracker.alaskantf.com%3A443%2Fannounce&tr=https%3A%2F%2Ftracker.qingwa.pro%3A443%2Fannounce&tr=udp%3A%2F%2Ftracker.playground.ru%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce&tr=http%3A%2F%2Ftracker.openbittorrent.com%3A80%2Fannounce&tr=udp%3A%2F%2Fopentracker.i2p.rocks%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.internetwarriors.net%3A1337%2Fannounce&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969%2Fannounce&tr=udp%3A%2F%2Fcoppersurfer.tk%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.zer0day.to%3A1337%2Fannounce
+ gid=e262ba2e3a76ec33
+ connect-timeout=5
+ max-tries=5
+ dir=C:\Users\diego\Downloads
+ out=ICARUS_ Complete the Set Bundle, v2.3.20.145714 + 18 DLCs
+ file-allocation=none
+ allow-overwrite=true
+ check-integrity=false
+ continue=true
+ auto-file-renaming=false
+ allow-piece-length-change=true
+ reuse-uri=true
+ max-resume-failure-tries=10
+ max-connection-per-server=16
+ min-split-size=1048576
+ retry-wait=1
+ force-save=true
+ user-agent=qBittorrent/4.5.0
+ use-head=false
+ max-upload-limit=0
+ seed-time=0
+ enable-peer-exchange=true
+ bt-request-peer-speed-limit=1
+ bt-seed-unverified=true
+ bt-hash-check-seed=false
+ bt-max-peers=0
+ bt-tracker-interval=15
+ bt-prioritize-piece=head=16M,tail=16M
+ bt-save-metadata=true
+ bt-metadata-only=false
+ bt-enable-lpd=true
+ bt-tracker-connect-timeout=3
+ bt-tracker=udp://tracker.opentrackr.org:1337/announce,udp://open.stealth.si:80/announce,udp://tracker.torrent.eu.org:451/announce,udp://exodus.desync.com:6969/announce,udp://tracker.moeking.me:6969/announce,udp://tracker.openbittorrent.com:6969/announce,udp://opentracker.i2p.rocks:6969/announce,udp://tracker.internetwarriors.net:1337/announce,udp://explodie.org:6969/announce,udp://tracker.cyberia.is:6969/announce,udp://tracker.birkenwald.de:6969/announce,udp://tracker.tiny-vps.com:6969/announce,udp://retracker.lanta-net.ru:2710/announce,udp://ipv4.tracker.harry.lu:80/announce,udp://tracker.theoks.net:6969/announce,udp://tracker.ccp.ovh:6969/announce,udp://bt1.archive.org:6969/announce,udp://bt2.archive.org:6969/announce,udp://tracker.filemail.com:6969/announce,udp://tracker1.bt.moack.co.kr:80/announce,udp://9.rarbg.com:2810/announce,udp://tracker.uw0.xyz:6969/announce,udp://tracker.dler.org:6969/announce,udp://tracker.lelux.fi:6969/announce,udp://movies.zsw.ca:6969/announce,udp://tracker1.myporn.club:9337/announce,udp://open.tracker.cl:1337/announce,udp://tracker.dump.cl:6969/announce,udp://tracker.auctor.tv:6969/announce,udp://tracker.srv00.com:6969/announce,udp://tracker.doko.moe:6969/announce,udp://tracker.qu.ax:6969/announce,udp://tracker.swateam.org.uk:2710/announce
+ bt-load-saved-metadata=true

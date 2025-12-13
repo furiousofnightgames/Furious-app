@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+httpx[http2]
+httpcore
+sqlmodel
+sqlalchemy
+aiofiles
+python-multipart

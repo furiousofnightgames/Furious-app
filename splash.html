@@ -1,0 +1,82 @@
+<style>
+  body {
+    background-color: #050505;
+    color: #fff;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    overflow: hidden;
+  }
+  .logo-container {
+    position: relative;
+    margin-bottom: 40px;
+    animation: pulse 3s infinite ease-in-out;
+  }
+  .logo-text {
+    font-size: 3.5rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    background: linear-gradient(135deg, #06b6d4, #d946ef);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 20px rgba(6, 182, 212, 0.5));
+  }
+  .logo-sub {
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 8px;
+    color: #64748b;
+    text-align: center;
+    margin-top: -10px;
+  }
+  .loader-container {
+    width: 300px;
+    height: 6px;
+    background: #1e293b;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+  }
+  .loader-bar {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #06b6d4, #d946ef);
+    border-radius: 3px;
+    box-shadow: 0 0 20px rgba(217, 70, 239, 0.5);
+    transition: width 0.4s ease-out;
+  }
+  .status-text {
+    margin-top: 15px;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    min-height: 20px;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.02); filter: brightness(1.2); }
+  }
+</style>
+<div class="logo-container">
+  <div class="logo-text">FURIOUS APP</div>
+  <div class="logo-sub">SYSTEM LOADING</div>
+</div>
+<div class="loader-container">
+  <div class="loader-bar" id="bar"></div>
+</div>
+<div class="status-text" id="status">Initializing system cores...</div>
+<script>
+  const { ipcRenderer } = require('electron');
+  const bar = document.getElementById('bar');
+  const status = document.getElementById('status');
+  
+  ipcRenderer.on('progress', (event, { percent, text }) => {
+    bar.style.width = percent + '%';
+    if(text) status.innerText = text;
+  });
+</script>

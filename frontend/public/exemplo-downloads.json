@@ -1,0 +1,46 @@
+{
+  "items": [
+    {
+      "name": "Ubuntu 22.04 Desktop ISO",
+      "url": "https://releases.ubuntu.com/22.04.1/ubuntu-22.04.1-desktop-amd64.iso",
+      "size": 4282384384,
+      "category": "Linux",
+      "image": "https://assets.ubuntu.com/v1/4f6efc30-ubuntu-logo.png"
+    },
+    {
+      "name": "Visual Studio Code",
+      "url": "https://code.visualstudio.com/download",
+      "size": 107520000,
+      "category": "Software",
+      "image": "https://code.visualstudio.com/favicon.ico"
+    },
+    {
+      "name": "Node.js LTS",
+      "url": "https://nodejs.org/dist/v20.0.0/node-v20.0.0-x64.msi",
+      "size": 157286400,
+      "category": "Runtime",
+      "icon": "https://nodejs.org/static/images/logo.svg"
+    },
+    {
+      "name": "Python 3.11",
+      "url": "https://www.python.org/ftp/python/3.11.4/python-3.11.4-amd64.exe",
+      "size": 104857600,
+      "category": "Runtime",
+      "image": "https://www.python.org/community/logos/python-logo.png"
+    },
+    {
+      "name": "Git for Windows",
+      "url": "https://github.com/git-for-windows/git/releases/download/v2.41.0.windows.1/Git-2.41.0-64-bit.exe",
+      "size": 62914560,
+      "category": "VCS",
+      "icon": "https://git-scm.com/favicon.ico"
+    },
+    {
+      "name": "Docker Desktop",
+      "url": "https://docs.docker.com/desktop/install/windows-install/",
+      "size": 524288000,
+      "category": "Containers",
+      "image": "https://www.docker.com/favicon.ico"
+    }
+  ]
+}

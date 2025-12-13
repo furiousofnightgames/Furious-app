@@ -1,0 +1,76 @@
+{
+  "name": "aplicacao-pessoal-json",
+  "version": "1.0.0",
+  "description": "Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.",
+  "main": "electron-main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:electron\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:electron": "wait-on http://localhost:5173 && electron .",
+    "build": "npm run build:frontend && npm run build:electron",
+    "build:frontend": "cd frontend && npm run build",
+    "build:electron": "electron-builder",
+    "build:installer": "npm run build:frontend && electron-builder --win nsis",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.furiousofnight.json",
+    "productName": "Furious App",
+    "asar": false,
+    "files": [
+      "electron-main.js",
+      "electron-preload.js",
+      "splash.html",
+      "frontend/dist/**/*",
+      "backend/**/*",
+      "engine/**/*",
+      "launcher/images/**/*",
+      "!portables/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "portables",
+        "to": "portables",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "dir",
+      "icon": "launcher/images/icone.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Furious App",
+      "installerIcon": "launcher/images/icone.ico",
+      "uninstallerIcon": "launcher/images/icone.ico",
+      "installerHeaderIcon": "launcher/images/icone.ico",
+      "deleteAppDataOnUninstall": true,
+      "displayLanguageSelector": true,
+      "runAfterFinish": true
+    },
+    "directories": {
+      "buildResources": "launcher/images",
+      "output": "launcher"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "electron-is-dev": "^3.0.1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "wait-on": "^7.2.0"
+  }
+}
