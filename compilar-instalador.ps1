@@ -62,9 +62,10 @@ try {
         Write-Header ">> SUCESSO!"
         Write-Host "[OK] Instalador criado com sucesso!" -ForegroundColor Green
         
-        if (Test-Path "launcher\Furious App Setup 2.0.0.exe") {
-            $installerSize = [math]::Round((Get-Item "launcher\Furious App Setup 2.0.0.exe").Length / 1MB, 2)
-            Write-Host "   Arquivo: launcher\Furious App Setup 2.0.0.exe" -ForegroundColor White
+        $installerExe = "launcher\Furious App Setup.exe"
+        if (Test-Path $installerExe) {
+            $installerSize = [math]::Round((Get-Item $installerExe).Length / 1MB, 2)
+            Write-Host "   Arquivo: $installerExe" -ForegroundColor White
             Write-Host "   Tamanho: $installerSize MB" -ForegroundColor White
         }
     } else {

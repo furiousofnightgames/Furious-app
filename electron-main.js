@@ -15,6 +15,79 @@ let backendReady = false;
 // Custom isDev detection (app.isPackaged is false in development)
 const isDev = !app.isPackaged;
 
+const ensureDirSync = (dirPath) => {
+  try {
+    fs.mkdirSync(dirPath, { recursive: true });
+  } catch (e) {
+  }
+};
+
+const safeRmSync = (p) => {
+  try {
+    if (fs.existsSync(p)) {
+      fs.rmSync(p, { recursive: true, force: true });
+    }
+  } catch (e) {
+  }
+};
+
+const dirSizeSync = (p) => {
+  try {
+    let total = 0;
+    const stack = [p];
+    while (stack.length) {
+      const cur = stack.pop();
+      let entries;
+      try {
+        entries = fs.readdirSync(cur, { withFileTypes: true });
+      } catch (e) {
+        continue;
+      }
+      for (const ent of entries) {
+        const full = path.join(cur, ent.name);
+        if (ent.isDirectory()) {
+          stack.push(full);
+        } else {
+          try {
+            total += fs.statSync(full).size;
+          } catch (e) {
+          }
+        }
+      }
+    }
+    return total;
+  } catch (e) {
+    return 0;
+  }
+};
+
+const configureAppDataPaths = () => {
+  try {
+    const roamingRoot = app.getPath('appData');
+    const localRoot = app.getPath('localAppData');
+
+    const desiredUserData = path.join(roamingRoot, 'furious-app');
+    const desiredCache = path.join(localRoot, 'furious-app', 'Cache');
+
+    ensureDirSync(desiredUserData);
+    ensureDirSync(desiredCache);
+
+    app.setPath('userData', desiredUserData);
+    app.setPath('cache', desiredCache);
+
+    const maxCacheMb = Number(process.env.ELECTRON_CACHE_MAX_MB || 250);
+    const maxBytes = Math.max(50, maxCacheMb) * 1024 * 1024;
+    const cacheSize = dirSizeSync(desiredCache);
+    if (cacheSize > maxBytes) {
+      safeRmSync(desiredCache);
+      ensureDirSync(desiredCache);
+    }
+  } catch (e) {
+  }
+};
+
+configureAppDataPaths();
+
 console.log('='.repeat(60));
 console.log('FURIOUS APP - STARTUP');
 console.log('='.repeat(60));
@@ -22,6 +95,8 @@ console.log('Mode:', isDev ? 'DEVELOPMENT' : 'PRODUCTION');
 console.log('__dirname:', __dirname);
 console.log('process.resourcesPath:', process.resourcesPath);
 console.log('app.getAppPath():', app.getAppPath());
+console.log('app.getPath(userData):', app.getPath('userData'));
+console.log('app.getPath(cache):', app.getPath('cache'));
 
 // Get correct base path for production vs development
 const getBasePath = () => {
@@ -32,11 +107,17 @@ const getBasePath = () => {
   return app.getAppPath();
 };
 
-const ensureDirSync = (dirPath) => {
-  try {
-    fs.mkdirSync(dirPath, { recursive: true });
-  } catch (e) {
+const getBackendBasePath = () => {
+  if (isDev) {
+    return __dirname;
   }
+
+  const appPath = app.getAppPath();
+  if (typeof appPath === 'string' && appPath.endsWith('app.asar')) {
+    return `${appPath}.unpacked`;
+  }
+
+  return appPath;
 };
 
 const moveFileIfMissingSync = (src, dst) => {
@@ -158,7 +239,8 @@ function startPythonBackend() {
     }
 
     const basePath = getBasePath();
-    const backendPath = path.join(basePath, 'backend');
+    const backendBasePath = getBackendBasePath();
+    const backendPath = path.join(backendBasePath, 'backend');
     const dataRoot = isDev ? basePath : app.getPath('userData');
     const logsDir = path.join(dataRoot, 'logs');
     const logPath = path.join(logsDir, 'backend.log');
@@ -175,7 +257,7 @@ function startPythonBackend() {
 
     console.log('Python executable:', PYTHON_EXECUTABLE);
     console.log('Backend path:', backendPath);
-    console.log('Working directory:', basePath);
+    console.log('Working directory:', backendBasePath);
     console.log('Log file:', logPath);
 
     // Create log file stream (overwrite on each session)
@@ -193,11 +275,12 @@ function startPythonBackend() {
       : path.join(process.resourcesPath, 'portables', 'aria2-1.37.0', 'aria2c.exe');
 
     let options = {
-      cwd: basePath, // Use base path as working directory
+      cwd: backendBasePath, // Use unpacked base path as working directory when packaged
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true, // Hide console window
       env: {
         ...process.env,
+        PYTHONIOENCODING: 'utf-8',
         ARIA2C_PATH: ARIA2_PATH,
         APP_DATA_DIR: dataRoot,
         DB_PATH: path.join(dataRoot, 'data.db'),

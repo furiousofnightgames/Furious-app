@@ -1,15 +1,17 @@
-# 🚀 Furious App - Acelerador de Downloads Profissional v1.0.0
+# 🚀 Furious App - Acelerador de Downloads Profissional
 
 Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.
 
-**Versão 1.0.0 estável disponível!** - Com suporte completo a Windows e interface otimizada.
+**Versão estável disponível!** - Com suporte completo a Windows e interface otimizada.
 
-## 🆕 Novidades na Versão 1.0.0
+## 🆕 Novidades
 - ✅ Nova tela de inicialização holográfica com tema cyberpunk
 - ✅ Corrigidos problemas de codificação de caracteres
 - ✅ Melhorias de estabilidade e performance
 - ✅ Interface otimizada para melhor experiência do usuário
 - ✅ Corrigidos problemas críticos de comunicação entre frontend e backend
+- ✅ Favoritos: ⭐ nos cards e na tela de detalhes + remoção rápida no drawer
+- ✅ IDs de itens estáveis (favoritos continuam marcados após reiniciar servidor)
 
 ---
 
@@ -17,7 +19,7 @@ Sistema completo de gerenciamento de downloads com interface web moderna. Suport
 
 ### 📦 Portabilidade Total
 - ✅ **Instalador automático** (.EXE com um clique)
-- ✅ **100% independente**: Python 3.10.5, Node.js 18.16.1 e aria2 1.37.0 inclusos
+- ✅ **100% independente**: Python portátil e aria2 inclusos (sem depender de instalações no sistema)
 - ✅ **Sem dependências externas**: Funciona offline após instalação
 - ✅ **Desinstalação segura**: Remove apenas a aplicação, preserva downloads
 
@@ -50,6 +52,9 @@ Sistema completo de gerenciamento de downloads com interface web moderna. Suport
 - Cache em disco para persistência
 - Invalidação automática
 
+Observação:
+- O cache grande (ex.: `Cache/Cache_Data`) é do Electron/Chromium e fica em `%LOCALAPPDATA%\furious-app\Cache`.
+
 ## ♿ Acessibilidade
 
 ### 🎨 Interface
@@ -67,14 +72,13 @@ Sistema completo de gerenciamento de downloads com interface web moderna. Suport
 ```
 📦 aplicacao-pessoal-json
 ├── 📁 backend/             # API FastAPI
-├── 📁 docs/               # Documentação
+├── 📁 docs/               # Documentação (opcional)
 ├── 📁 engine/             # Motor de downloads
 ├── 📁 frontend/           # Aplicação Vue.js
 ├── 📁 launcher/           # Tela de inicialização
 ├── 📁 node_modules/       # Dependências Node.js
 ├── 📁 portables/          # Dependências portáteis
 │   ├── python-64bits/    # Python 3.10.5
-│   ├── node-v18.16.1-win-x64/
 │   └── aria2-1.37.0/
 ├── 📄 .gitignore
 ├── 📄 COMECE_AQUI_ELECTRON.md
@@ -85,7 +89,6 @@ Sistema completo de gerenciamento de downloads com interface web moderna. Suport
 ├── 📄 backend.log         # Logs do backend
 ├── 📄 build-electron.ps1  # Script de build
 ├── 📄 compilar-*.ps1      # Scripts de compilação
-├── 📄 data.db             # Banco de dados SQLite
 ├── 📄 electron-*.js       # Configurações do Electron
 ├── 📄 nsis-*.nsi         # Scripts do instalador
 ├── 📄 package.json        # Configuração do projeto
@@ -158,7 +161,7 @@ pip install -r requirements.txt
 cd frontend
 npm install
 
-# 4. Iniciar em modo desenvolvimento
+# 4. Iniciar em modo desenvolvimento (Electron + Vite + Backend)
 npm run dev
 ```
 
@@ -173,6 +176,20 @@ npm run build:installer
 
 # O instalador será gerado na pasta 'dist'
 ```
+
+---
+
+## ⭐ Favoritos
+
+- Favoritar/desfavoritar nos cards de item.
+- Favoritar/desfavoritar dentro da página de detalhes (`ItemDetails`).
+- Drawer de favoritos (botão ☰):
+  - Clique no item abre detalhes.
+  - Botão `X` remove o favorito direto da lista.
+- O nome do favorito é normalizado (remove versões/builds/tags como DLC/emuladores) para exibir só o nome principal.
+
+Importante:
+- O `item_id` é determinístico por URL, então os favoritos continuam marcados após reiniciar.
 
 ## 🛠️ Requisitos do Sistema
 
@@ -194,8 +211,16 @@ Se encontrar erros de codificação de caracteres, certifique-se de que:
 - Verifique se o Windows Defender não está bloqueando a instalação
 
 ### Problemas de Rede
-- Verifique se as portas 8000 (backend) e 5173 (frontend em desenvolvimento) estão liberadas
+- Verifique se as portas 8000 (py run.py) / 8001 (Electron) e 5173 (frontend em desenvolvimento) estão liberadas
 - Certifique-se de que o firewall não está bloqueando o aplicativo
+
+### Teste limpo (banco zerado)
+Se você quer testar sem dados antigos (favoritos/jobs/etc), rode com um DB temporário:
+
+```powershell
+$env:DB_PATH = "$env:TEMP\furious-test.db"
+py run.py
+```
 
 ## 🤝 Como Contribuir
 
@@ -214,11 +239,13 @@ Este projeto está licenciado sob a licença MIT. Veja o arquivo [LICENSE](LICEN
 Para suporte ou dúvidas, entre em contato:
 - Email: [seu-email@exemplo.com]
 - Issues do GitHub: [URL do repositório]/issues
+- Leia a documentação existente em [COMECE_AQUI_ELECTRON.md](COMECE_AQUI_ELECTRON.md), [SETUP_ELECTRON.md](SETUP_ELECTRON.md) e [ELECTRON_GUIDE.md](ELECTRON_GUIDE.md) para obter ajuda.
+- O cache do aplicativo está localizado em `%LOCALAPPDATA%\furious-app\Cache`.
+
 ## 📚 Documentação Adicional
-- 📖 [COMECE_AQUI.md](docs/COMECE_AQUI.md) - 3 passos para começar
-- 🔨 [COMPILAR_INSTALADOR.md](docs/COMPILAR_INSTALADOR.md) - Guia detalhado
-- 🎉 [POS_INSTALACAO.md](docs/POS_INSTALACAO.md) - Como usar após instalar
-- 📦 [EXECUTAVEL_README.md](docs/EXECUTAVEL_README.md) - Documentação técnica
+- 📖 [COMECE_AQUI_ELECTRON.md](COMECE_AQUI_ELECTRON.md) - Início rápido (Electron)
+- 🔧 [SETUP_ELECTRON.md](SETUP_ELECTRON.md) - Setup do ambiente e build
+- 📄 [ELECTRON_GUIDE.md](ELECTRON_GUIDE.md) - Documentação técnica do Electron
 
 ---
 
@@ -284,7 +311,6 @@ frontend/
 ```
 portables/
 ├── python-64bits/              # Python 3.10.5 (renomeado!)
-├── node-v18.16.1-win-x64/     # Node.js
 └── aria2-1.37.0/              # aria2 (download engine)
 ```
 
@@ -363,7 +389,6 @@ Test-Path "C:\Program Files (x86)\NSIS\makensis.exe"
 aplicacao-pessoal-json/
 ├── portables/
 │   ├── python-64bits/                (Python portátil)
-│   └── node-v18.16.1-win-x64/        (Node portátil)
 │   └──aria2-1.37.0/                     (aria2 binário)
 ├── backend/                          (API Python/FastAPI)
 ├── engine/                           (Download manager)
@@ -371,8 +396,6 @@ aplicacao-pessoal-json/
 ├── launcher/                         (Scripts de inicialização)
 ├── nsis-installer.nsi                (Config do instalador)
 ├── compilar-instalador.ps1           (Script de compilação)
-├── COMECE_AQUI.md                    (Início rápido)
-├── POS_INSTALACAO.md                 (Pós-instalação)
 └── README.md                         (Este arquivo)
 ```
 
@@ -398,6 +421,11 @@ aplicacao-pessoal-json/
 ### Sistema
 - `WS /ws` - WebSocket (progresso real-time)
 - `GET /api/aria2/status` - Status do aria2
+
+### Favoritos
+- `GET /api/favorites` - Listar favoritos
+- `POST /api/favorites` - Criar/atualizar favorito
+- `DELETE /api/favorites/by_item` - Remover favorito por `(source_id, item_id)`
 
 ### Documentação Interativa
 - http://localhost:8000/docs (Swagger UI)
@@ -448,7 +476,9 @@ Pode ser customizada ao criar cada download
 - Localização: `portables/aria2-1.37.0/`
 
 ### Banco de Dados
-- Localização: `data.db` (projeto root)
+- Localização (dev / padrão): `%LOCALAPPDATA%\furious-app\data.db`
+- Localização (Electron): `%APPDATA%\furious-app\data.db`
+- Override: variável de ambiente `DB_PATH`
 - Tipo: SQLite 3
 - Backup recomendado antes de desinstalar
 
@@ -460,7 +490,7 @@ Pode ser customizada ao criar cada download
 R: Não! Tudo está incluído no .EXE.
 
 **P: Funciona offline?**  
-R: Sim, após instalação funciona 100% offline.
+R: Sim, após instalação funciona 100% offline, necessario internet para downloads.
 
 **P: Como atualizar?**  
 R: Desinstale a versão antiga e instale a nova.
@@ -501,7 +531,6 @@ R: Sim, execute via Python. O instalador .EXE é apenas Windows.
 Desenvolvido com ❤️ por Diego's Apps
 
 **Data de Lançamento**: Dezembro 2025  
-**Versão**: 1.0.0  
 **Status**: ✅ Produção
 
 ---
@@ -509,20 +538,11 @@ Desenvolvido com ❤️ por Diego's Apps
 ## 📞 Suporte
 
 Para dúvidas ou problemas:
-1. Consulte `COMECE_AQUI.md` (início rápido)
-2. Leia `POS_INSTALACAO.md` (pós-instalação)
-3. Verifique os logs no console
-4. Acesse http://localhost:8000/docs para API docs
+1. Consulte `COMECE_AQUI_ELECTRON.md`
+2. Consulte `SETUP_ELECTRON.md`
+3. Verifique os logs em `%APPDATA%\furious-app\logs\backend.log` (quando rodando via Electron)
+4. Acesse http://localhost:8000/docs (py run.py) ou http://localhost:8001/docs (Electron) para API docs
 
 ---
 
 **Aproveite o Furious App! 🚀**
-
-Then visit `http://127.0.0.1:8008` to access the frontend UI.
-
-
-Next steps:
-- Add tests and packaging scripts (PyInstaller)
-- Improve error handling and retry/backoff strategies
-- Add pause/resume for segmented downloads (persist part metadata)
-- Add authentication or session management if desired

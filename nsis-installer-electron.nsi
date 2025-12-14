@@ -9,7 +9,7 @@
 
 ; Configuracoes gerais
 Name "Furious App"
-OutFile "launcher\Furious App Setup 2.1.0.exe"
+OutFile "launcher\Furious App Setup.exe"
 InstallDir "$PROGRAMFILES\FuriousApp"
 Icon "launcher\images\icone.ico"
 
@@ -77,7 +77,7 @@ Section "Instalar Furious App" SecMain
     ; Adiciona entrada no Painel de Controle (Adicionar/Remover Programas)
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayName" "Furious App"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "UninstallString" "$INSTDIR\Uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayVersion" "2.0.0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayVersion" "2.2.0"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "Publisher" "Furious Apps"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayIcon" "$INSTDIR\Furious App.exe"
@@ -92,21 +92,14 @@ Section "Instalar Furious App" SecMain
 SectionEnd
 
 ; ====================================
-; Descricoes das Secoes
-; ====================================
-!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecMain} "Arquivos principais do Furious App"
-!insertmacro MUI_FUNCTION_DESCRIPTION_END
-
-; ====================================
 ; Secao de Desinstalacao
 ; ====================================
 Section "Uninstall"
     SetShellVarContext all
 
     SetShellVarContext current
-    RMDir /r "$APPDATA\Furious App"
-    RMDir /r "$LOCALAPPDATA\Furious App"
+    RMDir /r "$APPDATA\furious-app"
+    RMDir /r "$LOCALAPPDATA\furious-app"
     SetShellVarContext all
     
     ; Remove atalhos

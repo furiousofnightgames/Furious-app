@@ -57,7 +57,12 @@
               </div>
             </div>
 
-            <h1 class="text-4xl font-bold text-white mb-4">{{ item?.name }}</h1>
+            <div class="flex items-start justify-between gap-4 mb-4">
+              <h1 class="text-4xl font-bold text-white">{{ item?.name }}</h1>
+              <div class="flex-shrink-0">
+                <FavoriteToggleButton v-if="item" :item="item" />
+              </div>
+            </div>
             
             <!-- Badges de informação -->
             <div class="flex flex-wrap gap-3 mb-6">
@@ -506,6 +511,7 @@ import { formatBytes } from '../utils/format'
 import Modal from '../components/Modal.vue'
 import Input from '../components/Input.vue'
 import Button from '../components/Button.vue'
+import FavoriteToggleButton from '../components/FavoriteToggleButton.vue'
 
 // Obter base URL da API para usar em URLs absolutas
 const getApiBaseUrl = () => {

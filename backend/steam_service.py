@@ -15,8 +15,13 @@ elif _env_app_data_dir:
     os.makedirs(_env_app_data_dir, exist_ok=True)
     APP_LIST_FILE = os.path.join(_env_app_data_dir, "steam_applist.json")
 else:
-    APP_LIST_FILE = "steam_applist.json"
-APP_LIST_URL_OFFICIAL = "https://api.steampowered.com/ISteamApps/GetAppList/v2/"
+    _local_app_data = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    if _local_app_data:
+        _default_dir = os.path.join(_local_app_data, "furious-app")
+        os.makedirs(_default_dir, exist_ok=True)
+        APP_LIST_FILE = os.path.join(_default_dir, "steam_applist.json")
+    else:
+        APP_LIST_FILE = "steam_applist.json"
 APP_LIST_URL_OFFICIAL = "https://api.steampowered.com/ISteamApps/GetAppList/v2/"
 APP_LIST_URL_FALLBACK = "https://raw.githubusercontent.com/dgibbs64/SteamCMD-AppID-List/main/steamcmd_appid.json"
 
@@ -69,6 +74,8 @@ class SteamClient:
         async with self._loading_lock:
             if self._app_list_loaded:
                 return
+
+            print(f"[SteamService] AppList cache path: {APP_LIST_FILE}")
             
             # Tentar carregar do disco
             data = await self._load_from_disk()
@@ -112,10 +119,10 @@ class SteamClient:
     async def _download_app_list(self) -> Optional[List[Dict]]:
         client = await self._get_client()
         
-        async def try_download(url, name):
+        async def try_download(url, name, params=None, headers=None):
             try:
                 print(f"[SteamService] Baixando AppList via {name} ({url})...")
-                resp = await client.get(url)
+                resp = await client.get(url, params=params, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
                 
@@ -134,7 +141,21 @@ class SteamClient:
                 return None
 
         # 1. Tentar Oficial
-        apps = await try_download(APP_LIST_URL_OFFICIAL, "Steam Oficial")
+        apps = await try_download(
+            APP_LIST_URL_OFFICIAL,
+            "Steam Oficial",
+            params={"format": "json"},
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        if apps:
+            return apps
+
+        apps = await try_download(
+            "https://api.steampowered.com/ISteamApps/GetAppList/v2",
+            "Steam Oficial (alt)",
+            params={"format": "json"},
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
         if apps:
             return apps
             

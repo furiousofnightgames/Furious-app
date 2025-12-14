@@ -23,7 +23,17 @@ elif _env_app_data_dir:
     os.makedirs(_env_app_data_dir, exist_ok=True)
     DATABASE_URL = _sqlite_url_from_path(os.path.join(_env_app_data_dir, 'data.db'))
 else:
-    DATABASE_URL = "sqlite:///./data.db"
+    legacy_local_db = Path("./data.db")
+    if legacy_local_db.exists():
+        DATABASE_URL = "sqlite:///./data.db"
+    else:
+        _local_app_data = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        if _local_app_data:
+            _default_dir = os.path.join(_local_app_data, "furious-app")
+            os.makedirs(_default_dir, exist_ok=True)
+            DATABASE_URL = _sqlite_url_from_path(os.path.join(_default_dir, 'data.db'))
+        else:
+            DATABASE_URL = "sqlite:///./data.db"
 engine = create_engine(
     DATABASE_URL, 
     connect_args={"check_same_thread": False},
@@ -35,6 +45,11 @@ engine = create_engine(
 
 
 def init_db():
+    from backend.models import models  # noqa: F401
+    try:
+        print(f"[DB] Using DATABASE_URL: {DATABASE_URL}")
+    except Exception:
+        pass
     SQLModel.metadata.create_all(engine)
     # Simple migration: add missing columns that might be added to models later
     with engine.connect() as conn:

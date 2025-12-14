@@ -132,13 +132,21 @@ try {
 # 5. Organização Final
 Write-Header ">> FINALIZANDO"
 
-if (Test-Path "$OutputDir\*.exe") {
-    $Exes = Get-ChildItem "$OutputDir\*.exe"
+$rootExePattern = Join-Path $OutputDir "*.exe"
+$unpackedExe = Join-Path $OutputDir "win-unpacked\Furious App.exe"
+
+if (Test-Path $rootExePattern) {
+    $Exes = Get-ChildItem $rootExePattern
     Write-Host "Arquivos gerados em: $OutputDir" -ForegroundColor Green
     foreach ($exe in $Exes) {
         $SizeMB = [math]::Round($exe.Length / 1MB, 2)
         Write-Host "   [EXE] $($exe.Name) ($SizeMB MB)" -ForegroundColor White
     }
+} elseif (Test-Path $unpackedExe) {
+    $exe = Get-Item $unpackedExe
+    $SizeMB = [math]::Round($exe.Length / 1MB, 2)
+    Write-Host "Arquivos gerados em: $($exe.DirectoryName)" -ForegroundColor Green
+    Write-Host "   [EXE] $($exe.Name) ($SizeMB MB)" -ForegroundColor White
 } else {
     Write-Warning "[!] Nenhum .exe encontrado na pasta de saida esperada."
 }

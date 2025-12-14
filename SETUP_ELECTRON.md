@@ -44,38 +44,26 @@ Certifique-se que a estrutura de diretórios está correta:
 
 ```
 📦 aplicacao-pessoal-json
-├── 📁 backend/             # API FastAPI
-│   ├── main.py           # Ponto de entrada
-│   ├── database/         # Modelos e migrações
-│   ├── routes/           # Rotas da API
-│   └── services/         # Lógica de negócio
-│
-├── 📁 docs/               # Documentação completa
-├── 📁 engine/             # Motor de downloads
-│   ├── downloader.py     # Lógica principal
-│   ├── aria2_controller.py
-│   └── torrent_handler.py
-│
-├── 📁 frontend/           # Aplicação Vue.js
-│   ├── public/           # Arquivos estáticos
-│   └── src/              # Código-fonte
-│
-├── 📁 launcher/           # Tela de inicialização
-│   ├── furious_app_desktop.py
-│   └── images/
-│
-├── 📁 portables/          # Dependências portáteis
-│   ├── python-64bits/    # Python 3.10.5
-│   ├── node-v18.16.1-win-x64/
+├── backend/                  # API FastAPI
+│   ├── main.py
+│   ├── db.py
+│   ├── config.py
+│   └── models/models.py
+├── engine/                   # motor de downloads/aria2
+├── frontend/                 # Vue 3 + Vite
+│   ├── src/
+│   └── dist/                 # gerado pelo build
+├── portables/                # binários portáveis empacotados
+│   ├── python-64bits/
 │   └── aria2-1.37.0/
-│
-# Arquivos de configuração principais
-├── 📄 .gitignore
-├── 📄 electron-main.js
-├── 📄 electron-preload.js
-├── 📄 package.json
-├── 📄 requirements.txt
-└── 📄 run.py
+├── electron-main.js
+├── electron-preload.js
+├── electron-builder.yml
+├── build-electron.ps1
+├── compilar-launcher.ps1
+├── compilar-instalador.ps1
+├── package.json
+└── run.py
 ```
 
 **Arquivos de Build e Scripts:**
@@ -86,7 +74,7 @@ Certifique-se que a estrutura de diretórios está correta:
 - `nsis-*.nsi` - Scripts do instalador NSIS
 
 **Arquivos de Dados:**
-- `data.db` - Banco de dados SQLite
+- `data.db` - Banco de dados SQLite (fica em AppData por padrão)
 - `aria2.session` - Sessão do aria2
 - `dht.dat` - Dados DHT para torrents
 - `backend.log` - Logs da aplicação
@@ -102,14 +90,17 @@ npm run dev
 
 Isso irá:
 - Iniciar o servidor de desenvolvimento do frontend (Vite) em http://localhost:5173
-- Iniciar o servidor Python (FastAPI) em http://localhost:8000
+- Iniciar o servidor Python (FastAPI) em http://localhost:8001 (Electron)
 - Abrir a janela do Electron com a aplicação
 
 ### Estrutura de Desenvolvimento
 
 - **Frontend**: Desenvolvido com Vue.js 3 e Vite
 - **Backend**: API REST com FastAPI (Python 3.10+)
-- **Banco de Dados**: SQLite (armazenado em `backend/database.sqlite`)
+- **Banco de Dados**: SQLite
+  - Electron: `%APPDATA%\furious-app\data.db`
+  - Dev (py run.py sem env): `%LOCALAPPDATA%\furious-app\data.db`
+  - Override: `DB_PATH`
 - **Estilização**: TailwindCSS + CSS personalizado
 
 ## 🏗️ Build e Compilação
@@ -164,7 +155,7 @@ Arquivos gerados em `dist/`:
    - Consulte o arquivo de log em `%APPDATA%/furious-app/logs/`
 
 2. **Problemas de Rede**
-   - Verifique se as portas 8000 (backend) e 5173 (desenvolvimento) estão disponíveis
+   - Verifique se as portas 8000 (py run.py) / 8001 (Electron) e 5173 (desenvolvimento) estão disponíveis
    - Desative temporariamente o firewall para testes
 
 3. **Erros de Dependência**
@@ -174,8 +165,13 @@ Arquivos gerados em `dist/`:
 ## 📚 Documentação Adicional
 
 - [Guia do Desenvolvedor](ELECTRON_GUIDE.md) - Documentação técnica detalhada
-- [Notas de Versão](CHANGELOG.md) - Histórico de alterações
-- [Guia de Contribuição](.github/CONTRIBUTING.md) - Como contribuir para o projeto
+
+## 🧪 Teste limpo (banco zerado)
+
+```powershell
+$env:DB_PATH = "$env:TEMP\furious-test.db"
+npm run dev
+```
 
 ## 📞 Suporte
 
@@ -189,7 +185,7 @@ npm run dev
 Isso inicia:
 1. Frontend Vue.js em `http://localhost:5173`
 2. Electron conectado ao frontend
-3. Backend Python em `http://localhost:8000`
+3. Backend Python em `http://localhost:8001`
 
 ### Apenas Frontend
 

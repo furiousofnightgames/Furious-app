@@ -1,6 +1,6 @@
 {
-  "name": "aplicacao-pessoal-json",
-  "version": "1.0.0",
+  "name": "furiousapp",
+  "version": "2.2.0",
   "description": "Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.",
   "main": "electron-main.js",
   "homepage": "./",
@@ -18,7 +18,12 @@
   "build": {
     "appId": "com.furiousofnight.json",
     "productName": "Furious App",
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "backend/**",
+      "engine/**"
+    ],
+    "artifactName": "${productName}.${ext}",
     "files": [
       "electron-main.js",
       "electron-preload.js",
@@ -39,7 +44,9 @@
       }
     ],
     "win": {
-      "target": "dir",
+      "target": [
+        "dir"
+      ],
       "icon": "launcher/images/icone.ico"
     },
     "nsis": {
@@ -51,6 +58,7 @@
       "installerIcon": "launcher/images/icone.ico",
       "uninstallerIcon": "launcher/images/icone.ico",
       "installerHeaderIcon": "launcher/images/icone.ico",
+      "artifactName": "${productName} Setup.${ext}",
       "deleteAppDataOnUninstall": true,
       "displayLanguageSelector": true,
       "runAfterFinish": true

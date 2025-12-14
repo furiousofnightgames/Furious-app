@@ -29,6 +29,15 @@ class Item(SQLModel, table=True):
     source: Optional[Source] = Relationship(back_populates="items")
 
 
+class Favorite(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_id: int
+    item_id: int
+    name: str
+    url: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     item_id: Optional[int] = Field(default=None, foreign_key="item.id")

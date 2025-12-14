@@ -56,30 +56,30 @@ if ($Mode -eq "portable" -or $Mode -eq "installer" -or $Mode -eq "all") {
 # Build Portable
 if ($Mode -eq "portable" -or $Mode -eq "all") {
     Run-Command "npm run build:electron" "Compilando Electron (Portable)"
-    Write-Host "✅ Portable criado em: dist/Furious App 1.0.0.exe" -ForegroundColor Green
+    Write-Host "✅ App gerado em: launcher/win-unpacked/Furious App.exe" -ForegroundColor Green
     Write-Host ""
 }
 
 # Build Installer
 if ($Mode -eq "installer" -or $Mode -eq "all") {
-    Run-Command "npm run build:installer" "Compilando Electron (Instalador NSIS)"
-    Write-Host "✅ Instalador criado em: dist/Furious App Setup 1.0.0.exe" -ForegroundColor Green
+    Run-Command "npm run build:electron" "Compilando Electron (win-unpacked)"
+    Write-Host "✅ Agora gere o instalador com: .\compilar-instalador.ps1" -ForegroundColor Green
     Write-Host ""
 }
 
 # Resumo Final
 Write-Host "🎉 Build concluído com sucesso!" -ForegroundColor Green
 Write-Host ""
-Write-Host "📁 Arquivos gerados em: dist/" -ForegroundColor Cyan
+Write-Host "📁 Arquivos gerados em: launcher/" -ForegroundColor Cyan
 Write-Host ""
 
-Get-ChildItem -Path "dist" -Filter "*.exe" | ForEach-Object {
+Get-ChildItem -Path "launcher" -Filter "*.exe" | ForEach-Object {
     $size = [math]::Round($_.Length / 1MB, 2)
     Write-Host "   📦 $($_.Name) - ${size}MB" -ForegroundColor Yellow
 }
 
 Write-Host ""
 Write-Host "🚀 Próximos passos:" -ForegroundColor Cyan
-Write-Host "   1. Testar: .\dist\Furious App 1.0.0.exe" -ForegroundColor Gray
-Write-Host "   2. Distribuir: Furious App Setup 1.0.0.exe" -ForegroundColor Gray
+Write-Host "   1. Testar: .\launcher\win-unpacked\Furious App.exe" -ForegroundColor Gray
+Write-Host "   2. Gerar instalador: .\compilar-instalador.ps1" -ForegroundColor Gray
 Write-Host ""

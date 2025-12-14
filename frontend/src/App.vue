@@ -2,41 +2,51 @@
   <div class="min-h-screen flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-black">
     <!-- Navigation -->
     <nav class="bg-gradient-to-r from-gray-900/90 to-black/90 border-b border-cyan-500/30 shadow-lg shadow-cyan-500/10 sticky top-0 z-40" style="will-change: auto;">
-      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style="stop-color: #06b6d4; stop-opacity: 1" />
-                  <stop offset="100%" style="stop-color: #ec4899; stop-opacity: 1" />
-                </linearGradient>
-                <filter id="logoGlow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                  <feMerge>
-                    <feMergeNode in="coloredBlur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
-                </filter>
-              </defs>
-              <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" fill="url(#logoGrad)" filter="url(#logoGlow)" class="animate-pulse"/>
-              <circle cx="12" cy="12" r="10" stroke="url(#logoGrad)" stroke-width="0.5" fill="none"/>
-            </svg>
-          </div>
-          <h1 class="text-2xl font-bold text-cyan-300 uppercase tracking-widest">FuriousOfNight JSON</h1>
-        </div>
-        <div class="flex items-center gap-2 md:gap-6">
-          <router-link
-            v-for="link in navLinks"
-            :key="link.path"
-            :to="link.path"
-            :class="[
-              'px-3 md:px-4 py-2 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center gap-2',
-              isActiveLink(link.path)
-                ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50 shadow-lg shadow-cyan-500/20' 
-                : 'text-gray-400 hover:text-cyan-300 hover:border hover:border-cyan-500/30'
-            ]"
-          >
+      <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+              <HamburgerButton @toggle="favoritesStore.toggleDrawer" />
+              <div class="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" style="stop-color: #06b6d4; stop-opacity: 1" />
+                      <stop offset="100%" style="stop-color: #ec4899; stop-opacity: 1" />
+                    </linearGradient>
+                    <filter id="logoGlow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                      <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" fill="url(#logoGrad)" filter="url(#logoGlow)" class="animate-pulse"/>
+                  <circle cx="12" cy="12" r="10" stroke="url(#logoGrad)" stroke-width="0.5" fill="none"/>
+                </svg>
+                </div>
+                <h1 class="text-base sm:text-2xl font-bold text-cyan-300 uppercase tracking-widest truncate">fURIOUS APP</h1>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0 sm:hidden">
+                <div :class="['w-2 h-2 rounded-full transition-all', isConnected ? 'bg-green-500 shadow-lg shadow-green-500/50 animate-pulse' : 'bg-red-500 shadow-lg shadow-red-500/50 animate-pulse']" />
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 sm:gap-6">
+              <div class="flex-1 overflow-x-auto sm:overflow-visible">
+                <div class="flex items-center gap-2 md:gap-6 w-max sm:w-auto">
+                  <router-link
+                    v-for="link in navLinks"
+                    :key="link.path"
+                    :to="link.path"
+                    :class="[
+                      'shrink-0 whitespace-nowrap px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center gap-2',
+                      isActiveLink(link.path)
+                        ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50 shadow-lg shadow-cyan-500/20' 
+                        : 'text-gray-400 hover:text-cyan-300 hover:border hover:border-cyan-500/30'
+                    ]"
+                  >
             <!-- Dashboard Icon -->
             <svg v-if="link.path === '/'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 svg-icon">
               <defs>
@@ -95,13 +105,17 @@
             </svg>
             
             {{ link.label }}
-          </router-link>
+                  </router-link>
+                </div>
+              </div>
+
+              <div class="hidden sm:flex items-center gap-2 flex-shrink-0">
+                <div :class="['w-2 h-2 md:w-3 md:h-3 rounded-full transition-all', isConnected ? 'bg-green-500 shadow-lg shadow-green-500/50 animate-pulse' : 'bg-red-500 shadow-lg shadow-red-500/50 animate-pulse']" />
+                <span class="text-xs text-gray-400">{{ isConnected ? 'Online' : 'Offline' }}</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <div :class="['w-2 h-2 md:w-3 md:h-3 rounded-full transition-all', isConnected ? 'bg-green-500 shadow-lg shadow-green-500/50 animate-pulse' : 'bg-red-500 shadow-lg shadow-red-500/50 animate-pulse']" />
-          <span class="text-xs text-gray-400">{{ isConnected ? 'Online' : 'Offline' }}</span>
-        </div>
-      </div>
     </nav>
 
     <!-- Main Content -->
@@ -109,13 +123,14 @@
       <div class="max-w-7xl mx-auto">
         <router-view v-slot="{ Component }">
           <keep-alive :include="['Sources']">
-            <component :is="Component" />
+            <component :is="Component" :key="route.name === 'ItemDetails' ? route.fullPath : route.path" />
           </keep-alive>
         </router-view>
       </div>
     </main>
 
     <!-- Toast Notifications -->
+    <FavoritesDrawer :open="favoritesStore.drawerOpen" :items="favoritesStore.items" @close="favoritesStore.closeDrawer" />
     <Toast />
   </div>
 </template>
@@ -124,10 +139,14 @@
 import { onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDownloadStore } from './stores/download'
+import { useFavoritesStore } from './stores/favorites'
 import Toast from './components/Toast.vue'
+import HamburgerButton from './components/HamburgerButton.vue'
+import FavoritesDrawer from './components/FavoritesDrawer.vue'
 
 const route = useRoute()
 const downloadStore = useDownloadStore()
+const favoritesStore = useFavoritesStore()
 
 const navLinks = [
   { path: '/', label: 'Dashboard' },
@@ -145,6 +164,7 @@ function isActiveLink(path) {
 onMounted(() => {
   downloadStore.fetchJobs()
   downloadStore.fetchSources()
+  favoritesStore.fetchFavorites()
 })
 
 onUnmounted(() => {

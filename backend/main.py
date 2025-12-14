@@ -9,13 +9,14 @@ from typing import List, Optional
 from datetime import datetime
 import asyncio
 import pathlib
+import zlib
 from pydantic import BaseModel
 from starlette.staticfiles import StaticFiles
 from sqlmodel import select, delete
 from engine.manager import job_manager
 from engine.download import supports_range
 from backend.db import init_db, get_session
-from backend.models.models import Source, Item, Job, JobPart
+from backend.models.models import Source, Item, Favorite, Job, JobPart
 from backend import config as backend_config
 from backend.steam_service import steam_client
 from backend.resolver import clear_session_cache
@@ -39,13 +40,13 @@ async def lifespan(app: FastAPI):
     # This prevents UI confusion where downloads show as "Active" when they're actually paused
     running_jobs = session.exec(select(Job).where(Job.status == "running")).all()
     if running_jobs:
-        print(f"🔄 Found {len(running_jobs)} jobs that were running before restart")
+        print(f" Found {len(running_jobs)} jobs that were running before restart")
         print(f"   Auto-pausing to prevent state confusion...")
         for j in running_jobs:
             j.status = "paused"
             session.add(j)
         session.commit()
-        print(f"✅ {len(running_jobs)} jobs marked as paused")
+        print(f" {len(running_jobs)} jobs marked as paused")
         print(f"   Click 'Continue' in the UI to resume downloads")
     
     
@@ -922,6 +923,132 @@ async def list_sources():
     return result
 
 
+class FavoriteCreateReq(BaseModel):
+    source_id: int
+    item_id: int
+    name: str
+    url: str
+
+
+def stable_item_id(url: str) -> int:
+    u = (url or "").strip()
+    if not u:
+        return 0
+    return zlib.crc32(u.encode("utf-8")) & 0x7FFFFFFF
+
+
+@app.get("/api/favorites")
+async def list_favorites():
+    session = get_session()
+    q = session.exec(select(Favorite).order_by(Favorite.created_at.desc())).all()
+
+    changed = False
+    for f in q:
+        new_item_id = stable_item_id(f.url)
+        if new_item_id and f.item_id != new_item_id:
+            dup = session.exec(
+                select(Favorite).where(
+                    (Favorite.source_id == f.source_id)
+                    & (Favorite.item_id == new_item_id)
+                    & (Favorite.id != f.id)
+                )
+            ).first()
+
+            if dup:
+                # Keep the newest favorite record
+                if dup.created_at >= f.created_at:
+                    session.delete(f)
+                else:
+                    session.delete(dup)
+                    f.item_id = new_item_id
+                    session.add(f)
+            else:
+                f.item_id = new_item_id
+                session.add(f)
+
+            changed = True
+
+    if changed:
+        session.commit()
+        q = session.exec(select(Favorite).order_by(Favorite.created_at.desc())).all()
+
+    out = [
+        dict(
+            id=f.id,
+            source_id=f.source_id,
+            item_id=f.item_id,
+            name=f.name,
+            url=f.url,
+            created_at=f.created_at.isoformat() if f.created_at else None,
+        )
+        for f in q
+    ]
+    session.close()
+    return out
+
+
+@app.post("/api/favorites")
+async def create_favorite(req: FavoriteCreateReq):
+    session = get_session()
+
+    req_item_id = req.item_id
+    computed_item_id = stable_item_id(req.url)
+    if computed_item_id:
+        req_item_id = computed_item_id
+
+    existing = session.exec(
+        select(Favorite).where(
+            (Favorite.source_id == req.source_id) & (Favorite.item_id == req_item_id)
+        )
+    ).first()
+
+    if existing:
+        existing.name = req.name
+        existing.url = req.url
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        out = dict(
+            id=existing.id,
+            source_id=existing.source_id,
+            item_id=existing.item_id,
+            name=existing.name,
+            url=existing.url,
+            created_at=existing.created_at.isoformat() if existing.created_at else None,
+        )
+        session.close()
+        return out
+
+    fav = Favorite(source_id=req.source_id, item_id=req_item_id, name=req.name, url=req.url)
+    session.add(fav)
+    session.commit()
+    session.refresh(fav)
+
+    out = dict(
+        id=fav.id,
+        source_id=fav.source_id,
+        item_id=fav.item_id,
+        name=fav.name,
+        url=fav.url,
+        created_at=fav.created_at.isoformat() if fav.created_at else None,
+    )
+    session.close()
+    return out
+
+
+@app.delete("/api/favorites/by_item")
+async def delete_favorite_by_item(source_id: int, item_id: int):
+    session = get_session()
+    session.exec(
+        delete(Favorite).where(
+            (Favorite.source_id == source_id) & (Favorite.item_id == item_id)
+        )
+    )
+    session.commit()
+    session.close()
+    return {"status": "deleted", "source_id": source_id, "item_id": item_id}
+
+
 @app.get("/api/sources/{source_id}/items")
 async def list_items(source_id: int):
     """Carrega items sob demanda da fonte (releitura do JSON)."""
@@ -1067,7 +1194,7 @@ async def list_items(source_id: int):
         upload_date = raw.get("uploadDate") or raw.get("upload_date") or raw.get("date") or raw.get("published")
         
         items.append(dict(
-            id=hash(u) % 2147483647,  # ID baseado no hash da URL
+            id=stable_item_id(u),
             name=name or str(u).split("/")[-1],
             url=u,
             size=size,

@@ -2,6 +2,9 @@
   <div class="group relative bg-gray-900 border border-gray-700 hover:border-cyan-500 rounded-xl overflow-hidden shadow-lg h-full flex flex-col cursor-pointer" @click="goToDetails" style="will-change: border-color;">
     <!-- Image Area - Dimensões explícitas para compatibilidade PyQt5 -->
     <div class="relative overflow-hidden bg-gray-800 w-full" style="height: 180px; min-height: 180px; will-change: auto;">
+      <div class="absolute top-2 right-2 z-30">
+        <FavoriteToggleButton :item="item" />
+      </div>
       <img 
         v-if="displayImage" 
         :src="displayImage" 
@@ -72,6 +75,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatBytes as fmtBytes, formatRelativeDate as fmtDate } from '../utils/format'
 import api from '../services/api'
+import FavoriteToggleButton from './FavoriteToggleButton.vue'
 
 const router = useRouter()
 

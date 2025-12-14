@@ -614,7 +614,7 @@ const sourceToDelete = ref(null)
 
 // Paginação para performance com muitos items
 // Paginação para performance com muitos items
-const itemsPerPage = 20
+const itemsPerPage = 24
 const currentPage = ref(1)
 
 // Debounce para search - aumentado para 300ms para evitar engasgos

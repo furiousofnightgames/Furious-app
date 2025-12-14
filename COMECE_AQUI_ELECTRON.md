@@ -35,7 +35,7 @@ npm run dev
 
 Isso irá iniciar:
 - ✅ Frontend em http://localhost:5173
-- ✅ Backend em http://localhost:8000
+- ✅ Backend em http://localhost:8001
 - ✅ Janela do Electron com a aplicação
 
 ### 4️⃣ Gerar Instalador .exe
@@ -47,8 +47,8 @@ npm run build:installer
 ```
 
 Resultado em `dist/`:
-- `Furious App Setup 1.0.0.exe` - Instalador (para distribuir)
-- `Furious App 1.0.0.exe` - Portable (executável direto)
+- `Furious App Setup X.Y.Z.exe` - Instalador (para distribuir)
+- `Furious App X.Y.Z.exe` - Portable (executável direto)
 
 ## 📋 Arquivos Criados
 
@@ -115,7 +115,7 @@ python --version
 → Instale Node.js: https://nodejs.org/
 
 ### "Porta 8000 em uso"
-→ Feche outras aplicações ou mude a porta em `electron-main.js`
+→ No Electron a porta do backend é 8001. Feche outras aplicações usando 8001 ou ajuste `BACKEND_PORT` em `electron-main.js`
 
 ### "Python não encontrado"
 → Verifique `portables/python-64bits/python.exe` existe
@@ -171,6 +171,7 @@ npm run build:installer
 Após gerar o instalador:
 
 1. Encontre: `dist/Furious App Setup 1.0.0.exe`
+1. Encontre: `dist/Furious App Setup X.Y.Z.exe`
 2. Distribua aos usuários
 3. Usuários executam e instalam
 4. Atalho criado automaticamente
@@ -201,3 +202,16 @@ Sua aplicação está pronta para ser distribuída como .exe!
 **Versão:** 1.0.0  
 **Data:** Dezembro 2025  
 **Status:** ✅ Pronto para Produção
+
+## 📁 Onde ficam os dados (AppData)
+
+- Banco SQLite (Electron): `%APPDATA%\furious-app\data.db`
+- Logs (Electron): `%APPDATA%\furious-app\logs\backend.log`
+- Cache do Electron: `%LOCALAPPDATA%\furious-app\Cache`
+
+## 🧪 Teste limpo (sem favoritos antigos)
+
+```powershell
+$env:DB_PATH = "$env:TEMP\furious-test.db"
+npm run dev
+```
