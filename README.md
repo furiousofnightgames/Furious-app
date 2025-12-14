@@ -1,10 +1,12 @@
-# 🚀 Furious App - Acelerador de Downloads Profissional
+=======
+# 🚀 Furious App - Acelerador de Downloads Profissional v2.2.0
 
 Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.
 
-**Versão estável disponível!** - Com suporte completo a Windows e interface otimizada.
+**Versão 2.20 estável disponível!** - Com suporte completo a Windows e interface otimizada.
 
-## 🆕 Novidades
+## 🆕 Novidades na Versão 2.2.0
+>>>>>>> dec3e14bc6e2c5d0ce517eb9c8f9f10994cc3aa2
 - ✅ Nova tela de inicialização holográfica com tema cyberpunk
 - ✅ Corrigidos problemas de codificação de caracteres
 - ✅ Melhorias de estabilidade e performance
@@ -528,9 +530,13 @@ R: Sim, execute via Python. O instalador .EXE é apenas Windows.
 
 ## 📄 Licença e Créditos
 
-Desenvolvido com ❤️ por Diego's Apps
+Desenvolvido por FURIOUSOFNIGHTGAMES 
 
 **Data de Lançamento**: Dezembro 2025  
+<<<<<<< HEAD
+=======
+**Versão**: 2.2.0  
+>>>>>>> dec3e14bc6e2c5d0ce517eb9c8f9f10994cc3aa2
 **Status**: ✅ Produção
 
 ---
