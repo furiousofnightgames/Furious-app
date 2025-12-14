@@ -92,6 +92,24 @@
       </StatCard>
     </div>
 
+    <Card class="bg-gradient-to-r from-cyan-900/20 to-purple-900/20 border border-cyan-500/20">
+      <div class="flex items-start gap-3">
+        <div class="mt-0.5">
+          <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-cyan-400">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="text-sm text-gray-200">
+            Alguns downloads grandes podem apresentar um breve atraso inicial para preparar a sessão e coletar peers/seeders, especialmente via magnet ou fontes como JSON, FitGirl, DODI e OnlineFix.
+          </p>
+          <p class="text-xs text-gray-400 mt-1">
+            Aguarde. Ao iniciar, o download entrará em tração total, mantendo velocidade contínua e estável
+          </p>
+        </div>
+      </div>
+    </Card>
+
     <!-- Active Downloads -->
     <Card v-if="downloadStore.activeDownloads.length > 0">
       <div class="flex items-center gap-2 mb-4">

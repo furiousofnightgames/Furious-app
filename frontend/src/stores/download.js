@@ -62,8 +62,12 @@ export const useDownloadStore = defineStore('download', () => {
     try {
       loading.value = true
       const response = await api.get('/api/jobs')
-      // Backend returns last_error; normalize to `error` for the UI
-      jobs.value = response.data.map(j => ({ ...j, error: j.last_error }))
+      jobs.value = response.data.map(j => ({
+        ...j,
+        name: j.name || j.item_name || 'Download',
+        url: j.url || j.item_url,
+        error: j.last_error
+      }))
       error.value = null
     } catch (e) {
       error.value = e.message
@@ -215,7 +219,16 @@ export const useDownloadStore = defineStore('download', () => {
 
       console.log('[createJob] Enviando para API:', { url: finalConfig.url, name: finalConfig.name, destination: finalConfig.destination, k: finalConfig.k, n_conns: finalConfig.n_conns })
       const response = await api.post('/api/jobs', finalConfig)
-      await fetchJobs()
+
+      // Não bloquear a UI em fetchJobs(): em alguns cenários (SQLite lock / reload / worker atualizando DB)
+      // isso pode demorar e deixar modal preso em loading.
+      try {
+        Promise.race([
+          fetchJobs(),
+          new Promise((resolve) => setTimeout(resolve, 1500))
+        ]).catch(() => { })
+      } catch (e) { }
+
       toastSuccess('Sucesso', `${finalConfig.name || 'Download'} iniciado`)
       return response.data
     } catch (e) {

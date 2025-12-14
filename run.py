@@ -68,13 +68,28 @@ def main():
         browser_thread = threading.Thread(target=open_browser, daemon=True)
         browser_thread.start()
         
-        subprocess.run([
+        env = os.environ.copy()
+        local_app_data = env.get("LOCALAPPDATA") or env.get("APPDATA") or os.getcwd()
+        dev_data_dir = os.path.join(local_app_data, "furious-app-dev")
+        try:
+            os.makedirs(dev_data_dir, exist_ok=True)
+        except Exception:
+            pass
+        env.setdefault("APP_DATA_DIR", dev_data_dir)
+        env.setdefault("DB_PATH", os.path.join(dev_data_dir, "data.db"))
+        env.setdefault("ARIA2_SESSION_FILE", os.path.join(dev_data_dir, "aria2.session"))
+        env.setdefault("ARIA2_DHT_FILE", os.path.join(dev_data_dir, "dht.dat"))
+
+        args = [
             sys.executable, "-m", "uvicorn",
             "backend.main:app",
-            "--reload",
             "--host", "127.0.0.1",
             "--port", "8000"
-        ])
+        ]
+        if env.get("RUN_RELOAD") == "1":
+            args.insert(4, "--reload")
+
+        subprocess.run(args, env=env)
 
     except KeyboardInterrupt:
         print("\n\n👋 Servidor encerrado!")

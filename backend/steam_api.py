@@ -177,6 +177,7 @@ class SteamAPIClient:
         return {
             "found": True,
             "app_id": app_id,
+            "type": app_data.get("type", ""),
             "name": app_data.get("name", ""),
             "header_image": app_data.get("header_image", ""),
             "capsule": app_data.get("capsule_image", ""),

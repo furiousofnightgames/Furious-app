@@ -39,6 +39,22 @@ class JobManager:
 
     async def stop(self):
         self.running = False
+        # Signal any running jobs to stop gracefully (important for aria2 subprocess)
+        try:
+            for job_id, ev in list(self._stop_tokens.items()):
+                try:
+                    ev.set()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Give a short grace period for jobs to observe stop_event and terminate subprocesses
+        try:
+            await asyncio.sleep(0.5)
+        except Exception:
+            pass
+
         for w in self.workers:
             w.cancel()
         await asyncio.gather(*self.workers, return_exceptions=True)

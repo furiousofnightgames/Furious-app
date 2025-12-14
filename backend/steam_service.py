@@ -279,10 +279,6 @@ class SteamClient:
             if clean_query == clean_original:
                 ratio += 0.2
             
-            # Boost para match exato contido (ex: "Terraria" busca em "Terraria")
-            if clean_query == clean_original:
-                ratio += 0.2
-            
             # REMOVED: Substring Match Boost which was causing False Positives
             # e.g. "Yao-Guai Hunter" matches "Hunter" (0.95) -> WRONG
             # Now relying purely on Ratio + Sanitization.
@@ -295,7 +291,7 @@ class SteamClient:
         
         # Aceitar matches acima de 0.85 (fuzzy rigoroso para evitar falso positivo)
         # Se for menor, melhor falhar e tentar Fallback (SteamGridDB) ou Split Query
-        if best_ratio > 0.85:
+        if best_ratio > 0.88:
             return best_id
             
         return None
@@ -403,10 +399,22 @@ class SteamClient:
         
         # 0. Cache check antes de tudo
         clean_query = self.sanitize_search_term(query_str)
-        cache_key = f"search:{clean_query.lower()}"
-        cached = self._get_from_cache(cache_key)
-        if cached:
-            return cached
+        cache_term = (clean_query or "").lower().strip()
+        if len(cache_term) < 4:
+            cache_term = query_str.lower().strip()
+        cache_key = f"search:{cache_term}" if cache_term else None
+        if cache_key:
+            cached = self._get_from_cache(cache_key)
+            if cached:
+                cached_name = self._app_map.get(int(cached), "")
+                cached_clean = self.sanitize_search_term(cached_name).lower()
+                q_tokens = [t for t in re.findall(r"\w+", cache_term) if len(t) >= 3]
+                if not q_tokens:
+                    return cached
+                if all(t in cached_clean for t in q_tokens[:2]):
+                    return cached
+                if cache_key in self._cache:
+                    del self._cache[cache_key]
 
         # 1. TENTATIVA LOCAL (Rápida e Inteligente)
         # Garante carregamento do DB
@@ -422,11 +430,13 @@ class SteamClient:
 
         if local_id:
             print(f"[SteamService] [LOCAL] Encontrado: {local_id} ('{self._app_map[local_id]}') para '{query_str}'")
-            self._set_cache(cache_key, local_id)
+            if cache_key:
+                self._set_cache(cache_key, local_id)
             return local_id
 
         # 2. FALLBACK API (Lenta e Estrita)
-        print(f"[SteamService] [API] Local falhou. Tentando Store Search para '{clean_query}'")
+        api_term = clean_query or query_str
+        print(f"[SteamService] [API] Local falhou. Tentando Store Search para '{api_term}'")
         
         async with self._semaphore:
             client = await self._get_client()
@@ -443,11 +453,11 @@ class SteamClient:
                     print(f"[SteamService] Erro API: {e}")
                 return None
             
-            api_id = await do_api_search(clean_query)
+            api_id = await do_api_search(api_term)
             
             # Retry API com menos palavras
-            if not api_id and " " in clean_query:
-                words = clean_query.split()
+            if not api_id and " " in api_term:
+                words = api_term.split()
                 if len(words) > 1:
                     short_q = " ".join(words[:2])
                     print(f"[SteamService] [API] Retry curto: '{short_q}'")
@@ -456,10 +466,11 @@ class SteamClient:
             
             if api_id:
                 print(f"[SteamService] [API] Encontrado: {api_id}")
-                self._set_cache(cache_key, api_id)
+                if cache_key:
+                    self._set_cache(cache_key, api_id)
                 return api_id
         
-        print(f"[SteamService] Nenhum resultado para '{clean_query}'")
+        print(f"[SteamService] Nenhum resultado para '{api_term}'")
         return None
 
     async def _validate_image(self, url: str) -> bool:
@@ -556,27 +567,32 @@ class SteamClient:
             
             # Se achou app_id, monta o resultado e valida
             if app_id:
-                base_cdn = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{app_id}"
-                result = {
-                    "app_id": app_id,
-                    "header": f"{base_cdn}/header.jpg",
-                    "capsule": f"{base_cdn}/capsule_616x353.jpg",
-                    "hero": f"{base_cdn}/library_hero.jpg",
-                    "logo": f"{base_cdn}/logo.png",
-                    "background": f"{base_cdn}/page_bg_generated_v6b.jpg"
-                }
+                from backend.steam_api import steam_api_client
 
-                # VALIDAÇÃO DE IMAGEM (Anti-Soundtrack/DLC sem arte)
-                # Verifica se o header existe. Se não existir, ignora esse AppID.
-                is_valid = await self._validate_image(result["header"])
-                
-                if is_valid:
-                    # Cachear com a query ORIGINAL também para agilizar futuro
-                    cache_key = f"art:{app_id}"
-                    self._set_cache(cache_key, result)
-                    return result
+                details = await steam_api_client.get_appdetails(app_id)
+                app_type = str(details.get("type") or "").lower().strip()
+                if app_type and app_type not in ("game", "application"):
+                    print(f"[SteamService] ALERTA: AppID {app_id} é type='{app_type}' (Provável DLC/Soundtrack). Ignorando.")
                 else:
-                    print(f"[SteamService] ALERTA: AppID {app_id} encontrado mas sem 'header.jpg' (Provável Soundtrack/DLC). Ignorando.")
+                    header = (details.get("header_image") or "").strip()
+                    capsule = (details.get("capsule") or details.get("capsule_large") or "").strip()
+                    background = (details.get("background") or "").strip()
+
+                    if header or capsule or background:
+                        result = {
+                            "app_id": app_id,
+                            "header": header or None,
+                            "capsule": capsule or None,
+                            "hero": None,
+                            "logo": None,
+                            "background": background or None,
+                        }
+
+                        cache_key = f"art:{app_id}"
+                        self._set_cache(cache_key, result)
+                        return result
+                    else:
+                        print(f"[SteamService] ALERTA: AppID {app_id} encontrado mas sem arte via appdetails. Ignorando.")
             
             # Se não achou na Steam (ou imagem falhou), e temos SGDB, tentamos SGDB para este Q
             if self.sgdb:

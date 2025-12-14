@@ -2,6 +2,7 @@ import asyncio
 import httpx
 from typing import Optional, Dict, List
 import abc
+from urllib.parse import quote
 
 # Abstract Base Class for Image Providers
 class ImageProvider(abc.ABC):
@@ -31,7 +32,8 @@ class SteamGridDBProvider(ImageProvider):
         print(f"[SteamGridDB] Searching for: {query}")
         try:
             # 1. Search for Game ID
-            search_resp = await self.client.get(f"{self.base_url}/search/autocomplete/{query}")
+            q = quote(str(query), safe="")
+            search_resp = await self.client.get(f"{self.base_url}/search/autocomplete/{q}")
             if search_resp.status_code != 200:
                 print(f"[SteamGridDB] Search failed: {search_resp.status_code}")
                 return None

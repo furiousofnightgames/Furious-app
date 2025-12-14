@@ -91,7 +91,8 @@ const emit = defineEmits(['download'])
 
 const fetchedImage = ref(null)
 const loading = ref(false)
-const errorOccurred = ref(false)
+const imageErrorCount = ref(0)
+const fetchAttemptCount = ref(0)
 
 // Cache de imagens em localStorage para persistência
 const getImageCache = () => {
@@ -113,35 +114,91 @@ const setImageCache = (key, value) => {
     }
 }
 
+const getApiBaseUrl = () => {
+    return api.defaults.baseURL || 'http://127.0.0.1:8001'
+}
+
+const isProbablyValidImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return false
+    const s = url.trim()
+    if (!s) return false
+    if (s.startsWith('http://') || s.startsWith('https://')) return true
+    if (s.startsWith('data:image/')) return true
+    if (s.startsWith('/') || s.startsWith('./') || s.startsWith('../')) return true
+    return false
+}
+
+const toProxiedImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return null
+    const s = url.trim()
+    if (!s) return null
+
+    if (s.includes('/api/proxy/image?url=')) {
+        return s
+    }
+
+    if (s.startsWith('http://') || s.startsWith('https://')) {
+        const baseUrl = getApiBaseUrl()
+        return `${baseUrl}/api/proxy/image?url=${encodeURIComponent(s)}`
+    }
+
+    return s
+}
+
 const displayImage = computed(() => {
-    if (errorOccurred.value) return null
-    return fetchedImage.value || props.item.image || props.item.header_image || props.item.thumbnail
+    if (imageErrorCount.value >= 2) return null
+    const raw = fetchedImage.value || props.item.image || props.item.header_image || props.item.thumbnail
+    if (!isProbablyValidImageUrl(raw)) return null
+    return toProxiedImageUrl(raw)
 })
 
 const handleImageError = () => {
-    errorOccurred.value = true
     fetchedImage.value = null
+    imageErrorCount.value = (imageErrorCount.value || 0) + 1
+    try {
+        const cacheKey = `img_v2_${props.item.name}`
+        const cache = getImageCache()
+        if (cache && cache[cacheKey]) {
+            delete cache[cacheKey]
+            localStorage.setItem('imageCache', JSON.stringify(cache))
+        }
+    } catch {
+        // Ignorar erros de localStorage
+    }
+    if (!loading.value && imageErrorCount.value < 2) {
+        fetchImage()
+    }
 }
 
 const fetchImage = async () => {
-    // Se já buscamos e deu erro, não tenta denovo
-    if (errorOccurred.value) return
+    if (fetchAttemptCount.value >= 2) return
 
     // Se já tem imagem, não precisa buscar
-    if (props.item.image || props.item.header_image || props.item.thumbnail) {
+    const existing = props.item.image || props.item.header_image || props.item.thumbnail
+    if (isProbablyValidImageUrl(existing)) {
         return
     }
 
     // Verificar cache primeiro
-    const cacheKey = `img_${props.item.name}`
+    const cacheKey = `img_v2_${props.item.name}`
     const imageCache = getImageCache()
     if (imageCache[cacheKey]) {
-        fetchedImage.value = imageCache[cacheKey]
-        return
+        const cachedUrl = imageCache[cacheKey]
+        if (imageErrorCount.value === 0 && isProbablyValidImageUrl(cachedUrl)) {
+            fetchedImage.value = cachedUrl
+            return
+        }
+        try {
+            delete imageCache[cacheKey]
+            localStorage.setItem('imageCache', JSON.stringify(imageCache))
+        } catch {
+            // Ignorar erros de localStorage
+        }
     }
 
     loading.value = true
     try {
+        fetchAttemptCount.value = (fetchAttemptCount.value || 0) + 1
         // Busca resolver para obter imagem de alta qualidade
         const params = new URLSearchParams()
         params.append('game_name', props.item.name)
@@ -158,7 +215,7 @@ const fetchImage = async () => {
             const imageUrl = res.data.header || res.data.capsule || res.data.hero || res.data.grid
             if (imageUrl) {
                 // Validar URL antes de usar
-                if (imageUrl.startsWith('http')) {
+                if (isProbablyValidImageUrl(imageUrl)) {
                     fetchedImage.value = imageUrl
                     // Armazenar em cache
                     setImageCache(cacheKey, imageUrl)
@@ -167,7 +224,7 @@ const fetchImage = async () => {
         }
     } catch (e) {
         console.error(`[SteamGameCard] Erro ao carregar imagem para ${props.item.name}:`, e)
-        errorOccurred.value = true
+        imageErrorCount.value = (imageErrorCount.value || 0) + 1
     } finally {
         loading.value = false
     }
@@ -190,7 +247,8 @@ const isRecent = computed(() => {
 watch(() => props.item.name, (newName, oldName) => {
     if (newName !== oldName) {
         fetchedImage.value = null
-        errorOccurred.value = false
+        imageErrorCount.value = 0
+        fetchAttemptCount.value = 0
         loading.value = false
         fetchImage()
     }

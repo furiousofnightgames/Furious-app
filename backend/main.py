@@ -279,8 +279,13 @@ async def proxy_image(url: str):
         pass
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(url, follow_redirects=True)
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "Referer": "https://store.steampowered.com/",
+        }
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.get(url, follow_redirects=True, headers=headers)
             response.raise_for_status()
             
             # Detectar tipo de conteúdo
