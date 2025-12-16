@@ -36,6 +36,13 @@ export function formatSpeed(bytesPerSecond) {
   return formatBytes(bytesPerSecond) + '/s'
 }
 
+export function formatMbps(bytesPerSecond) {
+  if (!bytesPerSecond) return '0 Mbps'
+  const mbps = (bytesPerSecond * 8) / 1000000
+  const value = mbps >= 100 ? mbps.toFixed(0) : mbps.toFixed(1)
+  return value + ' Mbps'
+}
+
 export function formatTime(seconds) {
   if (!seconds || seconds <= 0) return '∞'
   const hours = Math.floor(seconds / 3600)

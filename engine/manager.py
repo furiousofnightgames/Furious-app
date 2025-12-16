@@ -14,6 +14,7 @@ from sqlmodel import select
 from datetime import datetime
 import re
 import unicodedata
+import errno
 
 # job status: queued, running, paused, completed, failed
 
@@ -28,6 +29,100 @@ class JobManager:
         self._stop_tokens: Dict[int, asyncio.Event] = {}
         self._cancel_flags: Dict[int, bool] = {}  # Track if job was canceled (not paused)
         self._pause_flags: Dict[int, bool] = {}   # Track if job was explicitly paused (vs canceled)
+
+    def _format_job_error(self, exc: Exception, tb: str, url: str, dest_to_save: Optional[str] = None) -> str:
+        raw = str(exc) if exc is not None else ''
+        combined_lower = (raw + "\n" + (tb or '')).lower() if (raw or tb) else ''
+        err_no = getattr(exc, 'errno', None)
+        winerror = getattr(exc, 'winerror', None)
+
+        code = 'EUNKNOWN'
+        title = 'Falha no download por um motivo não identificado.'
+        hints: list[str] = [
+            'Tente novamente.',
+            'Se persistir, verifique sua conexão, espaço em disco e permissões de escrita no destino.'
+        ]
+
+        if isinstance(exc, FileNotFoundError) and ('aria2' in combined_lower or 'aria2c' in combined_lower):
+            code = 'EARIA2_NOT_FOUND'
+            title = 'aria2c não foi encontrado no sistema.'
+            hints = [
+                'Instale o aria2c e/ou configure o caminho (ARIA2C_PATH).',
+                'Verifique a pasta portables/aria2-X.XX.X/ conforme instrução do app.'
+            ]
+        elif isinstance(exc, PermissionError) or err_no == errno.EACCES or 'permission denied' in combined_lower or 'acesso negado' in combined_lower:
+            code = 'EACCES'
+            title = 'Acesso negado ao gravar no destino (permissão insuficiente).' 
+            hints = [
+                'Escolha uma pasta onde você tenha permissão de escrita (ex.: dentro de Documentos/Downloads).',
+                'Evite pastas protegidas do Windows (Program Files, Windows, etc.).',
+                'Se estiver usando antivírus/Defender, teste adicionar exceção para a pasta de downloads.'
+            ]
+        elif isinstance(exc, FileExistsError) or err_no == errno.EEXIST or winerror == 183 or 'already exists' in combined_lower or 'file exists' in combined_lower or 'cannot create directory' in combined_lower or 'ja existe' in combined_lower:
+            code = 'EDEST_EXISTS'
+            title = 'Já existe uma pasta/arquivo com o mesmo nome no destino.'
+            hints = [
+                'Remova ou renomeie a pasta/arquivo existente no destino e tente novamente.',
+                'Ou altere o nome do item/destino para criar uma pasta nova.'
+            ]
+        elif err_no == errno.ENOSPC or 'no space left' in combined_lower or 'espaco insuficiente' in combined_lower or 'not enough space' in combined_lower:
+            code = 'ENOSPC'
+            title = 'Espaço em disco insuficiente para concluir o download.'
+            hints = [
+                'Libere espaço no disco de destino e tente novamente.',
+                'Se for torrent/magnet, considere deixar uma margem de espaço extra.'
+            ]
+        elif 'aria2 exit code' in combined_lower:
+            m = re.search(r'aria2 exit code:\s*(\d+)', raw, re.IGNORECASE)
+            exit_code = m.group(1) if m else None
+            code = f'EARIA2_EXIT_{exit_code}' if exit_code else 'EARIA2_EXIT'
+            title = 'O aria2 encerrou com erro durante o download.'
+            hints = [
+                'Verifique se existe pasta/arquivo conflitando no destino.',
+                'Verifique permissões de escrita e espaço em disco.',
+                'Se for torrent/magnet, pode haver problema no swarm (peers/seeders) ou bloqueio na rede.'
+            ]
+        elif 'erro ao acessar url' in combined_lower or ('status' in combined_lower and 'erro' in combined_lower):
+            m = re.search(r'status\s+(\d+)', raw, re.IGNORECASE)
+            status = m.group(1) if m else None
+            code = f'EHTTP_{status}' if status else 'EHTTP'
+            title = 'Não foi possível acessar o link (erro HTTP).' 
+            hints = [
+                'Verifique se o link ainda está válido e acessível no navegador.',
+                'Alguns servidores bloqueiam downloads diretos e exigem link final do arquivo.'
+            ]
+        elif 'download stalled' in combined_lower or 'no progress' in combined_lower or 'stalled' in combined_lower:
+            code = 'ESTALLED'
+            title = 'O download ficou sem progresso por muito tempo (travou/sem peers/sem resposta).' 
+            hints = [
+                'Tente pausar e retomar.',
+                'Se for torrent/magnet, pode ser falta de seeders/peers válidos ou bloqueio de rede.'
+            ]
+        elif 'destination files not found' in combined_lower:
+            code = 'EDEST_NOT_FOUND'
+            title = 'O download terminou, mas os arquivos finais não foram encontrados no destino.'
+            hints = [
+                'Verifique se a pasta de destino foi removida/movida por outro processo.',
+                'Se houver antivírus/Defender, verifique se ele não colocou arquivos em quarentena.'
+            ]
+
+        lines: list[str] = [f"[Código: {code}]", title]
+        if dest_to_save:
+            lines.append(f"Destino: {dest_to_save}")
+        if url:
+            lines.append(f"URL: {url}")
+        if hints:
+            lines.append('')
+            lines.append('Como resolver:')
+            for h in hints:
+                lines.append(f"- {h}")
+        lines.append('')
+        lines.append('--- Detalhes técnicos ---')
+        if raw:
+            lines.append(raw)
+        if tb:
+            lines.append(tb)
+        return "\n".join(lines)
 
     async def start(self):
         if self.running:
@@ -192,7 +287,7 @@ class JobManager:
         stop_event = asyncio.Event()
         self._stop_tokens[job_id] = stop_event
 
-        async def progress_cb(downloaded, total, peers=0, seeders=0, speed=None):
+        async def progress_cb(downloaded, total, peers=0, seeders=0, speed=None, phase=None, phase_label=None, phase_progress=None):
             import time as time_module
             p = (downloaded / total * 100) if total and total > 0 else None
             now_ts = time_module.time()
@@ -212,6 +307,12 @@ class JobManager:
                     speed = calc_speed
             
             info.update({"downloaded": downloaded, "total": total, "progress": p, "speed": speed, "peers": peers, "seeders": seeders, "last_ts": now_ts, "last_bytes": downloaded})
+            if phase is not None:
+                info["phase"] = phase
+            if phase_label is not None:
+                info["phase_label"] = phase_label
+            if phase_progress is not None:
+                info["phase_progress"] = phase_progress
             self._in_memory_progress[job_id] = info
             # update DB periodically (less frequently to minimize writes)
             await asyncio.to_thread(self._update_job_db, job_id, p)
@@ -228,9 +329,11 @@ class JobManager:
                     project_root = os.getcwd()
                 aria_path = backend_config.ARIA2C_PATH or find_aria2_binary(project_root)
                 if not aria_path or not os.path.exists(aria_path):
-                    msg = (
-                        "aria2c não encontrado. Coloque aria2 em: portables/aria2-X.XX.X/ ou defina ARIA2C_PATH. "
-                        "Download: https://github.com/aria2/aria2/releases"
+                    msg = self._format_job_error(
+                        FileNotFoundError('aria2c binary not found'),
+                        tb='',
+                        url=url,
+                        dest_to_save=dest_to_save
                     )
                     j.status = "failed"
                     j.last_error = msg
@@ -415,7 +518,7 @@ class JobManager:
             # persist last error message to DB to aid debugging (include traceback)
             tb = traceback.format_exc()
             try:
-                j.last_error = tb
+                j.last_error = self._format_job_error(e, tb=tb, url=url, dest_to_save=dest_to_save)
             except Exception:
                 pass
             j.status = "failed"

@@ -101,10 +101,10 @@
         </div>
         <div class="flex-1">
           <p class="text-sm text-gray-200">
-            Alguns downloads grandes podem apresentar um breve atraso inicial para preparação da sessão, coleta de peers/seeders e pré-alocação de espaço em disco, especialmente via magnet ou fontes como JSON, FitGirl, DODI e OnlineFix, etc.
+            Alguns downloads (principalmente via magnet, JSON, FitGirl, DODI, OnlineFix etc...) podem levar alguns segundos no início para preparar a sessão, baixar metadados e descobrir peers/seeders antes de ganhar velocidade.
           </p>
           <p class="text-xs text-gray-400 mt-1">
-            Aguarde. Após a conclusão dessa etapa, o download iniciará com tração total, mantendo velocidade contínua e estável, relaxe e deixe a aplicação trabalhar, você se beneficiará ao finalizar.
+            Aguarde essa etapa inicial. Em seguida, o download tende a estabilizar e manter velocidade contínua.
           </p>
         </div>
       </div>
@@ -130,13 +130,19 @@
         <div v-for="job in downloadStore.activeDownloads" :key="job.id">
           <div class="flex justify-between items-start mb-2">
             <div class="flex-1">
-              <p class="font-semibold text-cyan-300">{{ job.name }}</p>
+              <p class="font-semibold text-cyan-300 break-words">{{ job.name }}</p>
               <p class="text-xs text-gray-500">
                 <template v-if="job.status === 'queued'">
                   <span class="text-amber-400 font-medium">⏳ Aguardando</span>
                 </template>
                 <template v-else>
                   {{ job.downloaded ? formatBytes(job.downloaded) : '—' }} {{ job.total ? '/ ' + formatBytes(job.total) : '(desc.)' }}
+                </template>
+              </p>
+              <p v-if="job.phase_label" class="text-xs text-cyan-400 mt-1">
+                <span>{{ job.phase_label }}</span>
+                <template v-if="job.phase_progress !== null && job.phase_progress !== undefined">
+                  <span class="text-cyan-300 font-semibold"> ({{ downloadStore.formatProgress(job.phase_progress) }}%)</span>
                 </template>
               </p>
             </div>
@@ -152,9 +158,32 @@
               :style="{ width: job.progress ? `${Math.min(job.progress, 100)}%` : (job.status === 'running' ? '6%' : '0%') }"
             />
           </div>
-          <div class="flex justify-between items-center text-xs text-gray-400 mb-3">
-            <span>{{ formatSpeed(job.speed) }}</span>
-            <span>{{ calculateETA(job) }}</span>
+          <div class="flex items-center text-xs text-gray-400 mb-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="px-2 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold tracking-wide inline-flex items-center">
+                <span>{{ formatSpeed(job.speed) }}</span>
+                <span class="ml-2 inline-flex items-end gap-0.5 opacity-80">
+                  <span class="w-0.5 h-2 bg-cyan-300 rounded-sm animate-pulse" style="animation-delay: 0ms"></span>
+                  <span class="w-0.5 h-3 bg-cyan-300 rounded-sm animate-pulse" style="animation-delay: 120ms"></span>
+                  <span class="w-0.5 h-1.5 bg-cyan-300 rounded-sm animate-pulse" style="animation-delay: 240ms"></span>
+                </span>
+              </span>
+              <span class="px-2 py-1 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-300 font-semibold tracking-wide inline-flex items-center">
+                <span>{{ formatMbps(job.speed) }}</span>
+                <span class="ml-2 inline-flex items-end gap-0.5 opacity-80">
+                  <span class="w-0.5 h-2 bg-purple-300 rounded-sm animate-pulse" style="animation-delay: 60ms"></span>
+                  <span class="w-0.5 h-3 bg-purple-300 rounded-sm animate-pulse" style="animation-delay: 180ms"></span>
+                  <span class="w-0.5 h-1.5 bg-purple-300 rounded-sm animate-pulse" style="animation-delay: 300ms"></span>
+                </span>
+              </span>
+              <span class="px-2 py-1 rounded-md bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-300 font-semibold tracking-wide inline-flex items-center gap-1">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="w-4 h-4">
+                  <circle cx="12" cy="12" r="9" stroke-width="2" />
+                  <path d="M12 7v5l3 2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>{{ calculateETA(job.downloaded || 0, job.total || 0, job.speed || 0) || '—' }}</span>
+              </span>
+            </div>
           </div>
           <!-- Peers/Seeders Info -->
           <div v-if="job.peers !== undefined || job.seeders !== undefined" class="flex gap-4 text-xs text-gray-400 mb-3 pb-2 border-b border-gray-800">
@@ -231,7 +260,7 @@
         <div v-for="job in pausedJobs" :key="job.id" class="p-4 bg-gradient-to-r from-gray-900/50 to-gray-900/30 rounded-lg border border-yellow-500/20 hover:border-yellow-500/40 transition-all">
           <div class="flex justify-between items-start mb-3">
             <div class="flex-1">
-              <p class="font-semibold text-yellow-300">{{ job.name }}</p>
+              <p class="font-semibold text-yellow-300 break-words">{{ job.name }}</p>
               <p class="text-xs text-gray-400">{{ formatBytes(job.downloaded) }} {{ job.size ? '/ ' + formatBytes(job.size) : '(desc.)' }}</p>
             </div>
             <span class="text-sm font-bold text-yellow-400 bg-yellow-500/20 px-2 py-1 rounded">{{ downloadStore.formatProgress(Math.min(job.progress, 100)) }}%</span>
@@ -313,7 +342,7 @@
                 <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-green-400">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                 </svg>
-                <p class="font-semibold text-green-300 truncate">{{ job.name }}</p>
+                <p class="font-semibold text-green-300 break-words">{{ job.name }}</p>
               </div>
               <div class="flex items-center gap-4 text-sm">
                 <span class="text-gray-400">
@@ -405,7 +434,7 @@
                 <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-red-400">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                 </svg>
-                <p class="font-semibold text-red-300 truncate">{{ job.name }}</p>
+                <p class="font-semibold text-red-300 break-words">{{ job.name }}</p>
               </div>
               <div class="flex items-center gap-4 text-sm">
                 <span class="text-gray-400">
@@ -491,7 +520,7 @@
                 <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-amber-400">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
                 </svg>
-                <p class="font-semibold text-amber-300 truncate">{{ job.name }}</p>
+                <p class="font-semibold text-amber-300 break-words">{{ job.name }}</p>
               </div>
               <div class="flex items-center gap-4 text-sm">
                 <span class="text-gray-400">
@@ -768,7 +797,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watchEffect } from 'vue'
+import { ref, computed, onMounted, watchEffect, watch } from 'vue'
 import { useDownloadStore } from '../stores/download'
 import { useToastStore } from '../stores/toast'
 import api from '../services/api'
@@ -778,7 +807,7 @@ import StatCard from '../components/StatCard.vue'
 import Modal from '../components/Modal.vue'
 import DownloadDetails from '../components/DownloadDetails.vue'
 import CompletedDownloadDetails from '../components/CompletedDownloadDetails.vue'
-import { formatBytes, formatSpeed, calculateETA } from '../utils/format'
+import { formatBytes, formatSpeed, formatMbps, calculateETA } from '../utils/format'
 
 const downloadStore = useDownloadStore()
 const toastStore = useToastStore()
@@ -791,6 +820,7 @@ const showClearAllModal = ref(false)
 const showClearFailedModal = ref(false)
 const showClearCanceledModal = ref(false)
 const showErrorModal = ref(null)
+const errorLogCache = ref({})
 const jobToDelete = ref(null)
 const retryingJobId = ref(null)
 const jobStatusHistory = ref({})
@@ -825,6 +855,34 @@ watchEffect(() => {
       if (previousStatus === 'queued' && job.status === 'running') {
         try { toastStore.push('Fila', `Download "${job.name}" iniciado`) } catch (e) {}
       }
+
+      // Download falhou
+      if (job.status === 'failed') {
+        try {
+          if (job.last_error) {
+            const info = parseErrorInfo(job.last_error)
+            const title = info.code ? `Erro (${info.code})` : 'Erro'
+            const msg = info.summary ? `${job.name || 'Download'}: ${info.summary}` : `${job.name || 'Download'} falhou. Veja o log.`
+            toastStore.push(title, msg)
+          } else {
+            downloadStore.getJobDetails(job.id).then(details => {
+              const lastError = details?.last_error || details?.error
+              if (lastError) {
+                job.last_error = lastError
+                errorLogCache.value[job.id] = lastError
+                const info = parseErrorInfo(lastError)
+                const title = info.code ? `Erro (${info.code})` : 'Erro'
+                const msg = info.summary ? `${job.name || 'Download'}: ${info.summary}` : `${job.name || 'Download'} falhou. Veja o log.`
+                toastStore.push(title, msg)
+              } else {
+                toastStore.push('Erro', `${job.name || 'Download'} falhou. Veja o log.`)
+              }
+            }).catch(() => {
+              try { toastStore.push('Erro', `${job.name || 'Download'} falhou. Veja o log.`) } catch (e) {}
+            })
+          }
+        } catch (e) {}
+      }
       
       // Download foi concluido
 if (job.status === 'completed' && (previousStatus === 'running' || previousStatus === 'paused')) {
@@ -848,6 +906,40 @@ if (job.status === 'completed' && (previousStatus === 'running' || previousStatu
     // Atualiza historico de status
     jobStatusHistory.value[job.id] = job.status
   })
+})
+
+function parseErrorInfo(lastError) {
+  if (!lastError || typeof lastError !== 'string') return { code: null, summary: null }
+  const lines = lastError.split('\n').map(l => (l || '').trim()).filter(Boolean)
+  let code = null
+  if (lines.length > 0) {
+    const m = lines[0].match(/^\[C[oó]digo:\s*([^\]]+)\]$/i)
+    if (m) code = m[1].trim()
+  }
+  let summary = null
+  if (lines.length > 1) summary = lines[1]
+  return { code, summary }
+}
+
+watch(showErrorModal, (jobId) => {
+  if (!jobId) return
+  try {
+    const job = downloadStore.failedDownloads.find(j => j.id === jobId)
+    if (job && job.last_error) {
+      errorLogCache.value[jobId] = job.last_error
+      return
+    }
+    if (errorLogCache.value[jobId]) return
+
+    downloadStore.getJobDetails(jobId).then(details => {
+      const lastError = details?.last_error || details?.error
+      if (lastError) {
+        errorLogCache.value[jobId] = lastError
+        const inStore = downloadStore.jobs.find(j => j.id === jobId)
+        if (inStore) inStore.last_error = lastError
+      }
+    }).catch(() => {})
+  } catch (e) {}
 })
 
 const pausedJobs = computed(() => 
@@ -1025,6 +1117,9 @@ function getCurrentErrorLog() {
   const job = downloadStore.failedDownloads.find(j => j.id === showErrorModal.value)
   
   if (!job) return 'Job não encontrado'
+
+  const cached = errorLogCache.value[showErrorModal.value]
+  if (cached) return cached
   
   // Se tem erro específico, mostrar
   if (job.last_error) return job.last_error

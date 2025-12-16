@@ -12,8 +12,14 @@
             </span>
             <span class="text-xs text-slate-500">{{ job.id }}</span>
           </div>
-          <h3 class="text-base font-bold text-white line-clamp-2">{{ job.item_name || 'Download' }}</h3>
+          <h3 class="text-base font-bold text-white break-words line-clamp-2">{{ job.item_name || 'Download' }}</h3>
           <p class="text-xs text-slate-400 mt-1 break-all line-clamp-1">{{ job.item_url }}</p>
+          <p v-if="job.phase_label" class="text-xs text-cyan-300 mt-1">
+            <span>{{ job.phase_label }}</span>
+            <template v-if="job.phase_progress !== null && job.phase_progress !== undefined">
+              <span class="font-bold"> ({{ downloadStore.formatProgress(job.phase_progress) }}%)</span>
+            </template>
+          </p>
         </div>
         <div class="text-right shrink-0">
           <p class="text-3xl font-bold bg-gradient-to-br from-cyan-300 to-blue-400 bg-clip-text text-transparent">
@@ -37,7 +43,14 @@
             </svg>
           </div>
           <p class="text-xs text-slate-400 mb-0.5">Velocidade</p>
-          <p class="text-sm font-bold text-cyan-300">{{ formatSpeed(job.speed) }}</p>
+          <div class="flex items-center justify-center gap-2 flex-wrap">
+            <span class="px-2 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold tracking-wide">
+              {{ formatSpeed(job.speed) }}
+            </span>
+            <span class="px-2 py-1 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-300 font-semibold tracking-wide">
+              {{ formatMbps(job.speed) }}
+            </span>
+          </div>
         </div>
         <div class="text-center border-l border-r border-slate-700/30">
           <div class="flex justify-center mb-1">
@@ -129,7 +142,7 @@ import Card from './Card.vue'
 import Button from './Button.vue'
 import ProgressBar from './ProgressBar.vue'
 import { useDownloadStore } from '../stores/download'
-import { formatBytes, formatSpeed, calculateETA, calculateSpeedMultiplier, getStatusColor, getStatusLabel } from '../utils/format'
+import { formatBytes, formatSpeed, formatMbps, calculateETA, calculateSpeedMultiplier, getStatusColor, getStatusLabel } from '../utils/format'
 
 defineProps({
   job: {

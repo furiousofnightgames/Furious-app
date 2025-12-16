@@ -15,6 +15,7 @@ Icon "launcher\images\icone.ico"
 
 ; Imagens para o instalador
 !define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "launcher\images\banner.bmp"
 !define MUI_HEADERIMAGE_RIGHT
 !define MUI_ICON "launcher\images\icone.ico"
 !define MUI_UNICON "launcher\images\icone.ico"

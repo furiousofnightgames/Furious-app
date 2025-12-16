@@ -51,7 +51,14 @@
       <div class="grid grid-cols-3 gap-4 p-3 bg-slate-900/50 rounded">
         <div>
           <p class="text-xs text-slate-400">Velocidade</p>
-          <p class="text-sm font-bold text-cyan-300">{{ formatSpeed(job.speed || 0) }}</p>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold tracking-wide">
+              {{ formatSpeed(job.speed || 0) }}
+            </span>
+            <span class="px-2 py-1 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-300 font-semibold tracking-wide">
+              {{ formatMbps(job.speed || 0) }}
+            </span>
+          </div>
         </div>
         <div>
           <p class="text-xs text-slate-400">ETA</p>
@@ -114,7 +121,7 @@
 <script setup>
 import Modal from './Modal.vue'
 import Button from './Button.vue'
-import { formatBytes, formatSpeed, calculateETA, calculateSpeedMultiplier, getStatusColor, getStatusLabel } from '../utils/format'
+import { formatBytes, formatSpeed, formatMbps, calculateETA, calculateSpeedMultiplier, getStatusColor, getStatusLabel } from '../utils/format'
 
 defineProps({
   job: {

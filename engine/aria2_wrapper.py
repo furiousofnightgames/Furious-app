@@ -324,10 +324,10 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--bt-metadata-only=false',
             '--bt-load-saved-metadata=true',
             '--bt-detach-seed-only=false',  # NUNCA desconectar de seeders!
-            '--file-allocation=none',
+            '--file-allocation=trunc',
             '--seed-time=0',
             '--bt-max-peers=1000',
-            '--bt-max-open-files=1024',
+            '--bt-max-open-files=256',
             '--max-connection-per-server=16',
             '--max-concurrent-downloads=1',
             '--check-integrity=false',
@@ -374,10 +374,10 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--bt-metadata-only=false',
             '--bt-load-saved-metadata=true',
             '--bt-detach-seed-only=false',  # NUNCA desconectar de seeders!
-            '--file-allocation=none',
+            '--file-allocation=trunc',
             '--seed-time=0',
             '--bt-max-peers=0',  # Sem limite de peers
-            '--bt-max-open-files=4096',  # Mais conexões simultâneas para seeders
+            '--bt-max-open-files=256',  # Mais conexões simultâneas para seeders
             '--max-connection-per-server=16',
             '--max-concurrent-downloads=1',
             '--check-integrity=false',
@@ -406,9 +406,7 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--user-agent=qBittorrent/4.5.0',  # User agent qBittorrent (versão mais recente)
             '--listen-port=6881-6889',  # Porta de escuta para conexões incoming
             '--enable-peer-exchange=true',  # PEX para descobrir mais peers
-            '--bt-seed-unverified=true',  # Permite seed de peças não verificadas (mais rápido)
             '--bt-hash-check-seed=false',  # Não verifica hash ao retomar (mais rápido)
-            '--bt-prioritize-piece=head=16M,tail=16M',  # Prioriza início e fim (streaming)
         ]
         
         # Injetar trackers extras para maximizar peers/seeders
@@ -481,6 +479,8 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
     # Track last reported values to avoid duplicate logs
     last_reported_speed = 0
     last_reported_progress_pct = 0
+    metadata_show_done_until = 0.0
+    metadata_was_active = False
     
     def extract_download_path_from_logs() -> Optional[Path]:
         """
@@ -926,6 +926,28 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             progress_changed = abs(progress_pct * 100 - last_reported_progress_pct) > 0.1
             should_report = size_changed or speed_changed or progress_changed or time_since_last_report > 0.5
 
+            phase = None
+            phase_label = None
+            phase_progress = None
+            try:
+                now_ts = time.time()
+                if real_gid_detected and metadata_was_active and metadata_show_done_until <= 0:
+                    metadata_show_done_until = now_ts + 3.0
+                    metadata_was_active = False
+
+                if metadata_show_done_until > 0 and now_ts < metadata_show_done_until:
+                    phase = 'metadata_done'
+                    phase_label = 'Metadados baixados'
+                    phase_progress = None
+
+                if phase is None and not real_gid_detected and progress_data and progress_data.get('total', 0) <= 50 * 1024 * 1024:
+                    metadata_was_active = True
+                    phase = 'metadata'
+                    phase_label = 'Baixando metadados'
+                    phase_progress = float(progress_data.get('percentage', 0))
+            except Exception:
+                pass
+
             if should_report:
                 activity = current_size_bytes > last_size_bytes
                 last_size_bytes = current_size_bytes if activity else last_size_bytes
@@ -941,7 +963,10 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                     await progress_cb(current_size_bytes, total_size_bytes if total_size_detected else None,
                                     peers=progress_data.get('peers', 0) if progress_data else 0,
                                     seeders=progress_data.get('seeders', 0) if progress_data else 0,
-                                    speed=int(speed_mb_per_sec * 1024 * 1024))
+                                    speed=int(speed_mb_per_sec * 1024 * 1024),
+                                    phase=phase,
+                                    phase_label=phase_label,
+                                    phase_progress=phase_progress)
                 last_reported_size = current_size_bytes
                 last_reported_speed = speed_mb_per_sec
                 last_reported_progress_pct = progress_pct * 100
