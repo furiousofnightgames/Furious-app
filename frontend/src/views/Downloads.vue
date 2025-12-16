@@ -101,10 +101,10 @@
         </div>
         <div class="flex-1">
           <p class="text-sm text-gray-200">
-            Alguns downloads grandes podem apresentar um breve atraso inicial para preparar a sessão e coletar peers/seeders, especialmente via magnet ou fontes como JSON, FitGirl, DODI e OnlineFix.
+            Alguns downloads grandes podem apresentar um breve atraso inicial para preparação da sessão, coleta de peers/seeders e pré-alocação de espaço em disco, especialmente via magnet ou fontes como JSON, FitGirl, DODI e OnlineFix, etc.
           </p>
           <p class="text-xs text-gray-400 mt-1">
-            Aguarde. Ao iniciar, o download entrará em tração total, mantendo velocidade contínua e estável
+            Aguarde. Após a conclusão dessa etapa, o download iniciará com tração total, mantendo velocidade contínua e estável, relaxe e deixe a aplicação trabalhar, você se beneficiará ao finalizar.
           </p>
         </div>
       </div>
