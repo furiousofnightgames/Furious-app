@@ -13,15 +13,28 @@
   }
   .logo-container {
     position: relative;
-    margin-bottom: 40px;
+    margin: 0 40px 40px 40px;
     animation: pulse 3s infinite ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    max-width: 100%;
+  }
+  .logo-image {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 15px rgba(6, 182, 212, 0.6));
+    flex-shrink: 0;
   }
   .logo-text {
-    font-size: 3.5rem;
+    font-size: 2.5rem;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 4px;
     background: linear-gradient(135deg, #06b6d4, #d946ef);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 20px rgba(6, 182, 212, 0.5));
@@ -63,8 +76,11 @@
   }
 </style>
 <div class="logo-container">
-  <div class="logo-text">FURIOUS APP</div>
-  <div class="logo-sub">SYSTEM LOADING</div>
+  <img src="launcher/images/icone.png" alt="Furious App Logo" class="logo-image">
+  <div>
+    <div class="logo-text">FURIOUS APP</div>
+    <div class="logo-sub">SYSTEM LOADING</div>
+  </div>
 </div>
 <div class="loader-container">
   <div class="loader-bar" id="bar"></div>
