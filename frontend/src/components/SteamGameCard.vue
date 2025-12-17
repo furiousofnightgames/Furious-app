@@ -8,7 +8,7 @@
       <img 
         v-if="displayImage" 
         :src="displayImage" 
-        class="w-full h-full object-cover"
+        class="w-full h-full object-contain object-center"
         @error="handleImageError"
         loading="lazy"
         style="will-change: auto;"
@@ -93,6 +93,7 @@ const fetchedImage = ref(null)
 const loading = ref(false)
 const imageErrorCount = ref(0)
 const fetchAttemptCount = ref(0)
+const triedAppIdHeaderImage = ref(false)
 
 // Cache de imagens em localStorage para persistência
 const getImageCache = () => {
@@ -118,10 +119,27 @@ const getApiBaseUrl = () => {
     return api.defaults.baseURL || 'http://127.0.0.1:8001'
 }
 
+const normalizeImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return null
+    const s = url.trim()
+    if (!s) return null
+    if (s.startsWith('//')) return `https:${s}`
+    return s
+}
+
+const isProbablyVideoUrl = (url) => {
+    if (!url || typeof url !== 'string') return false
+    const s = (normalizeImageUrl(url) || '').toLowerCase()
+    if (!s) return false
+    const noQuery = s.split('?')[0]
+    return noQuery.endsWith('.webm') || noQuery.endsWith('.mp4') || noQuery.endsWith('.mkv') || noQuery.endsWith('.avi') || noQuery.endsWith('.mov')
+}
+
 const isProbablyValidImageUrl = (url) => {
     if (!url || typeof url !== 'string') return false
-    const s = url.trim()
+    const s = normalizeImageUrl(url)
     if (!s) return false
+    if (isProbablyVideoUrl(s)) return false
     if (s.startsWith('http://') || s.startsWith('https://')) return true
     if (s.startsWith('data:image/')) return true
     if (s.startsWith('/') || s.startsWith('./') || s.startsWith('../')) return true
@@ -130,7 +148,7 @@ const isProbablyValidImageUrl = (url) => {
 
 const toProxiedImageUrl = (url) => {
     if (!url || typeof url !== 'string') return null
-    const s = url.trim()
+    const s = normalizeImageUrl(url)
     if (!s) return null
 
     if (s.includes('/api/proxy/image?url=')) {
@@ -175,7 +193,16 @@ const fetchImage = async () => {
 
     // Se já tem imagem, não precisa buscar
     const existing = props.item.image || props.item.header_image || props.item.thumbnail
-    if (isProbablyValidImageUrl(existing)) {
+    if (imageErrorCount.value === 0 && isProbablyValidImageUrl(existing)) {
+        return
+    }
+
+    // Fallback leve: se tiver appId, tentar a imagem padrão do header da Steam
+    // Isso evita chamar /api/game-details para milhares de cards.
+    const appId = props.item?.appId || props.item?.appid || props.item?.steam_appid
+    if (!triedAppIdHeaderImage.value && appId) {
+        triedAppIdHeaderImage.value = true
+        fetchedImage.value = `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`
         return
     }
 

@@ -1,11 +1,10 @@
-cd frontend
-npm.cmd run build<template>
+<template>
   <div class="space-y-6">
     <!-- Header Stats with SVG Icons -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="p-4 bg-gradient-to-br from-amber-900/30 to-orange-900/10 rounded-lg border border-amber-500/20 hover:border-amber-500/50 transition">
-        <div class="flex items-center gap-3 mb-2">
-          <div class="w-10 h-10">
+        <div class="flex items-center justify-center gap-3 mb-2">
+          <div class="w-10 h-10 flex items-center justify-center">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
               <defs>
                 <linearGradient id="booksGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -21,12 +20,12 @@ npm.cmd run build<template>
           </div>
           <h3 class="text-sm font-semibold text-amber-400">Fontes Salvas</h3>
         </div>
-        <p class="text-2xl font-bold text-amber-300">{{ sources.length }}</p>
+        <p class="text-2xl font-bold text-amber-300 text-center">{{ sources.length }}</p>
       </div>
 
       <div class="p-4 bg-gradient-to-br from-cyan-900/30 to-blue-900/10 rounded-lg border border-cyan-500/20 hover:border-cyan-500/50 transition">
-        <div class="flex items-center gap-3 mb-2">
-          <div class="w-10 h-10">
+        <div class="flex items-center justify-center gap-3 mb-2">
+          <div class="w-10 h-10 flex items-center justify-center">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
               <defs>
                 <linearGradient id="itemsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -43,12 +42,12 @@ npm.cmd run build<template>
           </div>
           <h3 class="text-sm font-semibold text-cyan-400">Itens Totais</h3>
         </div>
-        <p class="text-2xl font-bold text-cyan-300">{{ filteredItems.length }}</p>
+        <p class="text-2xl font-bold text-cyan-300 text-center">{{ filteredItems.length }}</p>
       </div>
 
       <div class="p-4 bg-gradient-to-br from-purple-900/30 to-pink-900/10 rounded-lg border border-purple-500/20 hover:border-purple-500/50 transition">
-        <div class="flex items-center gap-3 mb-2">
-          <div class="w-10 h-10">
+        <div class="flex items-center justify-center gap-3 mb-2">
+          <div class="w-10 h-10 flex items-center justify-center">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
               <defs>
                 <linearGradient id="tagsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -69,7 +68,7 @@ npm.cmd run build<template>
           </div>
           <h3 class="text-sm font-semibold text-purple-400">Categorias</h3>
         </div>
-        <p class="text-2xl font-bold text-purple-300">{{ getCategories.size }}</p>
+        <p class="text-2xl font-bold text-purple-300 text-center">{{ getCategories.size }}</p>
       </div>
     </div>
 
@@ -228,7 +227,8 @@ npm.cmd run build<template>
       </div>
 
       <!-- Search Bar e Filtros -->
-      <Card v-if="selectedSourceId" class="relative">
+      <div v-if="selectedSourceId" ref="searchTopRef">
+        <Card class="relative">
         <!-- Mensagem de erro ao carregar items -->
         <div v-if="itemLoadError" class="mb-4 p-3 bg-red-500/20 border border-red-500 rounded text-red-300 text-sm">
           {{ itemLoadError }}
@@ -406,9 +406,10 @@ npm.cmd run build<template>
     <Card v-else class="text-center py-8">
       <p class="text-gray-400">Nenhuma fonte adicionada.</p>
     </Card>
+  </div>
 
-    <!-- Modal de Confirmação - Deletar Fonte -->
-    <Modal v-if="showDeleteModal && sourceToDelete" @close="showDeleteModal = false">
+  <!-- Modal de Confirmação - Deletar Fonte -->
+  <Modal v-if="showDeleteModal && sourceToDelete" @close="showDeleteModal = false">
       <div>
         <h3 class="text-lg font-bold text-red-400 mb-4">⚠️ Deletar Fonte</h3>
         <p class="text-gray-300 mb-4">
@@ -570,7 +571,7 @@ npm.cmd run build<template>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useDownloadStore } from '../stores/download'
 import api from '../services/api'
 import Card from '../components/Card.vue'
@@ -584,6 +585,7 @@ import { useToastStore } from '../stores/toast'
 import { formatBytes } from '../utils/format'
 
 const downloadStore = useDownloadStore()
+const searchTopRef = ref(null)
 const sources = ref([])
 const selectedSourceId = ref(null)
 const searchQuery = ref('')
@@ -616,6 +618,15 @@ const sourceToDelete = ref(null)
 // Paginação para performance com muitos items
 const itemsPerPage = 24
 const currentPage = ref(1)
+
+watch(currentPage, async () => {
+  await nextTick()
+  if (searchTopRef.value?.scrollIntoView) {
+    searchTopRef.value.scrollIntoView({ behavior: 'smooth' })
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+})
 
 // Debounce para search - aumentado para 300ms para evitar engasgos
 let searchDebounceTimer = null

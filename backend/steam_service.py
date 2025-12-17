@@ -175,6 +175,18 @@ class SteamClient:
         # Apenas alfanuméricos lowercase
         return set(re.findall(r"\w+", text.lower()))
 
+    def _extract_number_tokens(self, text: str) -> Set[str]:
+        if not text:
+            return set()
+        return set(re.findall(r"\d+", text))
+
+    def _numbers_compatible(self, query_numbers: Set[str], candidate_numbers: Set[str]) -> bool:
+        if not query_numbers:
+            return True
+        if not candidate_numbers:
+            return False
+        return query_numbers.issubset(candidate_numbers)
+
     def _build_index(self, apps: List[Dict]):
         """
         Cria um índice invertido simples: Token -> Set[AppIDs]
@@ -223,6 +235,8 @@ class SteamClient:
         clean_query = self.sanitize_search_term(query).lower()
         if not clean_query:
             return None
+
+        query_numbers = self._extract_number_tokens(clean_query)
             
         tokens = self._tokenize(clean_query)
         if not tokens:
@@ -271,6 +285,11 @@ class SteamClient:
             original_name = self._app_map.get(appid, "")
             # Limpar o nome do candidato também para comparação justa
             clean_original = self.sanitize_search_term(original_name).lower()
+
+            if query_numbers:
+                candidate_numbers = self._extract_number_tokens(clean_original)
+                if not self._numbers_compatible(query_numbers, candidate_numbers):
+                    continue
             
             # Comparação
             ratio = difflib.SequenceMatcher(None, clean_query, clean_original).ratio()
@@ -408,11 +427,20 @@ class SteamClient:
             if cached:
                 cached_name = self._app_map.get(int(cached), "")
                 cached_clean = self.sanitize_search_term(cached_name).lower()
-                q_tokens = [t for t in re.findall(r"\w+", cache_term) if len(t) >= 3]
-                if not q_tokens:
-                    return cached
-                if all(t in cached_clean for t in q_tokens[:2]):
-                    return cached
+                query_numbers = self._extract_number_tokens(cache_term)
+                cached_numbers = self._extract_number_tokens(cached_clean)
+                if query_numbers and not self._numbers_compatible(query_numbers, cached_numbers):
+                    if cache_key in self._cache:
+                        del self._cache[cache_key]
+                else:
+                    q_tokens = [
+                        t for t in re.findall(r"\w+", cache_term)
+                        if (t.isdigit() and len(t) >= 1) or len(t) >= 3
+                    ]
+                    if not q_tokens:
+                        return cached
+                    if all(t in cached_clean for t in q_tokens[:2]):
+                        return cached
                 if cache_key in self._cache:
                     del self._cache[cache_key]
 
@@ -464,6 +492,15 @@ class SteamClient:
                     await asyncio.sleep(0.2)
                     api_id = await do_api_search(short_q)
             
+            if api_id:
+                if self._app_list_loaded and int(api_id) in self._app_map:
+                    api_name = self._app_map.get(int(api_id), "")
+                    api_clean = self.sanitize_search_term(api_name).lower()
+                    query_numbers = self._extract_number_tokens(api_term.lower())
+                    api_numbers = self._extract_number_tokens(api_clean)
+                    if query_numbers and not self._numbers_compatible(query_numbers, api_numbers):
+                        api_id = None
+
             if api_id:
                 print(f"[SteamService] [API] Encontrado: {api_id}")
                 if cache_key:

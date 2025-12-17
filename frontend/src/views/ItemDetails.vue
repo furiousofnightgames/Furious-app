@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
     <!-- Header simples com uma única imagem grande (sem duplicação) -->
-    <div class="relative overflow-hidden pb-6">
+    <div class="relative overflow-hidden pb-0">
       <!-- Botão voltar -->
       <div class="absolute top-4 left-4 z-10">
         <button 
@@ -20,7 +20,7 @@
         <img
           :src="headerImageUrl"
           alt="Header do jogo"
-          class="w-full max-w-6xl max-h-[500px] rounded-2xl shadow-2xl border border-slate-700/80 object-cover"
+          class="w-full max-w-6xl max-h-[500px] rounded-2xl shadow-2xl border border-slate-700/80 object-contain object-center"
         />
       </div>
 
@@ -36,7 +36,7 @@
     </div>
 
     <!-- Conteúdo principal -->
-    <div class="relative -mt-20 z-10 px-4 md:px-8 pb-12">
+    <div class="relative mt-[3px] z-10 px-4 md:px-8 pb-12">
       <div class="max-w-6xl mx-auto">
         <!-- Card principal -->
         <div class="bg-slate-800 border border-slate-700 rounded-lg p-8 mb-8">
