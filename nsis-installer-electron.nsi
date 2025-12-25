@@ -60,15 +60,18 @@ Section "Instalar Furious App" SecMain
     SetOutPath "$INSTDIR"
     File /r /x "PyScripter" /x "tcl" /x "Doc" /x "PyQt5" /x "PyQt5-Qt5" /x "PyQt5_Qt5" /x "PyQtWebEngine" /x "PyQtWebEngine_Qt5" /x "PyInstaller" /x "_pyinstaller_hooks_contrib" /x "altgraph" /x "pyarmor" /x "pyarmor_runtime" "launcher\win-unpacked\*.*"
     
-    ; Cria atalho no Desktop
+    ; Copia ícone explicitamente para garantir exibição
+    File "launcher\images\icone.ico"
+
+    ; Cria atalho no Desktop com ícone explícito
     CreateDirectory "$DESKTOP"
-    CreateShortCut "$DESKTOP\Furious App.lnk" "$INSTDIR\Furious App.exe" "" "$INSTDIR\Furious App.exe" 0
+    CreateShortCut "$DESKTOP\Furious App.lnk" "$INSTDIR\Furious App.exe" "" "$INSTDIR\icone.ico" 0
     
-    ; Cria atalhos no Menu Iniciar
+    ; Cria atalhos no Menu Iniciar com ícone explícito
     !insertmacro MUI_STARTMENU_WRITE_BEGIN "FuriousApp"
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
-    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Furious App.lnk" "$INSTDIR\Furious App.exe" "" "$INSTDIR\Furious App.exe" 0
-    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Desinstalar.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Furious App.lnk" "$INSTDIR\Furious App.exe" "" "$INSTDIR\icone.ico" 0
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Desinstalar.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\icone.ico" 0
     CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Pasta de Instalacao.lnk" "$INSTDIR"
     !insertmacro MUI_STARTMENU_WRITE_END
     
@@ -78,7 +81,7 @@ Section "Instalar Furious App" SecMain
     ; Adiciona entrada no Painel de Controle (Adicionar/Remover Programas)
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayName" "Furious App"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "UninstallString" "$INSTDIR\Uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayVersion" "2.2.0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayVersion" "2.6.0"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "Publisher" "Furious Apps"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayIcon" "$INSTDIR\Furious App.exe"

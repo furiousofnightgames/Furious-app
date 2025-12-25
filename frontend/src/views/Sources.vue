@@ -567,6 +567,16 @@
         </div>
       </div>
     </Modal>
+    <!-- Source Analysis Modal -->
+    <SourceAnalysisModal
+      :open="showAnalysisModal"
+      :candidates="analysisCandidates"
+      :original-item="analysisOriginalItem"
+      :original-health="analysisOriginalItem?.health"
+      :is-loading="analysisLoading"
+      @close="showAnalysisModal = false"
+      @confirm="handleSafeSelect"
+    />
   </div>
 </template>
 
@@ -581,6 +591,7 @@ import Input from '../components/Input.vue'
 import StatCard from '../components/StatCard.vue'
 import Modal from '../components/Modal.vue'
 import Toggle from '../components/Toggle.vue'
+import SourceAnalysisModal from '../components/SourceAnalysisModal.vue'
 import { useToastStore } from '../stores/toast'
 import { formatBytes } from '../utils/format'
 
@@ -588,6 +599,7 @@ const downloadStore = useDownloadStore()
 const searchTopRef = ref(null)
 const sources = ref([])
 const selectedSourceId = ref(null)
+// ... (keep existing refs)
 const searchQuery = ref('')
 const searchQueryDebounced = ref('')
 const selectedCategory = ref(null)
@@ -597,7 +609,7 @@ const jsonPasteContent = ref('')
 const showDownloadDialog = ref(false)
 const selectedItem = ref(null)
 const downloadDestination = ref('downloads')
-const downloadVerifySsl = ref({}) // Armazena estado SSL individual por fonte ID
+const downloadVerifySsl = ref({}) 
 const showManualFolderModal = ref(false)
 const manualFolderPath = ref('')
 const browseLoading = ref(false)
@@ -609,6 +621,125 @@ const modalInfo = ref({ size: null, accept_range: false, eta: null, checking: fa
 const activeCategoryMenu = ref(null)
 const showCategoryDetailsModal = ref(false)
 const categoryDetailsData = ref(null)
+
+// Analysis State
+const showAnalysisModal = ref(false)
+const analysisCandidates = ref([])
+const analysisOriginalItem = ref(null)
+const analysisLoading = ref(false)
+
+// ... (keep existing methods)
+
+// Wrapper to handle safe download after analysis
+const handleSafeSelect = (selectedCandidate) => {
+  showAnalysisModal.value = false
+  // Map candidate back to item format if needed, or just use it
+  const finalItem = selectedCandidate.item || selectedCandidate
+  // Ensure source_id is preserved if available, or we need to find it?
+  // Actually, our download logic needs source_id for SSL settings etc.
+  // The candidate item should have source_id.
+  openDownloadConfigurationDialog(finalItem)
+}
+
+const handleSafeKeepOriginal = () => {
+  showAnalysisModal.value = false
+  if (analysisOriginalItem.value) {
+    openDownloadConfigurationDialog(analysisOriginalItem.value)
+  }
+}
+
+// Renamed original openDownloadDialog to openDownloadConfigurationDialog
+function openDownloadConfigurationDialog(item) {
+  console.log(`🔥 [Sources] Opening config dialog for:`, item.name)
+  selectedItem.value = item
+  downloadDestination.value = 'downloads'
+  
+  // Reset modal info
+  modalInfo.value = { size: null, accept_range: false, eta: null, checking: true, browseLoading: false }
+  
+  try {
+    const url = encodeURIComponent(item.url)
+    api.get(`/api/supports_range?url=${url}`).then(({ data }) => {
+      modalInfo.value.size = data.size || null
+      modalInfo.value.accept_range = !!data.accept_ranges
+      if (data.size && modalInfo.value.accept_range) {
+        const baseline = 1024 * 1024
+        modalInfo.value.eta = Math.round((data.size / baseline))
+      }
+    }).catch(err => {
+      console.warn('supports_range failed', err)
+    }).finally(() => {
+      modalInfo.value.checking = false
+    })
+  } catch (e) {
+    modalInfo.value.checking = false
+  }
+
+  showDownloadDialog.value = true
+}
+
+// New entry point triggered by @download
+// New entry point triggered by @download
+async function openDownloadDialog(item) {
+  console.log(`🔍 [Sources] Starting analysis for:`, item.name)
+  
+  // 1. Trigger Analysis UI Immediately
+  analysisOriginalItem.value = item // Show basic info during load
+  analysisCandidates.value = []     // Clear previous
+  analysisLoading.value = true
+  showAnalysisModal.value = true    // Open modal in loading state
+  
+  try {
+    const resp = await api.post('/api/analysis/pre-job', { item: item })
+    
+    // 2. Check results
+    if (resp.data && resp.data.candidates && resp.data.candidates.length > 0) {
+       console.log(`✨ Suggested ${resp.data.candidates.length} sources`)
+       
+       analysisCandidates.value = resp.data.candidates
+       // Keep analysisOriginalItem as set, but enrich health
+       
+       // Sincronizar dados da fonte original para o modal
+       const currentSource = sources.value.find(s => s.id === item.source_id)
+       const sourceName = currentSource?.title || getSourceName(currentSource?.url)
+       
+       const enrichedOriginal = {
+         ...item,
+         source: sourceName,
+         source_title: sourceName
+       }
+       
+       // Se o backend retornou saúde enriquecida, usar!
+       if (resp.data.original_health) {
+          enrichedOriginal.health = resp.data.original_health
+          // Se tiver seeders direto no health, atualizar root
+          if (resp.data.original_health.seeders !== undefined) {
+             enrichedOriginal.seeders = resp.data.original_health.seeders
+             enrichedOriginal.leechers = resp.data.original_health.leechers
+          }
+       }
+       
+       analysisOriginalItem.value = enrichedOriginal
+       
+       // showAnalysisModal.value = true // Already open
+       analysisLoading.value = false   // Switch to content view
+       return
+    }
+  } catch (e) {
+    console.warn(`Analysis failed or skipped:`, e)
+  } finally {
+    // analysisLoading.value = false // Handled inside success or below
+  }
+  
+  // 3. Fallback to normal flow (No candidates or Error)
+  // Close modal (it was in loading state)
+  showAnalysisModal.value = false
+  analysisLoading.value = false
+  
+  // Proceed to normal confirmation
+  openDownloadConfigurationDialog(item)
+}
+
 
 // Modal de confirmação para deletar
 const showDeleteModal = ref(false)
@@ -1004,36 +1135,7 @@ async function confirmDeleteSource() {
   }
 }
 
-function openDownloadDialog(item) {
-  console.log(`🔥 [Sources] openDownloadDialog() chamado`)
-  console.log(`   Item:`, item)
-  selectedItem.value = item
-  downloadDestination.value = 'downloads'
-  // prepare modal info and query server for size/accept-range
-  modalInfo.value = { size: null, accept_range: false, eta: null, checking: true, browseLoading: false }
-  try {
-    const url = encodeURIComponent(item.url)
-    api.get(`/api/supports_range?url=${url}`).then(({ data }) => {
-      modalInfo.value.size = data.size || null
-      modalInfo.value.accept_range = !!data.accept_ranges
-      if (data.size && modalInfo.value.accept_range) {
-        // estimate ETA assuming baseline 1 MB/s
-        const baseline = 1024 * 1024
-        modalInfo.value.eta = Math.round((data.size / baseline))
-      }
-    }).catch(err => {
-      console.warn('supports_range failed', err)
-    }).finally(() => {
-      modalInfo.value.checking = false
-    })
-  } catch (e) {
-    modalInfo.value.checking = false
-  }
 
-  // Abrir diálogo de download sem toast
-  showDownloadDialog.value = true
-  console.log(`Dialog opened`) 
-}
 
 async function browsePath() {
   // Try backend native picker first, then fallback to manual modal

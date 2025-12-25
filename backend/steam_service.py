@@ -27,6 +27,7 @@ APP_LIST_URL_FALLBACK = "https://raw.githubusercontent.com/dgibbs64/SteamCMD-App
 
 from backend.config import STEAMGRIDDB_API_KEY
 from backend.image_service import SteamGridDBProvider
+from backend.steam_api import steam_api_client
 
 class SteamClient:
     def __init__(self):
@@ -604,9 +605,10 @@ class SteamClient:
             
             # Se achou app_id, monta o resultado e valida
             if app_id:
-                from backend.steam_api import steam_api_client
-
-                details = await steam_api_client.get_appdetails(app_id)
+                # Use semaphore to prevent 503 Rate Limits
+                async with self._semaphore:
+                     details = await steam_api_client.get_appdetails(app_id)
+                
                 app_type = str(details.get("type") or "").lower().strip()
                 if app_type and app_type not in ("game", "application"):
                     print(f"[SteamService] ALERTA: AppID {app_id} é type='{app_type}' (Provável DLC/Soundtrack). Ignorando.")

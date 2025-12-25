@@ -1,3 +1,14 @@
+import sys
+import os
+import pathlib
+
+# Add project root to sys.path to allow imports from 'engine'
+# This is required when running from inside 'backend' folder or as a module
+current_dir = pathlib.Path(__file__).parent.resolve()
+project_root = current_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -1054,31 +1065,33 @@ async def delete_favorite_by_item(source_id: int, item_id: int):
     return {"status": "deleted", "source_id": source_id, "item_id": item_id}
 
 
-@app.get("/api/sources/{source_id}/items")
-async def list_items(source_id: int):
-    """Carrega items sob demanda da fonte (releitura do JSON)."""
-    print(f"\n[INFO] GET /api/sources/{source_id}/items - Carregando items sob demanda")
-    
-    session = get_session()
-    source = session.get(Source, source_id)
-    if not source:
-        session.close()
-        raise HTTPException(status_code=404, detail="Source not found")
 
-    print(f"[OK] Fonte encontrada: {source.url or 'JSON colado'}")    # Se for URL, fazer releitura do JSON
+
+def stable_item_id(url_or_magnet: str) -> int:
+    import zlib
+    if not url_or_magnet:
+        return 0
+    return zlib.crc32(str(url_or_magnet).encode('utf-8'))
+
+async def _load_items_internal(source: Source):
+    """Internal helper to fetch and parse items from a source object."""
+    print(f"[OK] Fonte encontrada: {source.url or 'JSON colado'}")    
+    
+    js = None
+    # Se for URL, fazer releitura do JSON
     if source.url and not source.url.startswith("json-raw://"):
         try:
             async with httpx.AsyncClient() as client:
                 r = await client.get(source.url, follow_redirects=True, timeout=20.0)
                 if r.status_code >= 400:
-                    session.close()
-                    raise HTTPException(status_code=400, detail="Erro ao recarregar fonte")
+                    print(f" Erro status code: {r.status_code}")
+                    return []
                 js = r.json()
                 print(f"[OK] JSON recarregado - {len(str(js))} bytes")
         except Exception as e:
-            session.close()
             print(f" Erro ao recarregar fonte: {str(e)}")
-            raise HTTPException(status_code=400, detail=f"Erro ao recarregar: {str(e)}")
+            # Don't raise HTTP exception here, just return empty list to allow iteration to continue
+            return []
     elif source.data:
         # Se for JSON colado, recuperar do campo data
         import json
@@ -1086,12 +1099,10 @@ async def list_items(source_id: int):
             js = json.loads(source.data)
             print(f"[OK] JSON colado recuperado - {len(source.data)} bytes")
         except Exception as e:
-            session.close()
             print(f" Erro ao parsear JSON colado: {str(e)}")
-            raise HTTPException(status_code=400, detail=f"Erro ao parsear JSON: {str(e)}")
+            return []
     else:
         # Se for JSON colado mas sem dados, não temos forma de recuperar - retornar vazio
-        session.close()
         print(f" Fonte sem URL e sem dados - items não podem ser carregados")
         return []
     
@@ -1198,6 +1209,10 @@ async def list_items(source_id: int):
         # Extrair data de upload (se disponível)
         upload_date = raw.get("uploadDate") or raw.get("upload_date") or raw.get("date") or raw.get("published")
         
+        # Extrair Seeds/Peers para análise de saúde
+        seeders = raw.get("seeders") or raw.get("seeds")
+        leechers = raw.get("leechers") or raw.get("peers")
+        
         items.append(dict(
             id=stable_item_id(u),
             name=name or str(u).split("/")[-1],
@@ -1205,12 +1220,29 @@ async def list_items(source_id: int):
             size=size,
             category=cat,
             type=item_type,
-            source_id=source_id,
+            source_id=source.id,
             image=image,
             icon=icon,
             thumbnail=thumbnail,
-            uploadDate=upload_date  # Adicionar data de upload
+            uploadDate=upload_date,
+            seeders=seeders,
+            leechers=leechers
         ))
+    
+    return items
+
+@app.get("/api/sources/{source_id}/items")
+async def list_items(source_id: int):
+    """Carrega items sob demanda da fonte (releitura do JSON)."""
+    print(f"\n[INFO] GET /api/sources/{source_id}/items - Carregando items sob demanda")
+    
+    session = get_session()
+    source = session.get(Source, source_id)
+    if not source:
+        session.close()
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    items = await _load_items_internal(source)
     
     session.close()
     # Debug: verificar se algum item tem uploadDate
@@ -1417,8 +1449,120 @@ async def cancel_job(job_id: int):
     
     session.commit()
     session.close()
-    print(f"[OK] Job {job_id} canceled and cleaned up")
     return {"ok": True, "message": "Job canceled and cleaned up"}
+
+
+@app.get("/api/sources/{source_id}/items/{item_id}")
+async def get_source_item(source_id: int, item_id: int):
+    """Fetches a single item from a source by its ID (hash)."""
+    # Reuse the logic from list_items - simpler to just call list_items logic internally
+    items = await list_items(source_id)
+    for item in items:
+        if item.get('id') == item_id:
+            return item
+    raise HTTPException(status_code=404, detail="Item not found in source")
+
+
+class AnalyzeReq(BaseModel):
+    item: dict
+    
+@app.post("/api/analysis/pre-job")
+async def pre_job_analysis(req: AnalyzeReq):
+    """
+    Analyzes all available sources to find healthier alternatives for the target item.
+    """
+    try:
+        from backend.services.analysis import ItemMatchingService, SourceHealthService
+    except ImportError:
+        # Fallback for when running directly or path issues
+        import sys
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from backend.services.analysis import ItemMatchingService, SourceHealthService
+
+    print(f"\n[ANALYSIS] Iniciando análise pré-job para: {req.item.get('name')}")
+    
+    session = get_session()
+    sources = session.exec(select(Source)).all()
+    
+    from types import SimpleNamespace
+    candidates = []
+    # Use SimpleNamespace instead of Item model to allow dynamic attribute injection (seeders/leechers)
+    target_item_obj = SimpleNamespace(**req.item) if isinstance(req.item, dict) else req.item
+    # Ensure name is set for matching
+    if not target_item_obj.name:
+         target_item_obj.name = req.item.get('name', 'Unknown')
+
+    # 1. Fetch items from all sources and collect matches
+    all_raw_matches = []
+    
+    for source in sources:
+        # Skip if source has no URL (unless it has data)
+        if not source.url and not source.data:
+            continue
+            
+        # Helper returns list of dicts
+        source_items = await _load_items_internal(source)
+        
+        # Convert dicts to pseudo-items for matching
+        # Optimize: Create objects only for matching service
+        from types import SimpleNamespace
+        
+        source_objs = []
+        for i in source_items:
+            obj = SimpleNamespace(**i)
+            # Add metadata needed later
+            obj.source_title = source.title
+            obj.source_id = source.id
+            source_objs.append(obj)
+            
+        # Find equivalents in this source
+        matches = ItemMatchingService.find_equivalents(target_item_obj, source_objs + [])
+        
+        for m in matches:
+            # Don't suggest the exact same item from same source
+            if str(m.id) == str(target_item_obj.id) and str(m.source_id) == str(target_item_obj.source_id):
+                continue
+            all_raw_matches.append(m)
+
+    print(f"[ANALYSIS] Initial matches found: {len(all_raw_matches)}. Starting live probe...")
+    
+    # 2. PROBE LIVE HEALTH (UDP Scraper)
+    # Include the ORIGINAL item in the probe list so we get its stats too!
+    target_item_obj.url = req.item.get('url') # Ensure URL is set for scraper
+    items_to_probe = all_raw_matches + [target_item_obj]
+    
+    if items_to_probe:
+        await SourceHealthService.enrich_candidates(items_to_probe)
+
+    # 3. Build final response
+    original_health = SourceHealthService.calculate_health_score(target_item_obj.__dict__)
+    
+    for m in all_raw_matches:
+        # Convert back to dict context for score calc
+        d = m.__dict__
+        health = SourceHealthService.calculate_health_score(d)
+        
+        candidates.append({
+            "item": d,
+            "source_title": getattr(m, 'source_title', 'Unknown'),
+            "health": health,
+            "is_original": False
+        })
+
+    session.close()
+    
+    # Sort by Health Score (seeds)
+    candidates.sort(key=lambda x: x['health']['seeders'], reverse=True)
+    
+    # Identify if original choice is healthy?
+    # We return the candidates. Frontend compares.
+    
+    print(f"[ANALYSIS] Encontradas {len(candidates)} alternativas.")
+    return {
+        "candidates": candidates,
+        "original_health": original_health # Send enriched original health back
+    }
+
 
 
 @app.delete("/api/jobs/{job_id}")

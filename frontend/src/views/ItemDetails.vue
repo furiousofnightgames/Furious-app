@@ -137,29 +137,7 @@
 
             <!-- Informações da direita -->
             <div class="space-y-4">
-              <div v-if="item?.seeders !== undefined" class="flex items-start gap-3">
-                <div class="w-6 h-6 text-green-400 flex-shrink-0 mt-1">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="text-slate-400 text-sm">Seeders</p>
-                  <p class="text-white font-medium">{{ item.seeders }}</p>
-                </div>
-              </div>
 
-              <div v-if="item?.leechers !== undefined" class="flex items-start gap-3">
-                <div class="w-6 h-6 text-orange-400 flex-shrink-0 mt-1">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8a4 4 0 110 8 4 4 0 010-8zM7 8v12m0 0H3m4 0h4" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="text-slate-400 text-sm">Leechers</p>
-                  <p class="text-white font-medium">{{ item.leechers }}</p>
-                </div>
-              </div>
 
               <div v-if="item?.language" class="flex items-start gap-3">
                 <div class="w-6 h-6 text-blue-400 flex-shrink-0 mt-1">
@@ -191,13 +169,18 @@
             <!-- Botão Baixar Direto (Sistema Interno) -->
             <button 
               v-if="item?.url || item?.magnet"
-              @click="openDownloadModal"
-              class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-lg font-semibold text-white transition transform hover:scale-105 shadow-lg shadow-green-500/20"
+              @click="startDownloadFlow"
+              :disabled="analysisLoading"
+              class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-70 disabled:cursor-wait rounded-lg font-semibold text-white transition transform hover:scale-105 shadow-lg shadow-green-500/20"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-if="!analysisLoading" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Baixar Jogo
+              <svg v-else class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ analysisLoading ? 'Analisando...' : 'Baixar Jogo' }}
             </button>
 
             <button 
@@ -499,6 +482,17 @@
         </div>
       </div>
     </Modal>
+
+    <!-- Modal de Análise de Fontes (Pré-Job) -->
+    <SourceAnalysisModal
+      :open="showAnalysisModal"
+      :original-item="analysisOriginalItem"
+      :candidates="analysisCandidates"
+      :original-health="analysisOriginalItem?.health"
+      :is-loading="analysisLoading"
+      @close="showAnalysisModal = false"
+      @confirm="onAnalysisConfirm"
+    />
 </template>
 
 <script setup>
@@ -622,8 +616,24 @@ onMounted(async () => {
   }
   
   console.log('[ItemDetails] Item carregado:', item.value.name)
+
+  // CRITICAL: Tentar buscar dados completos da fonte (URL, Size) se tivermos source_id
+  // Isso corrige problemas onde o item vem de favoritos (partial) e a fonte não está carregada
+  if (item.value.source_id && item.value.id) {
+    try {
+      console.log(`[ItemDetails] Tentando atualizar dados da fonte #${item.value.source_id} item #${item.value.id}`)
+      const sourceResp = await api.get(`/api/sources/${item.value.source_id}/items/${item.value.id}`)
+      if (sourceResp.data) {
+        console.log('[ItemDetails] Dados da fonte atualizados com sucesso!', sourceResp.data)
+        // Atualizar item com dados frescos (URL, Size, etc), mantendo o que já tinhamos
+        item.value = { ...item.value, ...sourceResp.data }
+      }
+    } catch (e) {
+      console.warn('[ItemDetails] Erro ao buscar dados frescos da fonte (pode ser normal se offline):', e)
+    }
+  }
   
-  // Buscar detalhes completos (usa AppID se tiver, senão tenta pelo nome)
+  // Buscar detalhes completos de metadados (Steam/SteamGridDB)
   try {
     const detailsEndpoint = item.value.appId 
       ? `/api/game-details/${item.value.appId}`
@@ -929,7 +939,71 @@ const onVideoError = (event) => {
 }
 
 // ================= DOWNLOAD LOGIC =================
-const openDownloadModal = () => {
+import SourceAnalysisModal from '../components/SourceAnalysisModal.vue'
+
+// ... (other imports)
+
+// Analysis State
+const showAnalysisModal = ref(false)
+const analysisCandidates = ref([])
+const analysisOriginalItem = ref(null)
+const analysisLoading = ref(false)
+
+// ...
+
+// ================= DOWNLOAD LOGIC =================
+
+const startDownloadFlow = async () => {
+  if (!item.value) return
+  
+  // 1. Pre-Job Analysis (Optional/Intelligent Layer)
+  analysisOriginalItem.value = item.value
+  analysisCandidates.value = []
+  analysisLoading.value = true
+  showAnalysisModal.value = true // Open immediately
+  
+  try {
+    const resp = await api.post('/api/analysis/pre-job', { item: item.value })
+    if (resp.data && resp.data.candidates && resp.data.candidates.length > 0) {
+      // Found alternatives -> Show Modal Content
+      analysisCandidates.value = resp.data.candidates
+      
+      const enrichedOriginal = { ...item.value }
+      if (resp.data.original_health) {
+         enrichedOriginal.health = resp.data.original_health
+         if (resp.data.original_health.seeders !== undefined) {
+             enrichedOriginal.seeders = resp.data.original_health.seeders
+             enrichedOriginal.leechers = resp.data.original_health.leechers
+         }
+      }
+      
+      analysisOriginalItem.value = enrichedOriginal
+      analysisLoading.value = false
+      return
+    }
+  } catch (e) {
+    console.warn('[ItemDetails] Analysis failed, proceeding to direct download:', e)
+  } finally {
+     // analysisLoading handled inside
+  }
+
+  // 2. Direct Download (if no alternatives or analysis failed)
+  // Close the loading modal
+  showAnalysisModal.value = false
+  analysisLoading.value = false
+  openDownloadConfigurationModal()
+}
+
+const onAnalysisConfirm = (selectedItem) => {
+  // Update the item to be downloaded with the selected one (might be original or swap)
+  item.value = selectedItem
+  showAnalysisModal.value = false
+  
+  // Proceed to configuration
+  openDownloadConfigurationModal()
+}
+
+const openDownloadConfigurationModal = () => {
   console.log('[ItemDetails] Abrindo modal de download')
   if (!item.value) return
 

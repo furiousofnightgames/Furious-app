@@ -60,9 +60,12 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { useFavoritesStore } from '../stores/favorites'
+import { useDownloadStore } from '../stores/download'
+import api from '../services/api'
 
 const router = useRouter()
 const favoritesStore = useFavoritesStore()
+const downloadStore = useDownloadStore()
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -77,17 +80,46 @@ function cleanName(name) {
   return normalized.length > 48 ? `${normalized.slice(0, 48)}...` : normalized
 }
 
-function openFavorite(fav) {
-  const normalizedName = favoritesStore.normalizeFavoriteName(fav.name)
-  const item = {
-    id: fav.item_id,
-    name: normalizedName || String(fav.name || '').trim(),
-    url: fav.url,
-    source_id: fav.source_id
+async function openFavorite(fav) {
+  // Tentar encontrar o item completo na store de downloads para garantir que temos a URL e outros metadados
+  const fullItem = downloadStore.items.find(i => i.source_id === fav.source_id && i.id === fav.item_id)
+  
+  let item
+  
+  if (fullItem) {
+    // Clone para evitar mutação direta na store se algo mudar na visualização
+    item = { ...fullItem }
+    console.log('[FavoritesDrawer] Item completo encontrado na store:', item.name)
+  } else {
+    // Se não estiver na store (ex: outra fonte), buscar na API
+    try {
+      console.log('[FavoritesDrawer] Buscando detalhes na API para:', fav.name)
+      const resp = await api.get(`/api/sources/${fav.source_id}/items/${fav.item_id}`)
+      if (resp.data) {
+        item = resp.data
+        console.log('[FavoritesDrawer] Detalhes recuperados da API')
+      }
+    } catch (e) {
+      console.warn('[FavoritesDrawer] Falha ao buscar na API:', e)
+    }
+
+    if (!item) {
+      // Fallback: usar dados parciais do favorito
+      console.warn('[FavoritesDrawer] Item não encontrado, usando dados parciais do favorito')
+      const normalizedName = favoritesStore.normalizeFavoriteName(fav.name)
+      item = {
+        id: fav.item_id,
+        name: normalizedName || String(fav.name || '').trim(),
+        url: fav.url,
+        source_id: fav.source_id
+      }
+    }
   }
+
   try {
     sessionStorage.setItem('itemDetails', JSON.stringify(item))
   } catch (e) {
+    console.error('[FavoritesDrawer] Erro ao salvar item no sessionStorage:', e)
   }
 
   emit('close')

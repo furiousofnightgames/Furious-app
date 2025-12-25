@@ -1,18 +1,18 @@
 =======
-# 🚀 Furious App - Acelerador de Downloads Profissional v2.2.0
+# 🚀 Furious App - Acelerador de Downloads Profissional v2.6.0
 
 Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.
 
-**Versão 2.20 estável disponível!** - Com suporte completo a Windows e interface otimizada.
+**Versão 2.6.0 estável disponível!** - Com suporte completo a Windows e interface otimizada.
 
-## 🆕 Novidades na Versão 2.2.0
->>>>>>> dec3e14bc6e2c5d0ce517eb9c8f9f10994cc3aa2
+## 🆕 Novidades na Versão 2.6.0
+- ✅ **Análise Inteligente de Fontes (Pré-Job)**: Intercepta o download para sugerir fontes com mais seeds/saúde.
+- ✅ **Sondagem de Trackers em Tempo Real**: Verifica seeds/peers reais via UDP antes do download.
+- ✅ **Estabilidade Steam API**: Novo sistema de fila (Semáforo) para evitar erros 503.
 - ✅ Nova tela de inicialização holográfica com tema cyberpunk
 - ✅ Corrigidos problemas de codificação de caracteres
 - ✅ Melhorias de estabilidade e performance
 - ✅ Interface otimizada para melhor experiência do usuário
-- ✅ Corrigidos problemas críticos de comunicação entre frontend e backend
-- ✅ Favoritos: ⭐ nos cards e na tela de detalhes + remoção rápida no drawer
 - ✅ IDs de itens estáveis (favoritos continuam marcados após reiniciar servidor)
 
 ---
@@ -533,10 +533,7 @@ R: Sim, execute via Python. O instalador .EXE é apenas Windows.
 Desenvolvido por FURIOUSOFNIGHTGAMES 
 
 **Data de Lançamento**: Dezembro 2025  
-<<<<<<< HEAD
-=======
-**Versão**: 2.2.0  
->>>>>>> dec3e14bc6e2c5d0ce517eb9c8f9f10994cc3aa2
+**Versão**: 2.6.0
 **Status**: ✅ Produção
 
 ---
