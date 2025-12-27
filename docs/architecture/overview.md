@@ -36,16 +36,21 @@ graph TD
 ### 3. Banco de Dados
 - **Tecnologia**: SQLite
 - **Estrutura**:
-  - Tabelas principais: `sources`, `items`, `jobs`, `job_parts`, `favorites`
+  - Tabelas principais: `source`, `item`, `job`, `jobpart`, `favorite`
+  - Resolver: `resolveralias` (auto-aprendizado local: chave normalizada -> AppID)
   - Migrações manuais (sem sistema de migração automática atualmente)
 
 ### 4. Motor de Downloads
 - **Tecnologias**: Aria2 (C++), Python (wrapper)
 - **Funcionalidades**:
-  - Gerenciamento de filas de download
-  - Suporte a múltiplas conexões
-  - Pausa/continuação de downloads
-  - Suporte a HTTP/HTTPS, Magnet, Torrent
+  - Gerenciamento de filas de download (estados: queued, running, paused, completed, failed, canceled)
+  - Suporte a múltiplas conexões (segmentação automática)
+  - Pausa/continuação/cancelamento seguros
+  - Suporte a HTTP/HTTPS com Range requests
+  - Suporte a Magnet e Torrent via Aria2 (trackers públicos embutidos)
+  - Retentativas automáticas com backoff
+  - Limpeza segura de arquivos temporários ao cancelar
+  - Detecção automática do binário aria2c
 
 ### 5. Integração com Steam
 - **APIs**: Steam Web API, SteamGridDB API
@@ -100,7 +105,7 @@ graph TD
 3. **WebSockets para Atualizações em Tempo Real**:
    - Melhor experiência do usuário
    - Reduz chamadas HTTP desnecessárias
-   - Sincronização em tempo real entre abas/dispositivos
+   - Atualizações em tempo real dentro da aplicação
 
 4. **Contêinerização de Dependências**:
    - Python e Aria2 incluídos como binários portáteis
@@ -111,11 +116,10 @@ graph TD
 
 1. **Escalabilidade**:
    - SQLite pode ter problemas com alta concorrência
-   - Não projetado para múltiplos usuários simultâneos
+   - Aplicação local-first (uso típico: 1 usuário por máquina)
 
 2. **Segurança**:
-   - Autenticação/autorização básicas
-   - Sem suporte a múltiplos usuários
+   - Aplicação local-first (localhost). Não foi projetada para exposição pública.
 
 3. **Performance**:
    - Processamento de JSON grandes pode ser lento
@@ -123,7 +127,7 @@ graph TD
 
 ## Próximos Passos
 
-1. Implementar sistema de plugins
-2. Adicionar suporte a mais fontes de metadados
-3. Melhorar sistema de cache
-4. Adicionar suporte a múltiplos usuários
+1. Deduplicação/imagens: reduzir falsos positivos e melhorar consistência
+2. Busca na biblioteca em grandes volumes (se necessário)
+3. Resiliência de download: sugerir alternativas do mesmo grupo ao falhar
+4. Melhorias na análise pré-download: mais fontes e heurísticas mais precisas

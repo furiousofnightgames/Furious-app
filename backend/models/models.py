@@ -69,3 +69,12 @@ class JobPart(SQLModel, table=True):
     size: Optional[int] = None
     status: str = "pending"  # pending, running, completed, failed
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ResolverAlias(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    # Key derived from the base title / session cache key (stable, sanitized)
+    key: str = Field(index=True, unique=True)
+    app_id: int = Field(index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

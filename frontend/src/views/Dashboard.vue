@@ -109,11 +109,11 @@
         </div>
         <h2 class="text-lg font-bold text-purple-400">Ações Rápidas</h2>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
         <!-- Fontes JSON - Laranja -->
         <router-link to="/sources">
-          <div class="p-4 bg-gradient-to-br from-amber-900/30 to-orange-900/10 rounded-lg border border-amber-500/40 hover:border-amber-500/70 hover:shadow-lg hover:shadow-amber-500/20 transition cursor-pointer text-center">
-            <div class="w-8 h-8 mx-auto mb-2">
+          <div class="p-3 bg-gradient-to-br from-amber-900/30 to-orange-900/10 rounded-lg border border-amber-500/40 hover:border-amber-500/70 hover:shadow-lg hover:shadow-amber-500/20 transition cursor-pointer text-center">
+            <div class="w-7 h-7 mx-auto mb-1.5">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
                 <defs>
                   <linearGradient id="sourceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -128,14 +128,14 @@
                       fill="url(#sourceGrad)" opacity="0.7" class="animate-pulse" style="animation-delay: 0.1s"/>
               </svg>
             </div>
-            <p class="font-bold text-amber-300">Fontes JSON</p>
+            <p class="font-bold text-amber-300 text-sm">Fontes JSON</p>
           </div>
         </router-link>
 
         <!-- Novo Download - Verde -->
         <router-link to="/new-download">
-          <div class="p-4 bg-gradient-to-br from-emerald-900/30 to-green-900/10 rounded-lg border border-emerald-500/40 hover:border-emerald-500/70 hover:shadow-lg hover:shadow-emerald-500/20 transition cursor-pointer text-center">
-            <div class="w-8 h-8 mx-auto mb-2">
+          <div class="p-3 bg-gradient-to-br from-emerald-900/30 to-green-900/10 rounded-lg border border-emerald-500/40 hover:border-emerald-500/70 hover:shadow-lg hover:shadow-emerald-500/20 transition cursor-pointer text-center">
+            <div class="w-7 h-7 mx-auto mb-1.5">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
                 <defs>
                   <linearGradient id="newGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -148,14 +148,14 @@
                 <line x1="14" y1="10" x2="10" y2="14" stroke="url(#newGrad)" stroke-width="2" stroke-linecap="round" class="animate-pulse" style="animation-delay: 0.2s"/>
               </svg>
             </div>
-            <p class="font-bold text-emerald-300">Novo Download</p>
+            <p class="font-bold text-emerald-300 text-sm">Novo Download</p>
           </div>
         </router-link>
 
         <!-- Histórico - Azul -->
         <router-link to="/downloads">
-          <div class="p-4 bg-gradient-to-br from-blue-900/30 to-cyan-900/10 rounded-lg border border-blue-500/40 hover:border-blue-500/70 hover:shadow-lg hover:shadow-blue-500/20 transition cursor-pointer text-center">
-            <div class="w-8 h-8 mx-auto mb-2">
+          <div class="p-3 bg-gradient-to-br from-blue-900/30 to-cyan-900/10 rounded-lg border border-blue-500/40 hover:border-blue-500/70 hover:shadow-lg hover:shadow-blue-500/20 transition cursor-pointer text-center">
+            <div class="w-7 h-7 mx-auto mb-1.5">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
                 <defs>
                   <linearGradient id="histGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -168,13 +168,32 @@
                 <rect x="2" y="20" width="20" height="2" fill="url(#histGrad)" rx="1" opacity="0.8"/>
               </svg>
             </div>
-            <p class="font-bold text-blue-300">Histórico</p>
+            <p class="font-bold text-blue-300 text-sm">Histórico</p>
+          </div>
+        </router-link>
+
+        <!-- Biblioteca - Ciano -->
+        <router-link to="/library">
+          <div class="p-3 bg-gradient-to-br from-cyan-900/30 to-sky-900/10 rounded-lg border border-cyan-500/40 hover:border-cyan-500/70 hover:shadow-lg hover:shadow-cyan-500/20 transition cursor-pointer text-center">
+            <div class="w-7 h-7 mx-auto mb-1.5">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
+                <defs>
+                  <linearGradient id="libGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color: #22d3ee" />
+                    <stop offset="100%" style="stop-color: #38bdf8" />
+                  </linearGradient>
+                </defs>
+                <path d="M6 4h12a2 2 0 012 2v14H6a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="url(#libGrad)" stroke-width="1.5" opacity="0.9"/>
+                <path d="M8 8h8M8 12h8M8 16h6" stroke="url(#libGrad)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+              </svg>
+            </div>
+            <p class="font-bold text-cyan-300 text-sm">Biblioteca</p>
           </div>
         </router-link>
 
         <!-- Reconectar - Roxo -->
-        <button @click="downloadStore.connectWebSocket()" class="p-4 bg-gradient-to-br from-purple-900/30 to-violet-900/10 rounded-lg border border-purple-500/40 hover:border-purple-500/70 hover:shadow-lg hover:shadow-purple-500/20 transition cursor-pointer text-center w-full btn-translucent">
-          <div class="w-8 h-8 mx-auto mb-2">
+        <button @click="downloadStore.connectWebSocket(true)" class="p-3 bg-gradient-to-br from-purple-900/30 to-violet-900/10 rounded-lg border border-purple-500/40 hover:border-purple-500/70 hover:shadow-lg hover:shadow-purple-500/20 transition cursor-pointer text-center w-full btn-translucent">
+          <div class="w-7 h-7 mx-auto mb-1.5">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
               <defs>
                 <linearGradient id="connGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -187,7 +206,7 @@
               <circle cx="12" cy="12" r="10" stroke="url(#connGrad)" stroke-width="0.5" fill="none" opacity="0.4"/>
             </svg>
           </div>
-          <p class="font-bold" :class="downloadStore.isConnected ? 'text-purple-300' : 'text-red-300'">Reconectar</p>
+          <p class="font-bold text-sm" :class="downloadStore.isConnected ? 'text-purple-300' : 'text-red-300'">Reconectar</p>
         </button>
       </div>
     </Card>

@@ -66,9 +66,11 @@
 │   ├── package.json
 │   └── vite.config.js
 ├── engine/               # Motor de downloads
-├── launcher/             # Aplicativo Electron
+├── launcher/             # Saída do build/instalador (electron-builder)
 ├── docs/                 # Documentação
-└── scripts/              # Scripts úteis
+├── electron-main.js      # Entrada do Electron
+├── electron-preload.js   # Preload do Electron
+└── run.py                # Modo local (backend+frontend) em 8000
 ```
 
 ## Desenvolvimento
@@ -76,11 +78,11 @@
 ### Iniciar Backend
 
 ```bash
-# No diretório raiz do projeto
-uvicorn backend.main:app --reload
+# No diretório raiz do projeto (modo local)
+py run.py
 ```
 
-O servidor estará disponível em `http://localhost:8000`
+O servidor estará disponível em `http://127.0.0.1:8000`
 
 ### Iniciar Frontend
 
@@ -94,16 +96,7 @@ O frontend estará disponível em `http://localhost:5173`
 
 ### Executar Testes
 
-#### Backend
-```bash
-pytest
-```
-
-#### Frontend
-```bash
-cd frontend
-npm run test:unit
-```
+Atualmente não há suíte de testes automatizada configurada por padrão.
 
 ### Padrões de Código
 
@@ -163,7 +156,7 @@ Use as DevTools do navegador (F12) para:
 
 ### Backend
 ```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 4
+py run.py
 ```
 
 ### Frontend
@@ -179,8 +172,7 @@ npm run build
    - As alterações no código são refletidas instantaneamente
 
 2. **Mock de Dados**
-   - Use `frontend/src/mocks` para dados de teste
-   - Ative com `VITE_USE_MOCKS=true` no `.env`
+  - O frontend consome a API real do backend local.
 
 3. **Variáveis de Ambiente**
    - Backend: `.env` na raiz do projeto

@@ -9,8 +9,9 @@
       sizeClasses,
       className
     ]"
+    :type="as === 'button' ? 'button' : undefined"
     :disabled="disabled"
-    @click="emit('click')"
+    @click="emit('click', $event)"
     role="button"
     :aria-disabled="disabled ? 'true' : 'false'"
   >

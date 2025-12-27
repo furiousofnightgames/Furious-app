@@ -4,6 +4,7 @@ import Downloads from '../views/Downloads.vue'
 import Sources from '../views/Sources.vue'
 import NewDownload from '../views/NewDownload.vue'
 import ItemDetails from '../views/ItemDetails.vue'
+import Library from '../views/Library.vue'
 
 const routes = [
   {
@@ -20,6 +21,11 @@ const routes = [
     path: '/sources',
     name: 'Sources',
     component: Sources
+  },
+  {
+    path: '/library',
+    name: 'Library',
+    component: Library
   },
   {
     path: '/new',

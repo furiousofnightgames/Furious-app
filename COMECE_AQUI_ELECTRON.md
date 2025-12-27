@@ -6,8 +6,8 @@ Bem-vindo ao Furious App, um gerenciador de downloads avançado com suporte a UR
 
 ### 1️⃣ Pré-requisitos
 
-- Node.js 18.16.1 ou superior
-- Python 3.10.5 ou superior
+- Node.js 18+ (recomendado)
+- Python 3.10+ (para desenvolvimento local)
 - Git (opcional, apenas para desenvolvimento)
 
 ### 2️⃣ Instalar Dependências
@@ -15,7 +15,7 @@ Bem-vindo ao Furious App, um gerenciador de downloads avançado com suporte a UR
 ```powershell
 # Clonar o repositório (se ainda não tiver feito)
 git clone [URL_DO_REPOSITORIO]
-cd aplicacao-json-versoes
+cd aplicacao-pessoal-json
 
 # Instalar dependências do backend
 pip install -r requirements.txt
@@ -35,8 +35,14 @@ npm run dev
 
 Isso irá iniciar:
 - ✅ Frontend em http://localhost:5173
-- ✅ Backend em http://localhost:8001
+- ✅ Backend em http://localhost:8001 (Electron)
 - ✅ Janela do Electron com a aplicação
+
+Para rodar local (sem Electron), use:
+```powershell
+py run.py
+```
+Isso sobe o backend+frontend em http://127.0.0.1:8000
 
 ### 4️⃣ Gerar Instalador .exe
 
@@ -46,9 +52,7 @@ Para criar um instalador do Windows:
 npm run build:installer
 ```
 
-Resultado em `dist/`:
-- `Furious App Setup X.Y.Z.exe` - Instalador (para distribuir)
-- `Furious App X.Y.Z.exe` - Portable (executável direto)
+Resultado (padrão) em `launcher/`.
 
 ## 📋 Arquivos Criados
 
@@ -98,8 +102,8 @@ Gera o instalador em ~10 minutos.
 
 ## ⚠️ Pré-requisitos
 
-- ✅ **Node.js 14+** - https://nodejs.org/
-- ✅ **Python 3.9+** - (já incluído nos portables)
+- ✅ **Node.js 18+** - https://nodejs.org/
+- ✅ **Python** - (já incluído nos portables do instalador)
 - ✅ **Windows 10+** - (para executar .exe)
 
 Verifique:
@@ -115,7 +119,7 @@ python --version
 → Instale Node.js: https://nodejs.org/
 
 ### "Porta 8000 em uso"
-→ No Electron a porta do backend é 8001. Feche outras aplicações usando 8001 ou ajuste `BACKEND_PORT` em `electron-main.js`
+→ No modo local (`py run.py`) a porta é 8000. No Electron a porta do backend é 8001.
 
 ### "Python não encontrado"
 → Verifique `portables/python-64bits/python.exe` existe
@@ -170,8 +174,7 @@ npm run build:installer
 
 Após gerar o instalador:
 
-1. Encontre: `dist/Furious App Setup 1.0.0.exe`
-1. Encontre: `dist/Furious App Setup X.Y.Z.exe`
+1. Encontre: `launcher/Furious App Setup.exe`
 2. Distribua aos usuários
 3. Usuários executam e instalam
 4. Atalho criado automaticamente
@@ -199,7 +202,7 @@ Sua aplicação está pronta para ser distribuída como .exe!
 
 ---
 
-**Versão:** 1.0.0  
+**Versão:** 2.7.0  
 **Data:** Dezembro 2025  
 **Status:** ✅ Pronto para Produção
 

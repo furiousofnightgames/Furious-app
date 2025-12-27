@@ -91,6 +91,8 @@ class SteamGridDBProvider(ImageProvider):
                  capsule_url = grids[0]["url"]
 
             return {
+                "id": game_id,
+                "name": game_name,
                 "header": header_url or hero_url,
                 "capsule": capsule_url or header_url,
                 "hero": hero_url,

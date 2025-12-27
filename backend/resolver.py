@@ -6,6 +6,75 @@ Implementa a estratégia de resolução 100% conforme plano_completo_imagens.md
 import re
 from typing import Dict, Optional, Any
 from backend.steam_service import steam_client
+from backend.db import get_session
+from backend.models.models import ResolverAlias
+from datetime import datetime
+from sqlmodel import select
+
+
+_resolver_telemetry: Dict[str, int] = {
+    "cache_hit": 0,
+    "rule_hit": 0,
+    "steam_hit": 0,
+    "sgdb_hit": 0,
+    "reject_low_plausibility": 0,
+    "sgdb_reject_low_plausibility": 0,
+}
+
+
+def _telemetry_inc(key: str, n: int = 1) -> None:
+    try:
+        _resolver_telemetry[key] = int(_resolver_telemetry.get(key, 0)) + int(n)
+    except Exception:
+        pass
+
+
+def get_resolver_telemetry() -> Dict[str, int]:
+    try:
+        return dict(_resolver_telemetry)
+    except Exception:
+        return {}
+
+
+def _get_db_alias_app_id(key: Optional[str]) -> Optional[int]:
+    if not key:
+        return None
+    try:
+        session = get_session()
+        try:
+            k = str(key).strip().lower()
+            obj = session.exec(select(ResolverAlias).where(ResolverAlias.key == k)).first()
+            if not obj:
+                return None
+            return int(obj.app_id)
+        finally:
+            session.close()
+    except Exception:
+        return None
+
+
+def _upsert_db_alias(key: Optional[str], app_id: Optional[int]) -> None:
+    if not key or not app_id:
+        return
+    try:
+        k = str(key).strip().lower()
+        if not _is_safe_cache_key(k):
+            return
+        session = get_session()
+        try:
+            existing = session.exec(select(ResolverAlias).where(ResolverAlias.key == k)).first()
+            if existing:
+                existing.app_id = int(app_id)
+                existing.updated_at = datetime.utcnow()
+                session.add(existing)
+            else:
+                obj = ResolverAlias(key=k, app_id=int(app_id), created_at=datetime.utcnow(), updated_at=datetime.utcnow())
+                session.add(obj)
+            session.commit()
+        finally:
+            session.close()
+    except Exception:
+        return
 
 
 _GENERIC_CACHE_TOKENS = {
@@ -54,6 +123,123 @@ def _make_session_cache_key(raw_name: str, normalized_name: str) -> Optional[str
     return key if _is_safe_cache_key(key) else None
 
 
+def _roman_to_int(s: str) -> Optional[int]:
+    if not s:
+        return None
+    t = s.strip().upper()
+    if not re.fullmatch(r"[IVXLCDM]+", t):
+        return None
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    total = 0
+    prev = 0
+    for ch in reversed(t):
+        v = values.get(ch)
+        if v is None:
+            return None
+        if v < prev:
+            total -= v
+        else:
+            total += v
+            prev = v
+    return total if total > 0 else None
+
+
+def _extract_numbers_and_roman(text: str) -> set[str]:
+    if not text:
+        return set()
+    tokens = re.findall(r"\b\d+\b", text)
+    romans = re.findall(r"\b[ivxlcdm]+\b", text)
+    out = set()
+    for t in tokens:
+        # Ignore years like (2023) / (2014) that appear in release titles.
+        # Steam names often omit the year, and treating it as a required number
+        # causes false rejections.
+        try:
+            if len(t) == 4:
+                y = int(t)
+                if 1970 <= y <= 2099:
+                    continue
+        except Exception:
+            pass
+        out.add(t)
+    for r in romans:
+        out.add(r.lower())
+    return out
+
+
+def _tokenize(text: str) -> set[str]:
+    if not text:
+        return set()
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def _is_appid_match_plausible(query: str, app_id: int) -> bool:
+    """Reject obvious false positives (e.g. Battlefield 6 resolving to Battlefield V).
+
+    Uses:
+    - numeric/roman tokens compatibility
+    - minimum token overlap (only when the query has enough signal)
+    """
+    try:
+        cand_name = None
+        if getattr(steam_client, "_app_map", None) and int(app_id) in steam_client._app_map:
+            cand_name = steam_client._app_map.get(int(app_id))
+        if not cand_name:
+            return True
+
+        q_norm = normalize_game_name(query)
+        c_norm = normalize_game_name(cand_name)
+
+        q_nums = _extract_numbers_and_roman(q_norm)
+        c_nums = _extract_numbers_and_roman(c_norm)
+        if q_nums and not q_nums.issubset(c_nums):
+            return False
+
+        q_tokens = _tokenize(q_norm)
+        c_tokens = _tokenize(c_norm)
+        stop = {"the", "a", "an", "of", "in", "on", "at", "to", "for", "by", "edition", "pack", "bundle", "complete"}
+        q_sig = {t for t in q_tokens if t and t not in stop and len(t) >= 2}
+        c_sig = {t for t in c_tokens if t and t not in stop and len(t) >= 2}
+
+        if len(q_sig) >= 3:
+            overlap = len(q_sig & c_sig)
+            ratio = overlap / max(1, len(q_sig))
+            if ratio < 0.55:
+                return False
+        return True
+    except Exception:
+        return True
+
+
+def _is_name_match_plausible(query: str, candidate_name: str) -> bool:
+    try:
+        if not query or not candidate_name:
+            return True
+        q_norm = normalize_game_name(query)
+        c_norm = normalize_game_name(candidate_name)
+
+        q_nums = _extract_numbers_and_roman(q_norm)
+        c_nums = _extract_numbers_and_roman(c_norm)
+        if q_nums and not q_nums.issubset(c_nums):
+            return False
+
+        q_tokens = _tokenize(q_norm)
+        c_tokens = _tokenize(c_norm)
+        stop = {"the", "a", "an", "of", "in", "on", "at", "to", "for", "by", "edition", "pack", "bundle", "complete"}
+        q_sig = {t for t in q_tokens if t and t not in stop and len(t) >= 2}
+        c_sig = {t for t in c_tokens if t and t not in stop and len(t) >= 2}
+
+        # If query is very short, don't over-filter.
+        if len(q_sig) <= 2:
+            return True
+
+        overlap = len(q_sig & c_sig)
+        ratio = overlap / max(1, len(q_sig))
+        return ratio >= 0.55
+    except Exception:
+        return True
+
+
 # ============================================================================
 # REGRAS AUTOMÁTICAS - Mapeamento de abreviações comuns
 # ============================================================================
@@ -64,6 +250,10 @@ AUTOMATIC_RULES = {
     "gta 5": "Grand Theft Auto V",
     "gta vi": "Grand Theft Auto VI",
     "gta 6": "Grand Theft Auto VI",
+    "lords of the fallen 2023": "Lords of the Fallen",
+    "the lords of the fallen 2023": "Lords of the Fallen",
+    "blood refreshed supply": "Blood: Fresh Supply",
+    "blood: refreshed supply": "Blood: Fresh Supply",
     "cod mw3": "Call of Duty Modern Warfare III",
     "cod mw2": "Call of Duty Modern Warfare II",
     "cod mw": "Call of Duty Modern Warfare",
@@ -255,8 +445,10 @@ def _build_name_candidates(raw_name: str, normalized_name: str) -> list[str]:
         return out
 
     # Prefer right side of slashed titles (e.g. "PT title / EN title").
-    if "/" in raw:
-        parts = [p.strip() for p in raw.split("/") if p and p.strip()]
+    # IMPORTANT: do NOT split on slashes used as tag separators like "DLCs/Bonuses".
+    # Only treat it as a bilingual title when it uses the spaced pattern " / ".
+    if " / " in raw:
+        parts = [p.strip() for p in raw.split(" / ") if p and p.strip()]
         if len(parts) >= 2:
             right = parts[-1]
             out.append(right)
@@ -264,6 +456,12 @@ def _build_name_candidates(raw_name: str, normalized_name: str) -> list[str]:
             if right_clean:
                 out.append(right_clean)
 
+    clean = steam_client.sanitize_search_term(raw)
+    if clean:
+        out.append(clean)
+
+    # Try base title before ':' as a fallback candidate, but after the full title.
+    # This prevents overly-generic prefixes like "Blood" from winning too early.
     if ":" in raw:
         left = raw.split(":", 1)[0].strip()
         if left:
@@ -271,10 +469,6 @@ def _build_name_candidates(raw_name: str, normalized_name: str) -> list[str]:
             left_clean = steam_client.sanitize_search_term(left)
             if left_clean:
                 out.append(left_clean)
-
-    clean = steam_client.sanitize_search_term(raw)
-    if clean:
-        out.append(clean)
 
     if normalized_name:
         out.append(normalized_name)
@@ -330,8 +524,24 @@ async def resolve_game_images(game_name: str) -> Dict[str, Any]:
     candidates = _build_name_candidates(game_name, normalized)
 
     session_cache_key = _make_session_cache_key(game_name, normalized)
+
+    # ========== TENTATIVA 1.5: Alias persistido no SQLite (auto-aprendizado) ==========
+    # Only for safe, non-generic keys.
+    db_alias_app_id = _get_db_alias_app_id(session_cache_key)
+    if db_alias_app_id:
+        try:
+            print(f"[Resolver] DB alias hit: {session_cache_key} -> {db_alias_app_id}")
+        except Exception:
+            pass
+        art = await _fetch_game_art(db_alias_app_id, game_name)
+        if art.get("found"):
+            _telemetry_inc("steam_hit")
+            if session_cache_key and art.get("appId"):
+                _set_cached_app_id(session_cache_key, int(art.get("appId")))
+            return art
     cached_app_id = _get_cached_app_id(session_cache_key) if session_cache_key else None
     if cached_app_id:
+        _telemetry_inc("cache_hit")
         # Evitar caracteres fora da codepage do console (problema no .exe)
         try:
             print(f"[Resolver] Cache hit: {cached_app_id}")
@@ -346,18 +556,24 @@ async def resolve_game_images(game_name: str) -> Dict[str, Any]:
             _delete_cached_app_id(session_cache_key)
     
     # ========== TENTATIVA 2: Regras Automáticas ==========
-    rule_match = AUTOMATIC_RULES.get(normalized)
+    # NOTE: normalize_game_name strips parenthetical content like "(2023)",
+    # but some franchises have ambiguous titles across years.
+    # So we also try the session cache key (base title sanitization) as a rule key.
+    rule_match = AUTOMATIC_RULES.get(normalized) or (AUTOMATIC_RULES.get(session_cache_key) if session_cache_key else None)
     if rule_match:
+        _telemetry_inc("rule_hit")
         try:
             print(f"[Resolver] Regra automatica: '{game_name}' -> '{rule_match}'")
         except:
             pass
         app_id = await steam_client.search_monitor(rule_match)
-        if app_id:
+        if app_id and _is_appid_match_plausible(rule_match, int(app_id)):
             art = await _fetch_game_art(app_id, rule_match)
             if art.get("found"):
+                _telemetry_inc("steam_hit")
                 if session_cache_key and art.get("appId"):
                     _set_cached_app_id(session_cache_key, int(art.get("appId")))
+                    _upsert_db_alias(session_cache_key, int(art.get("appId")))
                 return art
     
     # ========== TENTATIVA 3: Busca Exata (nome original) ==========
@@ -370,6 +586,13 @@ async def resolve_game_images(game_name: str) -> Dict[str, Any]:
         app_id = await steam_client.search_monitor(candidate)
         if not app_id:
             continue
+        if not _is_appid_match_plausible(candidate, int(app_id)):
+            _telemetry_inc("reject_low_plausibility")
+            try:
+                print(f"[Resolver] AppID rejeitado por baixa plausibilidade: {app_id}")
+            except:
+                pass
+            continue
         matched_name = candidate
         try:
             print(f"[Resolver] Encontrado via busca exata: {app_id}")
@@ -378,8 +601,10 @@ async def resolve_game_images(game_name: str) -> Dict[str, Any]:
 
         art = await _fetch_game_art(app_id, matched_name or game_name)
         if art.get("found"):
+            _telemetry_inc("steam_hit")
             if session_cache_key and art.get("appId"):
                 _set_cached_app_id(session_cache_key, int(art.get("appId")))
+                _upsert_db_alias(session_cache_key, int(art.get("appId")))
             return art
     
     # ========== TENTATIVA 4: Busca com Normalização ==========
@@ -389,16 +614,20 @@ async def resolve_game_images(game_name: str) -> Dict[str, Any]:
         pass
     if normalized != game_name and normalized:
         app_id = await steam_client.search_monitor(normalized)
-        if app_id:
+        if app_id and _is_appid_match_plausible(normalized, int(app_id)):
             try:
                 print(f"[Resolver] Encontrado via normalizacao: {app_id}")
             except:
                 pass
             art = await _fetch_game_art(app_id, (candidates[0] if candidates else game_name))
             if art.get("found"):
+                _telemetry_inc("steam_hit")
                 if session_cache_key and art.get("appId"):
                     _set_cached_app_id(session_cache_key, int(art.get("appId")))
+                    _upsert_db_alias(session_cache_key, int(art.get("appId")))
                 return art
+        elif app_id:
+            _telemetry_inc("reject_low_plausibility")
     
     # ========== TENTATIVA 5: Fuzzy Matching Local ==========
     try:
@@ -422,10 +651,23 @@ async def resolve_game_images(game_name: str) -> Dict[str, Any]:
             sgdb_result = await steam_client.sgdb.search_and_get_art(candidate)
             if not sgdb_result:
                 continue
+            # If provider returns a name, validate match to reduce wrong images.
+            sgdb_name = None
+            if isinstance(sgdb_result, dict):
+                sgdb_name = sgdb_result.get("name") or sgdb_result.get("game_name")
+            if sgdb_name and not _is_name_match_plausible(candidate, sgdb_name):
+                _telemetry_inc("sgdb_reject_low_plausibility")
+                try:
+                    print(f"[Resolver] SteamGridDB rejeitado por baixa plausibilidade: '{candidate}' -> '{sgdb_name}'")
+                except:
+                    pass
+                continue
             try:
-                print(f"[Resolver] Encontrado via SteamGridDB")
+                print("[Resolver] Encontrado via SteamGridDB")
             except:
                 pass
+            sgdb_result["found"] = True
+            _telemetry_inc("sgdb_hit")
             return {
                 "found": True,
                 "appId": None,  # SteamGridDB não tem appId
@@ -465,7 +707,10 @@ async def _fetch_game_art(app_id: int, game_name: str = None) -> Dict[str, Any]:
                 pass
             return {
                 "found": True,
-                "appId": app_id,
+                # IMPORTANT: do NOT keep the original app_id here.
+                # When Steam has no art for this app_id (common for DLC/soundtracks),
+                # returning it poisons frontend fallbacks (header.jpg) and caches.
+                "appId": None,
                 "capsule": sgdb_result.get("capsule"),
                 "header": sgdb_result.get("header"),
                 "background": sgdb_result.get("background"),

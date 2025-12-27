@@ -101,10 +101,10 @@
         </div>
         <div class="flex-1">
           <p class="text-sm text-gray-200">
-            Alguns downloads (principalmente via magnet, JSON, FitGirl, DODI, OnlineFix etc...) podem levar alguns segundos no início para preparar a sessão, baixar metadados e descobrir peers/seeders antes de ganhar velocidade.
+            Alguns downloads podem levar alguns segundos no início para preparar a sessão, obter metadados e realizar a descoberta de peers antes de atingir a velocidade ideal.
           </p>
           <p class="text-xs text-gray-400 mt-1">
-            Aguarde essa etapa inicial. Em seguida, o download tende a estabilizar e manter velocidade contínua.
+            Aguarde essa etapa inicial. Após a sincronização, o download tende a estabilizar e manter desempenho total e contínuo.
           </p>
         </div>
       </div>

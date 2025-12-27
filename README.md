@@ -1,11 +1,11 @@
 =======
-# 🚀 Furious App - Acelerador de Downloads Profissional v2.6.0
+# 🚀 Furious App - Acelerador de Downloads Profissional v2.7.0
 
 Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.
 
-**Versão 2.6.0 estável disponível!** - Com suporte completo a Windows e interface otimizada.
+**Versão 2.7.0 estável disponível!** - Com suporte completo a Windows e interface otimizada.
 
-## 🆕 Novidades na Versão 2.6.0
+## 🆕 Novidades na Versão 2.7.0
 - ✅ **Análise Inteligente de Fontes (Pré-Job)**: Intercepta o download para sugerir fontes com mais seeds/saúde.
 - ✅ **Sondagem de Trackers em Tempo Real**: Verifica seeds/peers reais via UDP antes do download.
 - ✅ **Estabilidade Steam API**: Novo sistema de fila (Semáforo) para evitar erros 503.
@@ -29,24 +29,23 @@ Sistema completo de gerenciamento de downloads com interface web moderna. Suport
 
 ### 🎯 Busca Automática
 - 🔍 **Biblioteca Steam**: Busca automática de jogos instalados
-- 👥 **Múltiplos Perfis**: Suporte a vários usuários Steam
+- 👥 **Perfil local**: cache local de AppList/metadata para resolver imagens
 - 📦 **Metadados Ricos**: Capas, banners, descrições e vídeos
 
 ### 🖼️ SteamGridDB
 - 🖼️ **Capas Personalizadas**: Download automático de capas de alta qualidade
 - 🏷️ **Organização**: Tags e categorias personalizáveis
-- 🌍 **Suporte a Idiomas**: Interface em múltiplos idiomas
+- 🌍 **Interface PT-BR**: foco em experiência local
 
 ## ⚡ Recursos Avançados
 
 ### 🔄 WebSockets
 - Atualizações em tempo real de progresso de downloads
 - Notificações instantâneas
-- Sincronização entre abas/dispositivos
+- Reconexão automática (quando aplicável)
 
 ### 🛡️ Segurança
 - Validação de entrada em todas as requisições
-- HTTPS para comunicação segura
 - Isolamento de processos no Electron
 
 ### 💾 Cache Inteligente
@@ -144,7 +143,7 @@ Observação:
 
 ### Windows - Instalador (.EXE)
 
-1. **Baixe** o instalador mais recente (FuriousAppInstaller.exe)
+1. **Baixe** o instalador mais recente (`Furious App Setup.exe`)
 2. **Execute** o instalador com privilégios de administrador
 3. **Siga** o assistente de instalação
 4. **Inicie** o Furious App pelo menu Iniciar ou atalho na área de trabalho
@@ -154,7 +153,7 @@ Observação:
 ```bash
 # 1. Clonar o repositório
 git clone [URL_DO_REPOSITORIO]
-cd aplicacao-json-versoes
+cd aplicacao-pessoal-json
 
 # 2. Instalar dependências do backend
 pip install -r requirements.txt
@@ -176,7 +175,7 @@ npm run build:frontend
 # 2. Criar instalador
 npm run build:installer
 
-# O instalador será gerado na pasta 'dist'
+# O instalador é gerado em 'launcher/' (configuração atual)
 ```
 
 ---
@@ -380,7 +379,7 @@ Test-Path "C:\Program Files (x86)\NSIS\makensis.exe"
 # Compile o instalador
 .\compilar-instalador.ps1
 
-# Resultado: FuriousAppInstaller.exe
+# Resultado: launcher/Furious App Setup.exe
 ```
 
 ---
@@ -533,7 +532,7 @@ R: Sim, execute via Python. O instalador .EXE é apenas Windows.
 Desenvolvido por FURIOUSOFNIGHTGAMES 
 
 **Data de Lançamento**: Dezembro 2025  
-**Versão**: 2.6.0
+**Versão**: 2.7.0
 **Status**: ✅ Produção
 
 ---

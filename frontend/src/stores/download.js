@@ -605,19 +605,48 @@ export const useDownloadStore = defineStore('download', () => {
     }
   }
 
-  function connectWebSocket() {
-    // Prevent multiple simultaneous connection attempts
-    if (isConnected.value || window.__wsConnecting) {
-      console.log('[WebSocket] Already connected or connecting, skipping')
-      return
-    }
+  function connectWebSocket(force = false) {
+    // Forced reconnect: close any existing socket and start a new connection.
+    if (force) {
+      try {
+        manuallyDisconnected = false
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout)
+          reconnectTimeout = null
+        }
 
-    // Reuse global singleton if available
-    if (window.__wsInstance && window.__wsInstance.readyState === WebSocket.OPEN) {
-      console.log('[WebSocket] Reusing existing global WebSocket instance')
-      ws.value = window.__wsInstance
-      isConnected.value = true
-      return
+        const existing = ws.value || window.__wsInstance
+        if (existing && existing.readyState !== WebSocket.CLOSED) {
+          try {
+            // prevent old handlers from mutating state after we start a new socket
+            existing.onopen = null
+            existing.onmessage = null
+            existing.onerror = null
+            existing.onclose = null
+          } catch (e) {}
+          try { existing.close() } catch (e) {}
+        }
+
+        ws.value = null
+        window.__wsInstance = null
+        window.__wsConnecting = false
+        isConnected.value = false
+        isConnecting.value = false
+      } catch (e) {}
+    } else {
+      // Prevent multiple simultaneous connection attempts
+      if (isConnected.value || window.__wsConnecting) {
+        console.log('[WebSocket] Already connected or connecting, skipping')
+        return
+      }
+
+      // Reuse global singleton if available
+      if (window.__wsInstance && window.__wsInstance.readyState === WebSocket.OPEN) {
+        console.log('[WebSocket] Reusing existing global WebSocket instance')
+        ws.value = window.__wsInstance
+        isConnected.value = true
+        return
+      }
     }
 
     window.__wsConnecting = true

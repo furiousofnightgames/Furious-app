@@ -13,7 +13,7 @@ Bem-vindo ao Furious App, um poderoso gerenciador de downloads com suporte a mú
 
 ### Passo a Passo
 1. Baixe o instalador mais recente da nossa página de lançamentos
-2. Execute o arquivo `FuriousApp-Setup-x.x.x.exe`
+2. Execute o arquivo `Furious App Setup.exe`
 3. Siga as instruções na tela
 4. O Furious App será instalado e um atalho será criado na área de trabalho
 
@@ -21,8 +21,8 @@ Bem-vindo ao Furious App, um poderoso gerenciador de downloads com suporte a mú
 
 ### Iniciando o Aplicativo
 - Clique duas vezes no ícone do Furious App na área de trabalho
-- Aguarde a inicialização do serviço (o ícone na bandeja do sistema ficará verde quando estiver pronto)
-- O navegador padrão abrirá automaticamente com a interface do usuário
+- Aguarde a inicialização (na primeira vez pode levar alguns segundos)
+- A aplicação abre em uma janela (Electron). Em modo local (`py run.py`), você acessa via navegador.
 
 ### Interface Principal
 
@@ -32,11 +32,21 @@ Bem-vindo ao Furious App, um poderoso gerenciador de downloads com suporte a mú
 - **Indicador de Status**: Mostra o estado da conexão com o servidor
 - **Tema**: Alternar entre modo claro e escuro
 
-#### Barra Lateral
-- **Dashboard**: Visão geral dos downloads e estatísticas
-- **Fontes**: Gerenciar fontes de download
-- **Downloads**: Visualizar e gerenciar downloads ativos e concluídos
-- **Configurações**: Personalizar o comportamento do aplicativo
+### 🖥️ Navegação e Telas
+
+### Telas Principais (rotas Vue.js)
+- **Dashboard** (`/`): Visão geral com estatísticas e acesso rápido
+- **Downloads** (`/downloads`): Lista de downloads ativos e concluídos com controles de pausa/continuar/cancelar
+- **Fontes** (`/sources`): Gerenciar fontes JSON e importar da galeria
+- **Biblioteca** (`/library`): Itens baixados com metadados Steam/imagens
+- **Novo Download** (`/new-download` ou `/`): Fluxo para adicionar fontes e iniciar downloads
+- **Detalhes do Item** (`/item/:id`): Página de detalhes com opções de download e análise
+
+### Componentes e Modais
+- **SourceAnalysisModal**: Análise pré-download com comparação de saúde de torrents
+- **Favoritos**: Acesso rápido via menu lateral
+- **Proxy de imagens/vídeos**: Para contornar limitações de carregamento
+- **Dialog nativo**: Selecionar pasta de destino
 
 ## 🔄 Gerenciando Fontes
 
@@ -81,20 +91,12 @@ Ao clicar em Baixar, o sistema pode exibir **"Analisando..."**. Isso significa q
 - **Velocidade**: Ajuste a velocidade máxima nas configurações
 
 ### Download em 2º Plano
-O Furious App continua baixando mesmo com a janela fechada. O ícone na bandeja do sistema mostra o progresso.
+O Furious App continua baixando enquanto a aplicação estiver aberta.
 
-## 🎮 Integração com Steam
+## 🎮 Biblioteca / Imagens
 
-### Conectando sua Conta Steam
-1. Vá para **Configurações** > **Integrações** > **Steam**
-2. Clique em **Conectar à Steam**
-3. Siga as instruções para fazer login
-4. Selecione a biblioteca que deseja importar
-
-### Recursos da Steam
-- **Biblioteca Automática**: Jogos da sua biblioteca Steam aparecem automaticamente
-- **Metadados Ricos**: Capas, descrições e vídeos dos jogos
-- **Atualizações Automáticas**: Seus jogos são verificados por atualizações automaticamente
+O Furious App tenta associar capas/imagens automaticamente para jogos exibidos na Biblioteca.
+Quando não há correspondência confiável, o app prefere mostrar placeholder em vez de uma imagem errada.
 
 ## ⚙️ Configurações
 
@@ -117,10 +119,7 @@ O Furious App continua baixando mesmo com a janela fechada. O ícone na bandeja 
 ## 🔍 Dicas e Truques
 
 ### Atalhos de Teclado
-- `Ctrl+N`: Nova aba
-- `Ctrl+T`: Nova guia de download
-- `Ctrl+W`: Fechar aba atual
-- `Ctrl+R`: Recarregar a página atual
+- `Ctrl+R`: Recarregar a página
 - `F5`: Atualizar lista de downloads
 
 ### Download em Lote
@@ -145,85 +144,29 @@ O Furious App pode pausar downloads automaticamente quando você estiver usando 
 - **Erro de Permissão**: Execute o aplicativo como administrador
 
 ### Obtendo Ajuda
-- **Ajuda Rápida**: Pressione `F1` em qualquer tela
-- **Documentação Online**: Acesse nossa base de conhecimento
-- **Suporte**: Envie um e-mail para suporte@exemplo.com
+- **Documentação**: Consulte os arquivos `.md` na pasta `docs/` do projeto
+- **Fontes**: Exemplos e fontes populares podem ser encontradas na comunidade
 
 ## 🔄 Atualizações
 
-O Furious App verifica atualizações automaticamente. Você será notificado quando uma nova versão estiver disponível.
-
-Para verificar manualmente:
-1. Vá para **Ajuda** > **Verificar Atualizações**
-2. Siga as instruções para instalar a atualização
-
-## 📱 Aplicativo Móvel
-
-Acesse seus downloads em qualquer lugar com nosso aplicativo móvel (disponível para iOS e Android).
-
-### Recursos do Aplicativo Móvel
-- Visualize o progresso dos downloads
-- Inicie/pare downloads remotos
-- Receba notificações
-- Acesse seus arquivos de qualquer lugar
+O Furious App é distribuído via instalador. Para atualizar, execute o instalador da versão mais recente.
 
 ## 🤝 Suporte
 
 ### Canais de Atendimento
-- **Chat Online**: Disponível no canto inferior direito
-- **E-mail**: suporte@exemplo.com
-- **Fórum**: Participe da nossa comunidade
-- **Redes Sociais**: Siga-nos para dicas e atualizações
+- Consulte a documentação do projeto e os logs locais.
 
 ### Horário de Atendimento
 - Segunda a Sexta: 9h às 18h (GMT-3)
 - Sábados: 9h às 13h
 - Domingos e feriados: Plantão para emergências
 
-## 📜 Histórico de Versões
+## 🔒 Privacidade
 
-### Versão 2.2.0 (Atual)
-- Nova interface do usuário
-- Suporte a temas
-- Melhor desempenho
-- Correções de bugs
-
-### Versão 2.1.0
-- Integração com Steam
-- Download em segundo plano
-- Notificações
-
-### Versão 2.0.0
-- Versão inicial
-- Recursos básicos de download
-- Gerenciamento de fontes
-
-## 📝 Notas de Atualização
-
-### 2.2.0
-- Corrigido problema de codificação de caracteres
-- Melhorias na estabilidade
-- Otimizações de desempenho
-
-## 🔒 Privacidade e Segurança
-
-### Coleta de Dados
-Coletamos apenas dados anônimos de uso para melhorar o aplicativo. Você pode desativar isso em **Configurações** > **Privacidade**.
-
-### Segurança
-- Conexões criptografadas
-- Dados locais protegidos
-- Atualizações de segurança regulares
-
-## 📞 Contato
-
-- **Site**: [www.furiousapp.com](https://www.furiousapp.com)
-- **E-mail**: contato@furiousapp.com
-- **Telefone**: +55 (11) 1234-5678
-- **Endereço**: Av. Exemplo, 123, São Paulo - SP, Brasil
+A aplicação é **local-first**. Dados e configurações ficam no computador do usuário.
 
 ---
 
-📅 **Última Atualização**: 17/12/2023
+📅 **Última Atualização**: 27/12/2025 (v2.7.0)
 
-© 2023 Furious App. Todos os direitos reservados.
+© 2025 Furious App. Todos os direitos reservados.

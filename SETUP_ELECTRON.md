@@ -197,7 +197,7 @@ npm run dev
 ### Apenas Backend
 
 ```powershell
-python run.py
+py run.py
 ```
 
 ## 🏗️ Build e Empacotamento
@@ -227,18 +227,18 @@ npm run build:installer
 ```
 
 Resultado: 
-- `dist/Furious App Setup 1.0.0.exe` - Instalador
-- `dist/Furious App 1.0.0.exe` - Portable
+- `launcher/Furious App Setup.exe` - Instalador
+- `launcher/win-unpacked/Furious App.exe` - Portable
 
 ## 📦 Estrutura de Saída
 
-Após `npm run build:installer`, você terá:
+Após `npm run build:installer`, você terá (por padrão):
 
 ```
-dist/
-├── Furious App Setup 1.0.0.exe    (Instalador com desinstalador)
-├── Furious App 1.0.0.exe          (Executável portátil)
-└── builder-effective-config.yaml  (Configuração usada)
+launcher/
+├── Furious App Setup.exe
+└── win-unpacked/
+    └── Furious App.exe
 ```
 
 ## 🚀 Distribuição
@@ -247,7 +247,7 @@ dist/
 
 1. **Distribuir o instalador:**
    ```
-   Furious App Setup 1.0.0.exe
+   Furious App Setup.exe
    ```
 
 2. **Usuário executa o instalador:**
@@ -264,14 +264,14 @@ dist/
 
 ```powershell
 # Executar o portable diretamente
-.\dist\Furious App 1.0.0.exe
+.\launcher\win-unpacked\Furious App.exe
 ```
 
 ## ⚙️ Configuração Avançada
 
 ### Variáveis de Ambiente
 
-Crie um arquivo `.env` na raiz do projeto para personalizar configurações:
+Variáveis de ambiente suportadas comumente (opcional):
 
 ```ini
 # Backend
@@ -426,7 +426,7 @@ DEBUG=* npm start
 2. **Testar build portable:**
    ```powershell
    npm run build:electron
-   .\dist\Furious App 1.0.0.exe
+   .\launcher\win-unpacked\Furious App.exe
    ```
 
 3. **Gerar instalador final:**
@@ -435,7 +435,7 @@ DEBUG=* npm start
    ```
 
 4. **Distribuir:**
-   - Envie `Furious App Setup 1.0.0.exe` aos usuários
+   - Envie `launcher/Furious App Setup.exe` aos usuários
    - Ou hospede em servidor de downloads
 
 ## 🎯 Checklist Final
@@ -459,6 +459,6 @@ Para problemas:
 
 ---
 
-**Versão:** 1.0.0  
+**Versão:** 2.7.0  
 **Data:** Dezembro 2025  
 **Status:** ✅ Pronto para Produção

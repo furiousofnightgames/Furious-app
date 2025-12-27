@@ -51,11 +51,13 @@
                     </svg>
                   </div>
                   <div>
-                    <div class="font-medium text-white">{{ originalItem?.name || 'Carregando...' }}</div>
+                    <div class="font-medium text-white whitespace-normal break-words">{{ originalItem?.name || 'Carregando...' }}</div>
                     <div class="text-sm text-slate-400 flex items-center gap-3">
                       <span>{{ originalItem?.source || '...' }}</span>
                       <span class="w-1 h-1 bg-slate-600 rounded-full"></span>
                       <span>{{ formatSize(originalItem?.size) }}</span>
+                      <span class="w-1 h-1 bg-slate-600 rounded-full"></span>
+                      <span>{{ formatUploadDate(originalItem?.uploadDate) }}</span>
                     </div>
                   </div>
                 </div>
@@ -92,6 +94,7 @@
                   <thead class="bg-slate-800/50 text-slate-400 font-medium">
                     <tr>
                       <th class="p-4">Fonte / Nome</th>
+                      <th class="p-4 text-center">Data</th>
                       <th class="p-4 text-right">Tamanho</th>
                       <th class="p-4 text-center">Saúde (Seeds)</th>
                       <th class="p-4 text-right">Ação</th>
@@ -101,7 +104,10 @@
                     <tr v-for="(cand, idx) in candidates" :key="idx" class="hover:bg-slate-800/30 transition group">
                       <td class="p-4">
                         <div class="font-medium text-white group-hover:text-cyan-400 transition">{{ cand.source_title }}</div>
-                        <div class="text-xs text-slate-500 truncate max-w-[300px]" :title="cand.item.name">{{ cand.item.name }}</div>
+                        <div class="text-xs text-slate-200 group-hover:text-cyan-200 whitespace-normal break-words transition" :title="cand.item.name">{{ cand.item.name }}</div>
+                      </td>
+                      <td class="p-4 text-center text-slate-300">
+                        {{ formatUploadDate(cand.item?.uploadDate) }}
                       </td>
                       <td class="p-4 text-right text-slate-300 font-mono">
                         {{ formatSize(cand.item.size) }}
@@ -187,6 +193,22 @@ function formatSize(bytes) {
     i++
   }
   return `${bytes.toFixed(1)} ${units[i]}`
+}
+
+function formatUploadDate(v) {
+  if (!v) return '—'
+  const s = String(v).trim()
+  if (!s) return '—'
+  // If backend sends relative strings, keep them.
+  if (s.includes('ago') || s.includes('há')) return s
+  // Try ISO parsing
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return s
+  try {
+    return d.toLocaleDateString('pt-BR')
+  } catch (e) {
+    return s
+  }
 }
 
 function getHealthBadgeClass(health) {

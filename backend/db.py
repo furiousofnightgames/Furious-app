@@ -58,6 +58,19 @@ def init_db():
             cols = [row[1] for row in r.fetchall()]
             return column in cols
 
+        # ResolverAlias table (auto-learning) - ensure it exists even on upgrades.
+        conn.exec_driver_sql(
+            "CREATE TABLE IF NOT EXISTS resolveralias ("
+            "id INTEGER PRIMARY KEY, "
+            "key TEXT NOT NULL UNIQUE, "
+            "app_id INTEGER NOT NULL, "
+            "created_at DATETIME, "
+            "updated_at DATETIME"
+            ")"
+        )
+        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_resolveralias_key ON resolveralias(key)")
+        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_resolveralias_app_id ON resolveralias(app_id)")
+
         # Job table columns
         if not has_column('job', 'k'):
             conn.exec_driver_sql("ALTER TABLE job ADD COLUMN k INTEGER DEFAULT 4")

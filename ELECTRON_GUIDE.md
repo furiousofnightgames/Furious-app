@@ -21,21 +21,17 @@ O Furious App foi transformado em uma aplicação **Desktop** completa com:
 - **Steam API** para integração com a plataforma Steam
 - **Sistema de Cache** multi-camada para melhor desempenho
 - **Validação de Dados** com Pydantic
-- **Gerenciamento de Sessão** para usuários autenticados
+- Aplicação local-first (localhost), sem autenticação por padrão
 - **Logging** abrangente para diagnóstico de problemas
-- **Sistema de Plugins** para extensibilidade
 
 ### Frontend (Vue.js/Electron)
 - **Vue 3** com Composition API
 - **Pinia** para gerenciamento de estado
 - **TailwindCSS** para estilização
 - **WebSockets** para atualizações em tempo real
-- **i18n** para internacionalização
-- **Temas** personalizáveis
+- Tema escuro (Tailwind)
 - **Componentes** reutilizáveis e acessíveis
-- **Testes unitários** com Vitest
 - **Lazy loading** de rotas
-- **Service Workers** para cache offline
 
 ### Sistema de Cache Inteligente
 - **Memória** para dados frequentes
@@ -45,12 +41,10 @@ O Furious App foi transformado em uma aplicação **Desktop** completa com:
 - **Compressão** para otimização
 
 ### Segurança
-- **HTTPS** para todas as comunicações
-- **CORS** configurado corretamente
-- **Rate Limiting** para prevenir abusos
-- **Sanitização** de entradas
-- **Proteção contra XSS/CSRF**
-- **Política de Segurança de Conteúdo (CSP)**
+- Aplicação local-first (localhost)
+- **CORS** configurado para ambiente local
+- **Sanitização** básica de entradas
+- Isolamento de processos no Electron (sandbox + contextIsolation)
 
 ### Funcionalidades Implementadas
 - **Interface Desktop Nativa** - Janelas, menus e notificações do sistema
@@ -70,14 +64,11 @@ aplicacao-pessoal-json/
 │   └── services/               # Lógica de negócio
 │
 ├── 📁 docs/                     # Documentação do projeto
-│   ├── CHECKLIST_FINAL.md
-│   ├── COMECE_AQUI.md
-│   ├── COMPILAR_INSTALADOR.md
-│   ├── EXECUTAVEL_README.md
-│   ├── LAUNCHER_CONFIGURACAO.md
-│   ├── POS_INSTALACAO.md
-│   ├── RESUMO_EXECUCAO.md
-│   └── RESUMO_FINAL.md
+│   ├── api/endpoints.md
+│   ├── architecture/overview.md
+│   ├── deployment/production.md
+│   ├── development/setup.md
+│   └── usage/user-guide.md
 │
 ├── 📁 engine/                   # Motor de downloads
 │   ├── downloader.py           # Lógica principal de download
@@ -316,7 +307,7 @@ Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICE
                │ HTTP/WebSocket
                ▼
 ┌─────────────────────────────────────────┐
-│    Backend Python (localhost:8000)      │
+│    Backend Python (localhost:8001)      │
 │  ┌─────────────────────────────────┐   │
 │  │   FastAPI + SQLModel            │   │
 │  │   - API REST                    │   │
@@ -352,11 +343,11 @@ Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICE
 
 2. **Distribua o arquivo:**
    ```
-   Furious App Setup 1.0.0.exe
+   Furious App Setup.exe
    ```
 
 3. **Usuário executa:**
-   - Clica em `Furious App Setup 1.0.0.exe`
+   - Clica em `Furious App Setup.exe`
    - Seleciona pasta de instalação
    - Clica em "Instalar"
    - Atalho criado no Desktop e Menu Iniciar
@@ -371,7 +362,7 @@ Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICE
 
 ```powershell
 # Executar o portable diretamente
-.\dist\Furious App 1.0.0.exe
+.\launcher\win-unpacked\Furious App.exe
 ```
 
 ## 🔍 Troubleshooting
@@ -395,7 +386,7 @@ Test-Path "portables/python-64bits/python.exe"
 
 **Solução:**
 ```powershell
-# Encontre o processo
+# No modo local (py run.py) usa 8000. No Electron usa 8001.
 netstat -ano | findstr :8000
 
 # Mate o processo (substitua PID)
@@ -494,7 +485,7 @@ npm start                    # Executar Electron (produção)
 
 - [ ] Testar em desenvolvimento: `npm run dev`
 - [ ] Testar build portable: `npm run build:electron`
-- [ ] Executar portable: `.\dist\Furious App 1.0.0.exe`
+- [ ] Executar portable: `.\launcher\win-unpacked\Furious App.exe`
 - [ ] Testar build instalador: `npm run build:installer`
 - [ ] Executar instalador em máquina limpa
 - [ ] Testar desinstalação
@@ -521,7 +512,7 @@ npm start                    # Executar Electron (produção)
    ```
 
 4. **Distribuir:**
-   - Envie `dist/Furious App Setup 1.0.0.exe` aos usuários
+   - Envie `launcher/Furious App Setup.exe` aos usuários
    - Ou hospede em servidor
 
 ## 📞 Suporte
@@ -535,6 +526,6 @@ Para problemas:
 
 ---
 
-**Versão:** 1.0.0  
+**Versão:** 2.7.0  
 **Data:** Dezembro 2025  
 **Status:** ✅ Pronto para Produção

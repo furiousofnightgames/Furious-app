@@ -7,7 +7,7 @@
       style="pointer-events: auto; position: fixed; top: 0; left: 0; right: 0; bottom: 0;"
     >
       <div
-        class="bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/30 rounded-xl p-8 max-w-md w-full m-4 shadow-2xl z-50 relative"
+        :class="['bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/30 rounded-xl p-8 w-full m-4 shadow-2xl z-50 relative', maxWidthClass]"
         @click.stop
         ref="dialog"
         style="max-height: 90vh; overflow-y: auto; pointer-events: auto;"
@@ -49,6 +49,10 @@ const props = defineProps({
   isOpen: {
     type: Boolean,
     default: true
+  },
+  maxWidthClass: {
+    type: String,
+    default: 'max-w-md'
   },
   title: String,
   showCancel: {

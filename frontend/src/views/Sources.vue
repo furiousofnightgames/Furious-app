@@ -40,9 +40,9 @@
               <rect x="12" y="14" width="8" height="8" fill="url(#itemsGrad)" opacity="0.5" stroke="url(#itemsGrad)" stroke-width="1.5" class="animate-bounce" style="animation-delay: 0.3s"/>
             </svg>
           </div>
-          <h3 class="text-sm font-semibold text-cyan-400">Itens Totais</h3>
+          <h3 class="text-sm font-semibold text-cyan-400">Itens Indexados</h3>
         </div>
-        <p class="text-2xl font-bold text-cyan-300 text-center">{{ filteredItems.length }}</p>
+        <p class="text-2xl font-bold text-cyan-300 text-center">{{ libraryStats.total_items }}</p>
       </div>
 
       <div class="p-4 bg-gradient-to-br from-purple-900/30 to-pink-900/10 rounded-lg border border-purple-500/20 hover:border-purple-500/50 transition">
@@ -66,11 +66,24 @@
               </g>
             </svg>
           </div>
-          <h3 class="text-sm font-semibold text-purple-400">Categorias</h3>
+          <h3 class="text-sm font-semibold text-purple-400">Jogos/Entradas</h3>
         </div>
-        <p class="text-2xl font-bold text-purple-300 text-center">{{ getCategories.size }}</p>
+        <p class="text-2xl font-bold text-purple-300 text-center">{{ libraryStats.total_groups }}</p>
       </div>
     </div>
+
+    <Card class="bg-gradient-to-br from-gray-900/40 to-gray-900/20 border border-cyan-500/20">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div class="text-sm text-gray-400">
+          A biblioteca carrega automaticamente os itens de todas as fontes.
+        </div>
+        <router-link to="/library">
+          <Button variant="primary" class="px-4 py-2">
+            Abrir Biblioteca
+          </Button>
+        </router-link>
+      </div>
+    </Card>
 
     <!-- Add Source Form -->
     <Card>
@@ -159,12 +172,9 @@
         <div
           v-for="source in sources"
           :key="source.id"
-          @click="selectSource(source)"
           :class="[
             'p-4 rounded-lg border cursor-pointer transition-all hover:shadow-lg',
-            selectedSourceId === source.id
-              ? 'bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border-cyan-500 shadow-lg shadow-cyan-500/30'
-              : 'bg-gradient-to-br from-gray-900/50 to-gray-800/30 border-gray-700 hover:border-cyan-500/50'
+            'bg-gradient-to-br from-gray-900/50 to-gray-800/30 border-gray-700 hover:border-cyan-500/50'
           ]"
         >
           <!-- Header com título e botão delete -->
@@ -219,197 +229,18 @@
             </Toggle>
           </div>
 
-          <!-- Selected Indicator -->
-          <div v-if="selectedSourceId === source.id" class="flex items-center justify-center gap-1 text-cyan-400 text-sm font-semibold">
-            <span>✓ Selecionada</span>
+          <div class="flex items-center justify-center gap-1 text-cyan-400 text-sm font-semibold">
+            <router-link to="/library" class="hover:text-cyan-200">Ver na Biblioteca</router-link>
           </div>
         </div>
       </div>
-
-      <!-- Search Bar e Filtros -->
-      <div v-if="selectedSourceId" ref="searchTopRef">
-        <Card class="relative">
-        <!-- Mensagem de erro ao carregar items -->
-        <div v-if="itemLoadError" class="mb-4 p-3 bg-red-500/20 border border-red-500 rounded text-red-300 text-sm">
-          {{ itemLoadError }}
-        </div>
-
-        <!-- Loading spinner -->
-        <div v-if="isLoadingItems" class="mb-4 p-4 bg-blue-500/20 border border-blue-500 rounded text-blue-300 text-sm flex items-center gap-2">
-          <span class="animate-spin">⏳</span>
-          Carregando items da fonte...
-        </div>
-
-        <div class="flex gap-3">
-          <div class="flex-1 relative">
-            <div class="absolute left-3 top-1/2 transform -translate-y-1/2 text-cyan-400 pointer-events-none">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5">
-                <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
-                <path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <input 
-              v-model="searchQuery"
-              placeholder="Buscar item..."
-              type="text"
-              class="w-full bg-gradient-to-r from-gray-900 to-gray-800 border-2 border-cyan-500/30 hover:border-cyan-500/50 focus:border-cyan-500 rounded-lg pl-10 pr-4 py-2.5 text-gray-100 outline-none transition-all duration-200 placeholder-gray-500"
-              :disabled="isLoadingItems"
-            />
-          </div>
-          <button v-if="searchQuery" @click="searchQuery = ''" type="button" class="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600/80 hover:bg-red-600 text-white transform hover:scale-105 active:scale-95 transition-all duration-200" :disabled="isLoadingItems">
-            ✕ Limpar
-          </button>
-        </div>
-
-        <div v-if="getCategories.size > 0" class="mt-4">
-          <p class="text-xs font-bold text-purple-400 mb-2">Categorias:</p>
-          <div class="flex flex-wrap gap-2 overflow-visible relative z-0">
-            <button
-              @click="selectedCategory = null"
-              :class="[
-                'px-3 py-1 rounded text-sm transition-all flex items-center gap-2',
-                !selectedCategory 
-                  ? 'bg-cyan-500 text-black font-bold' 
-                  : 'bg-gray-800 text-gray-300'
-              ]"
-            >
-              Todas
-              <span class="text-xs bg-black/30 px-2 py-0.5 rounded text-white font-semibold">
-                {{ getCategoryItemCount(null) }}
-              </span>
-            </button>
-            <div
-              v-for="category in Array.from(getCategories)"
-              :key="category"
-              class="flex items-center gap-1 relative"
-            >
-              <button
-                @click="selectedCategory = category"
-                :class="[
-                  'px-3 py-1 text-sm transition-all flex items-center gap-2 rounded',
-                  selectedCategory === category 
-                    ? 'bg-cyan-500 text-black font-bold' 
-                    : 'bg-gray-700 text-gray-300 hover:text-white hover:bg-gray-600'
-                ]"
-              >
-                {{ category }}
-                <span class="text-xs bg-black/30 px-2 py-0.5 rounded text-white font-semibold">
-                  {{ getCategoryItemCount(category) }}
-                </span>
-              </button>
-              <button
-                @click.stop="toggleCategoryMenu(category)"
-                :class="[
-                  'px-2 py-1 text-gray-400 hover:text-cyan-300 transition-colors btn-translucent',
-                  activeCategoryMenu === category ? 'text-cyan-300' : ''
-                ]"
-                title="Menu da categoria"
-              >
-                ⋮
-              </button>
-              
-              <!-- Dropdown Menu - Posicionado fora -->
-              <div 
-                v-if="activeCategoryMenu === category"
-                class="absolute top-full right-0 mt-1 bg-gray-900 border border-cyan-500/50 rounded shadow-lg shadow-cyan-500/20 z-[9999] min-w-max max-w-md pointer-events-auto"
-                @click.stop
-              >
-                <button
-                  @click="showCategoryDetails(category)"
-                  class="block w-full text-left px-4 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/20 hover:text-cyan-200 hover:border-l-2 hover:border-cyan-400 transition-all duration-200 whitespace-nowrap relative z-50 bg-gray-900"
-                >
-                  Detalhes
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <!-- Items List -->
-      <div v-if="selectedSourceId && filteredItems.length > 0" class="space-y-3">
-        <p class="text-sm text-gray-400">{{ filteredItems.length }} item(ns) • Página {{ currentPage }}/{{ totalPages }}</p>
-        
-        <!-- Items Paginados (GRID VIEW) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div v-for="item in paginatedItems" :key="item.id" class="h-full">
-            <SteamGameCard :item="item" @download="openDownloadDialog" />
-          </div>
-        </div>
-
-        <!-- Controles de Paginação -->
-        <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-6">
-          <button 
-            @click="currentPage = Math.max(1, currentPage - 1)"
-            :disabled="currentPage === 1"
-            class="px-3 py-2 rounded-lg font-semibold text-sm bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-500 hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            ← Anterior
-          </button>
-          
-          <!-- Primeira página (se não visível) -->
-          <button
-            v-if="visiblePages[0] > 1"
-            @click="currentPage = 1"
-            class="px-3 py-2 rounded-lg font-semibold text-sm bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-500"
-          >
-            1
-          </button>
-          
-          <!-- Reticências (se houver gap) -->
-          <span v-if="visiblePages[0] > 2" class="px-2 text-gray-500">...</span>
-          
-          <!-- Páginas visíveis -->
-          <div class="flex gap-1">
-            <button
-              v-for="page in visiblePages"
-              :key="page"
-              @click="currentPage = page"
-              :class="[
-                'px-3 py-2 rounded-lg font-semibold text-sm transition-all',
-                currentPage === page
-                  ? 'bg-cyan-500 text-black'
-                  : 'bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-500'
-              ]"
-            >
-              {{ page }}
-            </button>
-          </div>
-          
-          <!-- Reticências (se houver gap) -->
-          <span v-if="visiblePages[visiblePages.length - 1] < totalPages - 1" class="px-2 text-gray-500">...</span>
-          
-          <!-- Última página (se não visível) -->
-          <button
-            v-if="visiblePages[visiblePages.length - 1] < totalPages"
-            @click="currentPage = totalPages"
-            class="px-3 py-2 rounded-lg font-semibold text-sm bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-500"
-          >
-            {{ totalPages }}
-          </button>
-
-          <button 
-            @click="currentPage = Math.min(totalPages, currentPage + 1)"
-            :disabled="currentPage === totalPages"
-            class="px-3 py-2 rounded-lg font-semibold text-sm bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-500 hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            Próxima →
-          </button>
-        </div>
-      </div>
-
-      <Card v-else-if="selectedSourceId && filteredItems.length === 0" class="text-center py-8">
-        <p class="text-gray-400">Nenhum item encontrado.</p>
-      </Card>
     </div>
 
     <Card v-else class="text-center py-8">
       <p class="text-gray-400">Nenhuma fonte adicionada.</p>
     </Card>
-  </div>
 
-  <!-- Modal de Confirmação - Deletar Fonte -->
-  <Modal v-if="showDeleteModal && sourceToDelete" @close="showDeleteModal = false">
+    <Modal v-if="showDeleteModal && sourceToDelete" @close="showDeleteModal = false">
       <div>
         <h3 class="text-lg font-bold text-red-400 mb-4">⚠️ Deletar Fonte</h3>
         <p class="text-gray-300 mb-4">
@@ -418,370 +249,88 @@
         <p class="text-sm text-gray-400 mb-6">
           Todos os items desta fonte serão removidos e não poderão ser recuperados.
         </p>
-        
+
         <div class="flex gap-2 pt-4 border-t border-gray-700">
-          <button 
+          <button
             type="button"
             @click="showDeleteModal = false"
             class="flex-1 border-gray-600/50 text-gray-300 hover:bg-gray-600/10 hover:border-gray-600 transition-all flex items-center justify-center gap-2 btn-translucent"
           >
             Cancelar
           </button>
-          <button 
+          <button
             type="button"
             @click="confirmDeleteSource"
             class="flex-1 px-4 py-2 rounded-lg font-semibold bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transform hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center gap-2"
           >
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5">
-              <path d="M9 3H15V5H9V3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              <path d="M5 5H19V7H18L17 20C17 21.1046 16.1046 22 15 22H9C7.89543 22 7 21.1046 7 20L6 7H5V5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              <line x1="10" y1="10" x2="10" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <line x1="14" y1="10" x2="14" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
             Deletar
           </button>
         </div>
       </div>
     </Modal>
-
-    <!-- Download Dialog -->
-    <Modal v-if="showDownloadDialog" @close="showDownloadDialog = false">
-      <div>
-        <h3 class="text-lg font-bold text-cyan-400 mb-4">⬇️ Baixar Item</h3>
-        <div class="space-y-4">
-          <div>
-            <p class="text-sm text-gray-400">Item:</p>
-            <p class="text-cyan-300 font-semibold">{{ selectedItem?.name }}</p>
-          </div>
-          
-          <div>
-            <p class="text-sm text-gray-400">Tamanho:</p>
-            <p class="text-cyan-300">
-              <span v-if="modalInfo.checking">Verificando...</span>
-              <span v-else-if="modalInfo.size">{{ formatBytes(modalInfo.size) }} <span class="text-xs text-gray-400">(ETA ~{{ modalInfo.eta }}s)</span></span>
-              <span v-else>{{ formatBytes(selectedItem?.size) }}</span>
-            </p>
-          </div>
-
-          <div>
-            <label class="block text-sm font-semibold text-gray-300 mb-2">Pasta</label>
-            <div class="flex gap-2">
-              <div class="flex-1 p-3 bg-gray-900 border border-cyan-500/30 rounded">
-                <p class="text-sm text-cyan-300 truncate">
-                  {{ downloadDestination || 'downloads' }}
-                </p>
-              </div>
-              <button 
-                type="button"
-                @click.stop="browsePath"
-                class="border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-500 transition-all flex items-center justify-center gap-2 btn-translucent"
-              >
-                <span v-if="browseLoading">⏳</span>
-                <span v-else>...</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="flex gap-2 pt-4 border-t border-gray-700">
-            <button 
-              type="button"
-              @click.prevent.stop="showDownloadDialog = false"
-              class="flex-1 border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-500 transition-all flex items-center justify-center gap-2 btn-translucent"
-            >
-              Cancelar
-            </button>
-            <button 
-              type="button"
-              @click.prevent.stop="confirmDownload"
-              :class="[
-                'flex-1 px-4 py-2 rounded-lg font-semibold transform hover:scale-105 active:scale-95 transition-all duration-300',
-                downloadStore.loading ? 'opacity-60 cursor-not-allowed bg-gray-700 text-gray-200' : 'bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 text-white shadow-lg shadow-green-500/50 hover:shadow-green-500/80'
-              ]"
-              :disabled="downloadStore.loading"
-            >
-              <span v-if="downloadStore.loading">Aguarde...</span>
-              <span v-else>Baixar Agora</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Modal>
-
-    <!-- Manual folder input fallback -->
-    <Modal v-if="showManualFolderModal" @close="showManualFolderModal = false" title="Escolher pasta manualmente" :showDefaultButtons="false">
-      <div style="pointer-events: auto;">
-        <label class="block text-sm font-semibold text-gray-300 mb-2">Caminho da pasta</label>
-        <Input v-model="manualFolderPath" placeholder="C:\\Users\\seu usuario\\Downloads" />
-        <div class="flex gap-2 pt-4" style="pointer-events: auto;">
-          <Button variant="outline" class="flex-1 btn-translucent" @click="showManualFolderModal = false">
-            Cancelar
-          </Button>
-          <Button variant="success" class="flex-1" @click="() => { downloadDestination.value = manualFolderPath.value || downloadDestination.value; showManualFolderModal = false }">
-            Usar esta pasta
-          </Button>
-        </div>
-      </div>
-    </Modal>
-
-    <!-- Modal de Detalhes da Categoria -->
-    <Modal v-if="showCategoryDetailsModal && categoryDetailsData" @close="showCategoryDetailsModal = false" title="Detalhes da Categoria" :showDefaultButtons="false">
-      <div class="space-y-4 max-h-96 overflow-y-auto">
-        <div class="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 p-4 rounded-lg border border-cyan-500/30">
-          <h3 class="text-lg font-bold text-cyan-300 mb-2">{{ categoryDetailsData.categoryName }}</h3>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <p class="text-xs text-gray-400">Total de Itens</p>
-              <p class="text-2xl font-bold text-cyan-300">{{ categoryDetailsData.totalItems }}</p>
-            </div>
-            <div>
-              <p class="text-xs text-gray-400">Tamanho Total</p>
-              <p class="text-2xl font-bold text-emerald-300">{{ categoryDetailsData.totalSize }}</p>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="categoryDetailsData.subcategories.length > 0" class="space-y-2">
-          <p class="text-sm font-semibold text-purple-400 mb-3">Subcategorias:</p>
-          <div v-for="(subcat, idx) in categoryDetailsData.subcategories" :key="idx" class="bg-gray-800/50 p-3 rounded border border-gray-700 hover:border-cyan-500/50 transition-colors">
-            <div class="flex justify-between items-start">
-              <div class="flex-1">
-                <p class="text-sm font-semibold text-gray-200">📁 {{ subcat.name }}</p>
-                <p class="text-xs text-gray-400">{{ subcat.count }} itens</p>
-              </div>
-              <div class="text-right">
-                <p class="text-sm font-bold text-emerald-300">{{ subcat.size }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex gap-2 pt-4">
-          <Button 
-            @click="showCategoryDetailsModal = false"
-            variant="outline"
-            size="md"
-            class="flex-1 flex items-center justify-center gap-1 whitespace-nowrap btn-translucent"
-          >
-            Fechar
-          </Button>
-        </div>
-      </div>
-    </Modal>
-    <!-- Source Analysis Modal -->
-    <SourceAnalysisModal
-      :open="showAnalysisModal"
-      :candidates="analysisCandidates"
-      :original-item="analysisOriginalItem"
-      :original-health="analysisOriginalItem?.health"
-      :is-loading="analysisLoading"
-      @close="showAnalysisModal = false"
-      @confirm="handleSafeSelect"
-    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useDownloadStore } from '../stores/download'
 import api from '../services/api'
 import Card from '../components/Card.vue'
-import SteamGameCard from '../components/SteamGameCard.vue'
 import Button from '../components/Button.vue'
 import Input from '../components/Input.vue'
-import StatCard from '../components/StatCard.vue'
 import Modal from '../components/Modal.vue'
 import Toggle from '../components/Toggle.vue'
-import SourceAnalysisModal from '../components/SourceAnalysisModal.vue'
 import { useToastStore } from '../stores/toast'
-import { formatBytes } from '../utils/format'
 
 const downloadStore = useDownloadStore()
-const searchTopRef = ref(null)
 const sources = ref([])
-const selectedSourceId = ref(null)
-// ... (keep existing refs)
-const searchQuery = ref('')
-const searchQueryDebounced = ref('')
-const selectedCategory = ref(null)
 const showJsonPaste = ref(false)
 const newSourceUrl = ref('')
 const jsonPasteContent = ref('')
-const showDownloadDialog = ref(false)
-const selectedItem = ref(null)
-const downloadDestination = ref('downloads')
 const downloadVerifySsl = ref({}) 
-const showManualFolderModal = ref(false)
-const manualFolderPath = ref('')
-const browseLoading = ref(false)
 const isAddingSource = ref(false)
 const addError = ref('')
-const isLoadingItems = ref(false)
-const itemLoadError = ref('')
-const modalInfo = ref({ size: null, accept_range: false, eta: null, checking: false })
-const activeCategoryMenu = ref(null)
-const showCategoryDetailsModal = ref(false)
-const categoryDetailsData = ref(null)
 
-// Analysis State
-const showAnalysisModal = ref(false)
-const analysisCandidates = ref([])
-const analysisOriginalItem = ref(null)
-const analysisLoading = ref(false)
+const libraryStats = ref({ total_items: 0, total_groups: 0 })
+const librarySourceCounts = ref({})
 
-// ... (keep existing methods)
-
-// Wrapper to handle safe download after analysis
-const handleSafeSelect = (selectedCandidate) => {
-  showAnalysisModal.value = false
-  // Map candidate back to item format if needed, or just use it
-  const finalItem = selectedCandidate.item || selectedCandidate
-  // Ensure source_id is preserved if available, or we need to find it?
-  // Actually, our download logic needs source_id for SSL settings etc.
-  // The candidate item should have source_id.
-  openDownloadConfigurationDialog(finalItem)
-}
-
-const handleSafeKeepOriginal = () => {
-  showAnalysisModal.value = false
-  if (analysisOriginalItem.value) {
-    openDownloadConfigurationDialog(analysisOriginalItem.value)
-  }
-}
-
-// Renamed original openDownloadDialog to openDownloadConfigurationDialog
-function openDownloadConfigurationDialog(item) {
-  console.log(`🔥 [Sources] Opening config dialog for:`, item.name)
-  selectedItem.value = item
-  downloadDestination.value = 'downloads'
-  
-  // Reset modal info
-  modalInfo.value = { size: null, accept_range: false, eta: null, checking: true, browseLoading: false }
-  
-  try {
-    const url = encodeURIComponent(item.url)
-    api.get(`/api/supports_range?url=${url}`).then(({ data }) => {
-      modalInfo.value.size = data.size || null
-      modalInfo.value.accept_range = !!data.accept_ranges
-      if (data.size && modalInfo.value.accept_range) {
-        const baseline = 1024 * 1024
-        modalInfo.value.eta = Math.round((data.size / baseline))
-      }
-    }).catch(err => {
-      console.warn('supports_range failed', err)
-    }).finally(() => {
-      modalInfo.value.checking = false
-    })
-  } catch (e) {
-    modalInfo.value.checking = false
-  }
-
-  showDownloadDialog.value = true
-}
-
-// New entry point triggered by @download
-// New entry point triggered by @download
-async function openDownloadDialog(item) {
-  console.log(`🔍 [Sources] Starting analysis for:`, item.name)
-  
-  // 1. Trigger Analysis UI Immediately
-  analysisOriginalItem.value = item // Show basic info during load
-  analysisCandidates.value = []     // Clear previous
-  analysisLoading.value = true
-  showAnalysisModal.value = true    // Open modal in loading state
-  
-  try {
-    const resp = await api.post('/api/analysis/pre-job', { item: item })
-    
-    // 2. Check results
-    if (resp.data && resp.data.candidates && resp.data.candidates.length > 0) {
-       console.log(`✨ Suggested ${resp.data.candidates.length} sources`)
-       
-       analysisCandidates.value = resp.data.candidates
-       // Keep analysisOriginalItem as set, but enrich health
-       
-       // Sincronizar dados da fonte original para o modal
-       const currentSource = sources.value.find(s => s.id === item.source_id)
-       const sourceName = currentSource?.title || getSourceName(currentSource?.url)
-       
-       const enrichedOriginal = {
-         ...item,
-         source: sourceName,
-         source_title: sourceName
-       }
-       
-       // Se o backend retornou saúde enriquecida, usar!
-       if (resp.data.original_health) {
-          enrichedOriginal.health = resp.data.original_health
-          // Se tiver seeders direto no health, atualizar root
-          if (resp.data.original_health.seeders !== undefined) {
-             enrichedOriginal.seeders = resp.data.original_health.seeders
-             enrichedOriginal.leechers = resp.data.original_health.leechers
-          }
-       }
-       
-       analysisOriginalItem.value = enrichedOriginal
-       
-       // showAnalysisModal.value = true // Already open
-       analysisLoading.value = false   // Switch to content view
-       return
-    }
-  } catch (e) {
-    console.warn(`Analysis failed or skipped:`, e)
-  } finally {
-    // analysisLoading.value = false // Handled inside success or below
-  }
-  
-  // 3. Fallback to normal flow (No candidates or Error)
-  // Close modal (it was in loading state)
-  showAnalysisModal.value = false
-  analysisLoading.value = false
-  
-  // Proceed to normal confirmation
-  openDownloadConfigurationDialog(item)
-}
-
-
-// Modal de confirmação para deletar
 const showDeleteModal = ref(false)
 const sourceToDelete = ref(null)
-
-// Paginação para performance com muitos items
-// Paginação para performance com muitos items
-const itemsPerPage = 24
-const currentPage = ref(1)
-
-watch(currentPage, async () => {
-  await nextTick()
-  if (searchTopRef.value?.scrollIntoView) {
-    searchTopRef.value.scrollIntoView({ behavior: 'smooth' })
-  } else {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-})
-
-// Debounce para search - aumentado para 300ms para evitar engasgos
-let searchDebounceTimer = null
-watch(searchQuery, (newVal) => {
-  clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    searchQueryDebounced.value = newVal
-    currentPage.value = 1  // Reset para primeira página ao filtrar
-  }, 300)
-})
-
-// Reset página quando categoria muda
-watch(selectedCategory, () => {
-  currentPage.value = 1
-})
 
 onMounted(async () => {
   await downloadStore.fetchSources()
   sources.value = downloadStore.sources
-  await downloadStore.fetchAllItems()
+  await refreshLibraryInfo(false)
 })
 
 const getSourceItemCount = (sourceId) => {
-  return downloadStore.items.filter(i => i.source_id === sourceId).length
+  const v = librarySourceCounts.value?.[sourceId]
+  return typeof v === 'number' ? v : 0
+}
+
+async function refreshLibraryInfo(refresh) {
+  try {
+    const resp = await api.get('/api/library' + (refresh ? '?refresh=true' : ''))
+    const data = resp.data || {}
+    const groups = Array.isArray(data.groups) ? data.groups : []
+    libraryStats.value = {
+      total_items: data.total_items || 0,
+      total_groups: groups.length
+    }
+
+    const counts = {}
+    for (const g of groups) {
+      const versions = Array.isArray(g?.versions) ? g.versions : []
+      for (const it of versions) {
+        const sid = it?.source_id
+        if (sid == null) continue
+        counts[sid] = (counts[sid] || 0) + 1
+      }
+    }
+    librarySourceCounts.value = counts
+  } catch (e) {
+    // ignore; keep last known stats
+  }
 }
 
 // Extrai nome amigável da URL da fonte
@@ -815,219 +364,6 @@ const getSourceName = (url) => {
   }
 }
 
-const getCategories = computed(() => {
-  const categories = new Set()
-  downloadStore.items
-    .filter(i => i.source_id === selectedSourceId.value)
-    .forEach(i => {
-      if (i.category) categories.add(i.category)
-    })
-  return categories
-})
-
-// Função de busca fuzzy otimizada - rápida E precisa
-function fuzzyScore(text, query) {
-  const t = text.toLowerCase()
-  const q = query.toLowerCase()
-  
-  // Pontuação perfeita se for match exato
-  if (t === q) return 1000
-  
-  // Se contém exatamente como substring
-  const idx = t.indexOf(q)
-  if (idx !== -1) {
-    // Bonus se for no inicio
-    if (idx === 0) return 950
-    // Bonus se for após espaço ou caractere especial
-    if (idx > 0 && /[\s\-_\.]/.test(t[idx - 1])) return 920
-    return 850
-  }
-  
-  // Busca por primeira letra de cada palavra
-  const words = t.split(/[\s\-_\.]+/).filter(w => w.length > 0)
-  const initials = words.map(w => w[0]).join('')
-  
-  if (initials.includes(q)) return 800
-  
-  // Busca fuzzy precisa: cada letra do query deve aparecer em ordem no text
-  let textIdx = 0
-  let matchCount = 0
-  let lastDistance = 0
-  
-  for (let i = 0; i < q.length; i++) {
-    const found = t.indexOf(q[i], textIdx)
-    if (found === -1) return 0 // Uma letra não encontrada = sem match
-    
-    // Penaliza se as letras estão muito separadas
-    const distance = found - textIdx
-    if (distance > 5) {
-      lastDistance = 0
-      break
-    }
-    
-    matchCount++
-    textIdx = found + 1
-    lastDistance = distance
-  }
-  
-  // Se todas as letras foram encontradas em sequência
-  if (matchCount === q.length) {
-    return 200 + Math.max(0, 100 - lastDistance * 10)
-  }
-  
-  return 0
-}
-
-// Função para calcular score total do item - otimizada
-function itemScore(item, query) {
-  if (!query) return 0
-  
-  const nameScore = fuzzyScore(item.name, query)
-  if (nameScore > 0) return nameScore
-  
-  return item.category ? fuzzyScore(item.category, query) * 0.5 : 0
-}
-
-// Função para extrair primeira palavra
-function getFirstWord(text) {
-  return text.split(/[\s:\-_\.\(\)]/)[0].toLowerCase()
-}
-
-// Função para buscar por primeiro termo ou primeira letra de cada palavra
-function matchStartsWith(text, query) {
-  const t = text.toLowerCase()
-  const q = query.toLowerCase()
-  const words = t.split(/[\s:\-_\.\(\)]+/).filter(w => w.length > 0)
-  
-  // Verificar se começa com a query
-  if (t.startsWith(q)) return 950
-  
-  // Verificar se alguma palavra começa com a query
-  for (const word of words) {
-    if (word.startsWith(q)) return 900
-  }
-  
-  // Verificar se as primeiras letras de cada palavra formam a query
-  const initials = words.map(w => w[0]).join('').toLowerCase()
-  if (initials.includes(q)) return 850
-  
-  // Verificar match de primeira letra de cada palavra individualmente
-  let matches = 0
-  for (let i = 0; i < q.length && i < words.length; i++) {
-    if (words[i].startsWith(q[i])) matches++
-  }
-  if (matches > 0 && matches === q.length) return 800
-  
-  return 0
-}
-
-const filteredItems = computed(() => {
-  let items = downloadStore.items.filter(i => i.source_id === selectedSourceId.value)
-  
-  // Aplicar filtro de categoria primeiro (mais rápido)
-  if (selectedCategory.value) {
-    items = items.filter(i => i.category === selectedCategory.value)
-  }
-  
-  // Aplicar busca por texto
-  if (searchQueryDebounced.value) {
-    const query = searchQueryDebounced.value.trim().toLowerCase()
-    
-    if (query.length > 0) {
-      // Calcular score para cada item - otimizado
-      const scored = items.map(item => {
-        const nameScore = fuzzyScore(item.name, query)
-        const categoryScore = item.category ? fuzzyScore(item.category, query) : 0
-        
-        // Priorizar match no name
-        const finalScore = nameScore > 0 ? nameScore : categoryScore * 0.6
-        
-        return { item, score: finalScore }
-      })
-      
-      // Filtrar items com score > 0 e ordenar por score
-      items = scored
-        .filter(s => s.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .map(s => s.item)
-    }
-  }
-  
-  // Ordenar por data de upload (mais recentes primeiro)
-  // Items sem data vão para o final
-  items.sort((a, b) => {
-    const dateA = a.uploadDate ? new Date(a.uploadDate).getTime() : 0
-    const dateB = b.uploadDate ? new Date(b.uploadDate).getTime() : 0
-    return dateB - dateA // Ordem decrescente (mais recente primeiro)
-  })
-  
-  return items
-})
-
-// Items paginados para renderizar
-const paginatedItems = computed(() => {
-  const total = filteredItems.value.length
-  const start = (currentPage.value - 1) * itemsPerPage
-  const end = start + itemsPerPage
-  return filteredItems.value.slice(start, end)
-})
-
-// Total de páginas
-const totalPages = computed(() => {
-  return Math.ceil(filteredItems.value.length / itemsPerPage)
-})
-
-// Intervalo de páginas visíveis (estilo Steam)
-const maxVisiblePages = 5
-const visiblePages = computed(() => {
-  if (totalPages.value <= maxVisiblePages) {
-    // Se tem 5 ou menos páginas, mostrar todas
-    return Array.from({ length: totalPages.value }, (_, i) => i + 1)
-  }
-  
-  // Calcular range de páginas centrado na página atual
-  let start = Math.max(1, currentPage.value - Math.floor(maxVisiblePages / 2))
-  let end = Math.min(totalPages.value, start + maxVisiblePages - 1)
-  
-  // Ajustar se chegou no final
-  if (end - start + 1 < maxVisiblePages) {
-    start = Math.max(1, end - maxVisiblePages + 1)
-  }
-  
-  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
-})
-
-async function selectSource(source) {
-  console.log(`\n🔄 [Sources] selectSource(${source.id}) - Carregando items sob demanda`)
-  selectedSourceId.value = source.id
-  searchQuery.value = ''
-  selectedCategory.value = null
-  
-  // Garantir que o objeto de SSL seja reativo - inicializar apenas se não existir
-  if (!(source.id in downloadVerifySsl.value)) {
-    // Usar Object.assign para garantir reatividade
-    Object.assign(downloadVerifySsl.value, { [source.id]: true })
-  }
-  // Se já existe, manter o valor anterior (não sobrescrever)
-  
-  // Limpar items anteriores
-  downloadStore.items = []
-  
-  // Carregar items da fonte (releitura do JSON)
-  try {
-    isLoadingItems.value = true
-    itemLoadError.value = ''
-    console.log(`⏳ Aguardando items de "${source.title}"...`)
-    await downloadStore.fetchSourceItems(source.id)
-    console.log(`✓ Items carregados com sucesso`)
-  } catch (e) {
-    console.error(`❌ Erro ao carregar items:`, e.message)
-    itemLoadError.value = `Erro ao carregar items: ${e.message}`
-  } finally {
-    isLoadingItems.value = false
-  }
-}
-
 async function handleAddSource() {
   if (!newSourceUrl.value) {
     try { const ts = useToastStore(); ts.push('Erro', 'Por favor, insira uma URL') } catch (e) {}
@@ -1042,12 +378,7 @@ async function handleAddSource() {
 
     const result = await downloadStore.loadJsonFromUrl(newSourceUrl.value)
     sources.value = downloadStore.sources
-    await downloadStore.fetchAllItems()
-    
-    // Selecionar última fonte adicionada
-    if (sources.value.length > 0) {
-      selectedSourceId.value = sources.value[sources.value.length - 1].id
-    }
+    await refreshLibraryInfo(true)
     
     newSourceUrl.value = ''
     
@@ -1074,8 +405,7 @@ async function handleAddRawJson() {
     const data = JSON.parse(jsonPasteContent.value)
     const result = await downloadStore.loadJsonRaw(data)
     sources.value = downloadStore.sources
-    await downloadStore.fetchAllItems()
-    selectedSourceId.value = sources.value[sources.value.length - 1].id
+    await refreshLibraryInfo(true)
     jsonPasteContent.value = ''
     showJsonPaste.value = false
     
@@ -1119,13 +449,7 @@ async function confirmDeleteSource() {
     const itemsAntes = downloadStore.items.length
     downloadStore.items = downloadStore.items.filter(i => i.source_id !== sourceId)
     console.log(`✓ [Sources] Items removidos: ${itemsAntes - downloadStore.items.length} items deletados`)
-    
-    if (selectedSourceId.value === sourceId) {
-      console.log(`✓ [Sources] Limpando seleção (fonte deletada estava selecionada)`)
-      selectedSourceId.value = null
-      searchQuery.value = ''
-      selectedCategory.value = null
-    }
+    await refreshLibraryInfo(true)
     
     console.log(`✅ [Sources] Fonte #${sourceId} deletada com sucesso`)
     try { const ts = useToastStore(); ts.push('Fonte deletada', 'A fonte foi removida com sucesso') } catch (e) {}
@@ -1133,214 +457,5 @@ async function confirmDeleteSource() {
     console.error(`❌ [Sources] Erro ao deletar fonte #${sourceId}:`, e)
     try { const ts = useToastStore(); ts.push('Erro', `Erro ao deletar fonte: ${e.message}`) } catch (ee) {}
   }
-}
-
-
-
-async function browsePath() {
-  // Try backend native picker first, then fallback to manual modal
-  browseLoading.value = true
-  try {
-    if (window.electronAPI?.selectFolder) {
-      const folder = await window.electronAPI.selectFolder()
-      if (folder) downloadDestination.value = folder
-      browseLoading.value = false
-      return
-    }
-    const resp = await api.post('/api/dialog/select_folder')
-    if (resp.data && resp.data.path) {
-      downloadDestination.value = resp.data.path
-      return
-    }
-    // canceled or no path -> open manual modal
-    manualFolderPath.value = downloadDestination.value || ''
-    showManualFolderModal.value = true
-  } catch (e) {
-    console.warn('Folder picker failed:', e)
-    manualFolderPath.value = downloadDestination.value || ''
-    showManualFolderModal.value = true
-  } finally {
-    browseLoading.value = false
-  }
-}
-
-async function confirmDownload() {
-  console.log(`📥 [confirmDownload] Iniciado`)
-  
-  if (!selectedItem.value) {
-    const msg = 'Nenhum item selecionado'
-    console.error(`❌ ${msg}`)
-    try { const ts = useToastStore(); ts.push('Erro', msg) } catch (e) { alert(msg) }
-    return
-  }
-  
-  try {
-    // Validar destination
-    let destCandidate = (downloadDestination.value || 'downloads').toString()
-    const destLower = destCandidate.toLowerCase()
-    const suspicious = destLower.startsWith('http') || destLower.startsWith('magnet:') || destCandidate.includes('%25') || destCandidate.includes('announce')
-    if (suspicious) {
-      console.warn(`⚠️  Destino suspeito detectado, usando padrão`)
-      destCandidate = 'downloads'
-    }
-
-    console.log(`📋 Preparando job com:`, {
-      url: selectedItem.value.url,
-      name: selectedItem.value.name,
-      destination: destCandidate,
-      verify_ssl: (downloadVerifySsl.value[selectedItem.value.source_id] !== false) ?? true,
-      size: selectedItem.value.size || null
-    })
-    
-    // DEBUG: Log adicional bem visível
-    console.log(`🔒 SSL STATUS: source=${selectedItem.value.source_id}, value=${downloadVerifySsl.value[selectedItem.value.source_id]}, send=${(downloadVerifySsl.value[selectedItem.value.source_id] !== false) ?? true}`)
-
-    const jobData = {
-      url: selectedItem.value.url,
-      name: selectedItem.value.name,
-      destination: destCandidate,
-      verify_ssl: (downloadVerifySsl.value[selectedItem.value.source_id] !== false) ?? true,
-      size: selectedItem.value.size || null
-    }
-    
-    console.log(`🚀 Chamando createJob com:`, jobData)
-    const result = await downloadStore.createJob(jobData)
-    
-    if (!result) {
-      throw new Error('Resposta nula do servidor')
-    }
-    
-    if (!result.job_id) {
-      throw new Error(`Resposta inválida do servidor: ${JSON.stringify(result)}`)
-    }
-
-    console.log(`✅ Job criado com sucesso: #${result.job_id}`)
-    
-    // Verifica se já há downloads rodando
-    const hasRunning = downloadStore.jobs.some(j => j.status === 'running')
-    const toastMsg = hasRunning ? `Download #${result.job_id} colocado na fila` : `Download #${result.job_id} iniciado`
-    try { const ts = useToastStore(); ts.push('Download', toastMsg) } catch (e) { alert(toastMsg) }
-    
-    showDownloadDialog.value = false
-    selectedItem.value = null
-  } catch (e) {
-    const errMsg = e.response?.data?.detail || e.message || 'Erro ao criar job'
-    console.error(`❌ Erro em confirmDownload:`, e, `\nMensagem: ${errMsg}`)
-    try { const ts = useToastStore(); ts.push('Erro', errMsg) } catch (ee) { alert(`Erro: ${errMsg}`) }
-  }
-}
-
-// Funções para menu hamburger da categoria
-const getCategoryItemCount = (category) => {
-  if (category === null) {
-    return downloadStore.items.filter(i => i.source_id === selectedSourceId.value).length
-  }
-  return downloadStore.items.filter(i => i.source_id === selectedSourceId.value && i.category === category).length
-}
-
-const toggleCategoryMenu = (category) => {
-  activeCategoryMenu.value = activeCategoryMenu.value === category ? null : category
-}
-
-const showCategoryDetails = (category) => {
-  const items = downloadStore.items.filter(
-    i => i.source_id === selectedSourceId.value && i.category === category
-  )
-  
-  if (items.length === 0) {
-    alert('Nenhum item nesta categoria')
-    return
-  }
-  
-  // Agrupar itens por tipo/subcategoria
-  const grouped = {}
-  items.forEach(item => {
-    const subcat = item.type || 'Sem tipo'
-    if (!grouped[subcat]) grouped[subcat] = { count: 0, size: 0 }
-    grouped[subcat].count++
-    grouped[subcat].size += item.size || 0
-  })
-  
-  // Montar dados para o modal
-  const totalSize = Object.values(grouped).reduce((sum, g) => sum + g.size, 0)
-  const subcategories = Object.entries(grouped)
-    .map(([name, data]) => ({
-      name,
-      count: data.count,
-      size: formatBytes(data.size)
-    }))
-    .sort((a, b) => b.count - a.count)
-  
-  categoryDetailsData.value = {
-    categoryName: category,
-    totalItems: items.length,
-    totalSize: formatBytes(totalSize),
-    subcategories
-  }
-  
-  showCategoryDetailsModal.value = true
-  activeCategoryMenu.value = null
-}
-
-// Funções antigas removidas
-const downloadAllFromCategory = (category) => {
-  alert('Opção desabilitada')
-  activeCategoryMenu.value = null
-}
-
-const copyCategoryItems = (category) => {
-  alert('Opção desabilitada')
-  activeCategoryMenu.value = null
-}
-
-const showCategoryStats = (category) => {
-  alert('Opção desabilitada')
-  activeCategoryMenu.value = null
-}
-
-// Funções de formatação de data
-function formatRelativeDate(dateString) {
-  if (!dateString) return ''
-  
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now - date
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffMinutes = Math.floor(diffMs / (1000 * 60))
-  
-  if (diffMinutes < 1) return 'agora'
-  if (diffMinutes < 60) return `há ${diffMinutes}min`
-  if (diffHours < 24) return `há ${diffHours}h`
-  if (diffDays === 0) return 'hoje'
-  if (diffDays === 1) return 'ontem'
-  if (diffDays < 7) return `há ${diffDays} dias`
-  if (diffDays < 30) return `há ${Math.floor(diffDays / 7)} semanas`
-  if (diffDays < 365) return `há ${Math.floor(diffDays / 30)} meses`
-  return `há ${Math.floor(diffDays / 365)} anos`
-}
-
-function formatFullDate(dateString) {
-  if (!dateString) return ''
-  
-  const date = new Date(dateString)
-  return date.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-function isRecentUpload(dateString) {
-  if (!dateString) return false
-  
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now - date
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  
-  return diffDays < 30 // Considera recente se foi adicionado nos últimos 30 dias
 }
 </script>

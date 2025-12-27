@@ -150,6 +150,7 @@ const favoritesStore = useFavoritesStore()
 
 const navLinks = [
   { path: '/', label: 'Dashboard' },
+  { path: '/library', label: 'Biblioteca' },
   { path: '/sources', label: 'Fontes' },
   { path: '/downloads', label: 'Histórico' },
   { path: '/new-download', label: 'Download' }

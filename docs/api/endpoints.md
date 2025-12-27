@@ -2,15 +2,18 @@
 
 ## Visão Geral
 
-A API do Furious App é baseada em REST e utiliza JSON para troca de dados. A maioria dos endpoints requer autenticação via token JWT no cabeçalho `Authorization`.
+A API do Furious App é baseada em REST e utiliza JSON para troca de dados. A aplicação é **local-first**: por padrão roda em `localhost` (ou `127.0.0.1`) e **não exige autenticação**.
 
-### Autenticação
+Para a documentação sempre atualizada, consulte o Swagger/OpenAPI do próprio servidor:
 
-```http
-Authorization: Bearer <seu_token_aqui>
-```
+- `http://127.0.0.1:8000/docs` (modo local via `py run.py`)
+- `http://localhost:8001/docs` (quando executando via Electron)
 
 ## Endpoints Principais
+
+## Endpoints (inventário completo)
+
+Observação: os endpoints abaixo refletem o que existe no `backend/main.py`.
 
 ### 1. Gerenciamento de Fontes
 
@@ -23,7 +26,7 @@ GET /api/sources
 [
   {
     "id": 1,
-    "name": "Minha Fonte",
+    "title": "Minha Fonte",
     "url": "https://exemplo.com/fonte.json",
     "created_at": "2023-01-01T00:00:00"
   }
@@ -40,6 +43,8 @@ Content-Type: application/json
   "url": "https://exemplo.com/nova-fonte.json"
 }
 ```
+
+> Nota: na implementação atual, os itens da fonte são carregados sob demanda via `GET /api/sources/{source_id}/items`.
 **Resposta de Sucesso (201 Created):**
 ```json
 {
@@ -55,6 +60,16 @@ Content-Type: application/json
 DELETE /api/sources/{source_id}
 ```
 **Resposta de Sucesso (204 No Content)**
+
+#### Listar Itens de uma Fonte (carregamento sob demanda)
+```http
+GET /api/sources/{source_id}/items
+```
+
+#### Buscar 1 Item específico de uma Fonte
+```http
+GET /api/sources/{source_id}/items/{item_id}
+```
 
 ### 2. Gerenciamento de Itens
 
@@ -96,25 +111,71 @@ POST /api/analysis/pre-job
 Content-Type: application/json
 
 {
-  "item_id": "string",
-  "source_id": "string",
-  "title": "Nome do Jogo",
-  "uris": ["magnet:?xt=urn:...", "http://..."]
+  "item": {
+    "id": 123,
+    "source_id": 1,
+    "name": "Nome do Jogo",
+    "url": "magnet:?xt=urn:...",
+    "size": 123456789,
+    "uploadDate": "2025-12-27T00:00:00Z"
+  }
 }
 ```
 
 **Resposta de Sucesso (200 OK):**
 ```json
 {
-  "original_score": { "score": 25, "seeders": 1, "label": "Fraco" },
-  "alternatives": [
+  "original_health": { "score": 25, "seeders": 1, "label": "Fraco" },
+  "candidates": [
     {
-      "source_name": "DODI",
-      "item": { "name": "Game v1.0", "size": "10 GB" },
-      "score": { "score": 100, "seeders": 140, "label": "Excelente" }
+      "source_title": "DODI",
+      "item": { "name": "Game v1.0", "size": 123456789, "uploadDate": "2025-12-27T00:00:00Z" },
+      "health": { "score": 100, "seeders": 140, "label": "Excelente" }
     }
   ]
 }
+```
+
+### 3.1 Telemetria do Resolver (diagnóstico)
+
+#### Ler contadores
+```http
+GET /api/resolver/telemetry
+```
+
+#### Resetar contadores
+```http
+POST /api/resolver/telemetry/reset
+```
+
+### 3.2 Biblioteca (deduplicada)
+
+```http
+GET /api/library
+```
+
+### 3.3 Resolver / Steam / Detalhes
+
+#### Resolver de imagens
+```http
+POST /api/resolver?game_name=...
+```
+
+#### Imagens Steam (arte)
+```http
+GET /api/steam/artes?term=...
+```
+
+#### Detalhes completos (imagens + vídeos + screenshots)
+```http
+GET /api/game-details/{app_id_or_name}
+```
+
+### 3.4 Cache
+
+#### Limpar caches
+```http
+POST /api/cache/clear
 ```
 
 ### 4. Gerenciamento de Downloads
@@ -204,6 +265,47 @@ DELETE /api/jobs/{job_id}
 }
 ```
 
+#### Pausar
+```http
+POST /api/jobs/{job_id}/pause
+```
+
+#### Retomar
+```http
+POST /api/jobs/{job_id}/resume
+```
+
+#### Cancelar (mantém no histórico como cancelado)
+```http
+POST /api/jobs/{job_id}/cancel
+```
+
+#### Listar partes do job (quando segmentado)
+```http
+GET /api/jobs/{job_id}/parts
+```
+
+#### Abrir pasta do download no Explorer
+```http
+POST /api/jobs/open-folder
+Content-Type: application/json
+
+{"path": "C:\\..."}
+```
+
+#### Limpezas (apenas IDs visíveis enviados pelo frontend)
+```http
+DELETE /api/jobs/completed/clear
+DELETE /api/jobs/failed/clear
+DELETE /api/jobs/canceled/clear
+```
+
+### 4.1 Suporte a Range (downloads diretos)
+
+```http
+GET /api/supports_range?url=...
+```
+
 ### 4. Gerenciamento de Favoritos
 
 #### Listar Favoritos
@@ -254,6 +356,11 @@ DELETE /api/favorites/{favorite_id}
 ```
 **Resposta de Sucesso (204 No Content)**
 
+#### Remover Favorito por item
+```http
+DELETE /api/favorites/by_item?source_id=...&item_id=...
+```
+
 ### 5. WebSocket para Atualizações em Tempo Real
 
 **Endpoint WebSocket:**
@@ -261,16 +368,18 @@ DELETE /api/favorites/{favorite_id}
 ws://localhost:8000/ws
 ```
 
+Mensagem keep-alive do client: qualquer texto (o servidor responde `{ "type": "ack" }`).
+
 **Mensagens Enviadas pelo Servidor:**
 ```json
 {
-  "type": "job_update",
+  "type": "job_progress",
   "data": {
     "job_id": 1,
     "status": "downloading",
-    "progress": 42.5,
-    "speed": 1024,
-    "downloaded": 4456448
+    "progress": 45.2,
+    "speed": 1048576,
+    "eta": 120
   }
 }
 
@@ -279,7 +388,7 @@ ws://localhost:8000/ws
   "data": {
     "job_id": 1,
     "status": "completed",
-    "path": "/caminho/para/arquivo"
+    "download_path": "C:/Users/Usuario/Downloads/item.bin"
   }
 }
 
@@ -288,7 +397,7 @@ ws://localhost:8000/ws
   "data": {
     "job_id": 1,
     "status": "error",
-    "error": "Erro ao baixar o arquivo"
+    "error": "Failed to download: connection timeout"
   }
 }
 ```
@@ -326,16 +435,39 @@ Todas as respostas de erro seguem o formato:
 
 A versão atual da API é `v1`. Todas as rotas estão prefixadas com `/api`.
 
+## Endpoints auxiliares (diagnóstico/proxy)
+
+#### Proxy de imagens (para contornar limitações de carregamento em alguns ambientes)
+```http
+GET /api/proxy/image?url=...
+```
+
+#### Proxy de vídeo
+```http
+GET /api/proxy/video?url=...
+```
+
+#### Diagnóstico de vídeos
+```http
+GET /api/debug/videos
+```
+
+#### Status do aria2 (detecção de binário)
+```http
+GET /api/aria2/status
+```
+
+#### Dialog nativo de selecionar pasta
+```http
+POST /api/dialog/select_folder
+```
+
 ## Exemplo de Uso com JavaScript
 
 ```javascript
 // Listar fontes
 async function getSources() {
-  const response = await fetch('http://localhost:8000/api/sources', {
-    headers: {
-      'Authorization': 'Bearer seu_token_aqui'
-    }
-  });
+  const response = await fetch('http://localhost:8000/api/sources');
   return await response.json();
 }
 
@@ -344,8 +476,7 @@ async function startDownload(item) {
   const response = await fetch('http://localhost:8000/api/jobs', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer seu_token_aqui'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       item_id: item.id,
@@ -364,7 +495,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     switch (data.type) {
-      case 'job_update':
+      case 'job_progress':
         console.log('Atualização de progresso:', data.data);
         break;
       case 'job_complete':

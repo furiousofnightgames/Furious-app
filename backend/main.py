@@ -21,6 +21,9 @@ from datetime import datetime
 import asyncio
 import pathlib
 import zlib
+import re
+import unicodedata
+from typing import Dict, Any, Tuple
 from pydantic import BaseModel
 from starlette.staticfiles import StaticFiles
 from sqlmodel import select, delete
@@ -30,8 +33,308 @@ from backend.db import init_db, get_session
 from backend.models.models import Source, Item, Favorite, Job, JobPart
 from backend import config as backend_config
 from backend.steam_service import steam_client
-from backend.resolver import clear_session_cache
+from backend.resolver import clear_session_cache, get_resolver_telemetry
 from backend.steam_api import steam_api_client
+
+_library_cache: Dict[str, Any] = {"valid": False, "value": None, "built_at": None, "sources_sig": None}
+
+
+def _invalidate_library_cache() -> None:
+    try:
+        _library_cache["valid"] = False
+    except Exception:
+        pass
+
+
+def _normalize_library_name(name: str) -> str:
+    s = (name or "").strip()
+    if not s:
+        return ""
+    try:
+        s = unicodedata.normalize('NFKD', s)
+        s = ''.join(c for c in s if not unicodedata.combining(c))
+    except Exception:
+        pass
+    s = s.lower()
+    # Drop common numeric catalog prefixes like "1428: Game Name" or "1428 - Game Name"
+    s = re.sub(r"^\s*\d{1,6}\s*(?:[:\-–]+)\s*", "", s)
+    s = re.sub(r"^#+", "", s)
+    s = re.sub(r"\[[^\]]+\]", " ", s)
+    s = re.sub(r"\([^\)]+\)", " ", s)
+    s = re.sub(r"\b\d+(?:\.\d+){1,}\b", " ", s)
+    s = re.sub(r"\b(v|ver|version)\s*\d+(?:\.\d+)*\b", " ", s)
+    s = re.sub(r"\b(build|b)\s*\d{3,}\b", " ", s)
+    s = re.sub(r"\b(update|patch|hotfix)\s*\d+(?:\.\d+)*\b", " ", s)
+    s = re.sub(r"\b(release|final|proper|complete|deluxe|ultimate|remaster(?:ed)?|definitive)\b", " ", s)
+    s = re.sub(r"\b(multi\s*\d+|multi\d+)\b", " ", s)
+    s = re.sub(r"\b(selective\s*download|repack)\b", " ", s)
+    s = re.sub(r"\b(repack|fitgirl|dodi|elamigos|gog|steamrip|codex|plaza|skidrow|reloaded|goldberg|tenoke|xatab)\b", " ", s)
+    # Platform/compatibility noise often appended to titles
+    s = re.sub(r"\bwindows\s*(?:xp|vista|7|8|8\.1|10|11)(?:\s*-\s*(?:xp|vista|7|8|8\.1|10|11))*\b", " ", s)
+    s = re.sub(r"\bwin\s*(?:xp|7|8|8\.1|10|11)\b", " ", s)
+    s = re.sub(r"\b(?:compatible|compatibility)\b", " ", s)
+    s = re.sub(r"\s*(?:\+|\-|–|:|\|)\s*[^\n]*\b(dlc|dlcs|ost|soundtrack|bonus|pack|collection|edition)\b[^\n]*", " ", s)
+    # Mod-related descriptors at the end shouldn't split the same base game into separate groups
+    # (kept conservative to avoid breaking titles like "garry's mod" which won't match as a suffix segment)
+    s = re.sub(r"\s*(?:\+|\-|–|:|\|)\s*[^\n]*\b(modpack|mod\s*pack|mods|mod|retexture(?:d)?|retextured|texture(?:d)?|graphics|redux|overhaul|remastered\s*mod)\b[^\n]*", " ", s)
+
+    # Specific normalization: GTA V variants (Legacy/Enhanced) should be grouped together.
+    # Keep this scoped to GTA V so we don't accidentally merge unrelated titles like "Legacy of Kain".
+    try:
+        if re.search(r"\b(grand\s+theft\s+auto\s+v|gta\s*5|gta\s*v)\b", s):
+            s = re.sub(r"\bgta\s*5\b", "grand theft auto v", s)
+            s = re.sub(r"\bgta\s*v\b", "grand theft auto v", s)
+            s = re.sub(r"\b(legacy|enhanced)\b", " ", s)
+            s = re.sub(r"\bpremium\b", " ", s)
+    except Exception:
+        pass
+
+    s = re.sub(r"\b\d{6,}\b", " ", s)
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _library_group_key(item: Dict[str, Any]) -> str:
+    for k in ("appId", "appid", "steam_appid", "steamAppId", "steam_app_id"):
+        v = item.get(k)
+        try:
+            if v is None:
+                continue
+            sv = str(v).strip()
+            if not sv:
+                continue
+            if sv.isdigit():
+                return f"steam:{int(sv)}"
+        except Exception:
+            pass
+    base = _normalize_library_name(str(item.get('name') or ''))
+    if base:
+        return base
+    url = str(item.get('url') or '')
+    url = url.strip().lower()
+    if not url:
+        return "unknown"
+    # stable-ish fallback to avoid empty grouping
+    return f"url:{zlib.crc32(url.encode('utf-8')) & 0x7FFFFFFF}"
+
+
+def _extract_library_app_id(item: Dict[str, Any]) -> Optional[int]:
+    for k in ("appId", "appid", "steam_appid", "steamAppId", "steam_app_id"):
+        try:
+            v = item.get(k)
+            if v is None:
+                continue
+            sv = str(v).strip()
+            if not sv or not sv.isdigit():
+                continue
+            return int(sv)
+        except Exception:
+            continue
+    return None
+
+
+def _coerce_int(v: Any) -> Optional[int]:
+    try:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return int(v)
+        return int(v)
+    except Exception:
+        return None
+
+
+def _upload_date_to_ts(v: Any) -> int:
+    if v is None:
+        return 0
+    try:
+        if isinstance(v, (int, float)):
+            iv = int(v)
+            if iv > 10_000_000_000:
+                iv = iv // 1000
+            return iv
+    except Exception:
+        pass
+
+    s = str(v).strip()
+    if not s:
+        return 0
+
+    try:
+        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        return int(dt.timestamp())
+    except Exception:
+        pass
+
+    try:
+        if s.isdigit():
+            iv = int(s)
+            if iv > 10_000_000_000:
+                iv = iv // 1000
+            return iv
+    except Exception:
+        pass
+
+    try:
+        m = re.search(r"(\d+)\s*(second|minute|hour|day|week|month|year)s?", s.lower())
+        if m:
+            n = int(m.group(1))
+            unit = m.group(2)
+            mult = {
+                "second": 1,
+                "minute": 60,
+                "hour": 3600,
+                "day": 86400,
+                "week": 7 * 86400,
+                "month": 30 * 86400,
+                "year": 365 * 86400,
+            }.get(unit, 0)
+            if mult > 0:
+                return int(datetime.utcnow().timestamp()) - (n * mult)
+    except Exception:
+        pass
+
+    return 0
+
+
+def _pick_best_version(versions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def score(x: Dict[str, Any]) -> Tuple[int, int, int, int]:
+        ts = _upload_date_to_ts(x.get('uploadDate'))
+        seeders = _coerce_int(x.get('seeders')) or 0
+        leechers = _coerce_int(x.get('leechers')) or 0
+        size = _coerce_int(x.get('size')) or 0
+        # Primary: most recent. Secondary: health/seeders. Tertiary: size.
+        return (ts, seeders, leechers, size)
+
+    best = None
+    best_score = None
+    for v in versions:
+        sc = score(v)
+        if best is None or sc > best_score:
+            best = v
+            best_score = sc
+    return best or (versions[0] if versions else {})
+
+
+async def _build_library_payload() -> Dict[str, Any]:
+    session = get_session()
+    try:
+        sources = session.exec(select(Source)).all()
+        sources_sig = '|'.join([f"{s.id}:{s.url}:{s.title}:{getattr(s, 'created_at', '')}" for s in sources])
+    finally:
+        session.close()
+
+    groups: Dict[str, Dict[str, Any]] = {}
+    total_items = 0
+
+    for s in sources:
+        if not s.url and not getattr(s, 'data', None):
+            continue
+        try:
+            source_items = await _load_items_internal(s)
+        except Exception:
+            source_items = []
+        total_items += len(source_items)
+        source_title = s.title or (s.url or f"Source #{s.id}")
+        for it in source_items:
+            if not isinstance(it, dict):
+                continue
+            it = dict(it)
+            it.setdefault('source_id', s.id)
+            it.setdefault('source_title', source_title)
+            key = _library_group_key(it)
+            g = groups.get(key)
+            if not g:
+                groups[key] = {"key": key, "display_name": it.get('name') or key, "versions": [it]}
+            else:
+                g["versions"].append(it)
+
+    out_groups: List[Dict[str, Any]] = []
+    for key, g in groups.items():
+        versions = g.get('versions') or []
+
+        # Propagate Steam AppID inside the group if any version has it.
+        # This is intentionally conservative (does not merge groups) and helps
+        # image caching/resolution on the frontend.
+        group_app_id: Optional[int] = None
+        try:
+            for v in versions:
+                aid = _extract_library_app_id(v)
+                if aid:
+                    group_app_id = aid
+                    break
+        except Exception:
+            group_app_id = None
+
+        if group_app_id:
+            for v in versions:
+                try:
+                    if _extract_library_app_id(v) is None:
+                        v["appId"] = group_app_id
+                        v["steam_appid"] = group_app_id
+                except Exception:
+                    pass
+
+        best = _pick_best_version(versions)
+        if group_app_id:
+            try:
+                if _extract_library_app_id(best) is None:
+                    best["appId"] = group_app_id
+                    best["steam_appid"] = group_app_id
+            except Exception:
+                pass
+        recent_ts = 0
+        try:
+            recent_ts = max((_upload_date_to_ts(x.get('uploadDate')) for x in versions), default=0)
+        except Exception:
+            recent_ts = _upload_date_to_ts(best.get('uploadDate'))
+        display_name = best.get('name') or g.get('display_name') or key
+        merged = {
+            "key": key,
+            "name": display_name,
+            "appId": group_app_id,
+            "steam_appid": group_app_id,
+            "versions_count": len(versions),
+            "best": best,
+            "versions": sorted(
+                versions,
+                key=lambda x: (
+                    _upload_date_to_ts(x.get('uploadDate')),
+                    _coerce_int(x.get('seeders')) or 0,
+                    _coerce_int(x.get('leechers')) or 0,
+                    _coerce_int(x.get('size')) or 0,
+                    str(x.get('uploadDate') or '')
+                ),
+                reverse=True
+            ),
+            "recent_ts": recent_ts,
+        }
+        out_groups.append(merged)
+
+    out_groups.sort(key=lambda x: (-_coerce_int(x.get('recent_ts')) or 0, str(x.get('name') or '').lower()))
+    return {
+        "groups": out_groups,
+        "total_sources": len(sources),
+        "total_items": total_items,
+        "built_at": datetime.utcnow().isoformat() + 'Z',
+        "sources_sig": sources_sig,
+    }
+
+
+async def library_index(refresh: bool = False):
+    if not refresh and _library_cache.get("valid") and _library_cache.get("value") is not None:
+        return _library_cache["value"]
+
+    payload = await _build_library_payload()
+    try:
+        _library_cache["valid"] = True
+        _library_cache["value"] = payload
+        _library_cache["built_at"] = payload.get("built_at")
+        _library_cache["sources_sig"] = payload.get("sources_sig")
+    except Exception:
+        pass
+    return payload
 
 # Define lifespan before creating app
 @asynccontextmanager
@@ -95,6 +398,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.get("/api/library")(library_index)
 
 
 class LoadJsonRequest(BaseModel):
@@ -761,6 +1065,8 @@ async def load_json(req: LoadJsonRequest):
         session.commit()
         session.refresh(source)
         session.close()
+
+        _invalidate_library_cache()
         
         # print(f"Fonte salva: #{source.id}")
         # print(f"Items carregados sob demanda ao selecionar")
@@ -827,6 +1133,8 @@ async def load_json_raw(req: LoadJsonRawRequest):
         session.commit()
         session.refresh(source)
         session.close()
+
+        _invalidate_library_cache()
 
         print(f"[OK] Fonte salva: #{source.id} (JSON colado com {len(str(js))} bytes)")
         print(f" Items carregados sob demanda ao selecionar")
@@ -1276,6 +1584,8 @@ async def delete_source(source_id: int):
     print(f"[OK] Fonte #{source_id} deletada com sucesso")
     
     session.close()
+
+    _invalidate_library_cache()
     
     return {"status": "deleted", "source_id": source_id, "message": "Fonte e items deletados"}
 
@@ -1297,6 +1607,24 @@ async def aria2_status():
     from engine.aria2_wrapper import find_aria2_binary
     found = find_aria2_binary(os.getcwd())
     return {"env_path": path, "found_path": found, "available": bool(found)}
+
+
+@app.get("/api/resolver/telemetry")
+async def resolver_telemetry():
+    return get_resolver_telemetry()
+
+
+@app.post("/api/resolver/telemetry/reset")
+async def resolver_telemetry_reset():
+    try:
+        before = get_resolver_telemetry()
+        from backend import resolver as _resolver_mod
+        if hasattr(_resolver_mod, "_resolver_telemetry") and isinstance(_resolver_mod._resolver_telemetry, dict):
+            for k in list(_resolver_mod._resolver_telemetry.keys()):
+                _resolver_mod._resolver_telemetry[k] = 0
+        return {"status": "ok", "before": before, "after": get_resolver_telemetry()}
+    except Exception:
+        return {"status": "ok"}
 
 
 @app.get("/api/jobs/{job_id}")

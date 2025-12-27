@@ -1,15 +1,19 @@
 # Guia de Implantação em Produção
 
-## Requisitos do Servidor
+## Visão Geral
+
+O Furious App é uma aplicação **desktop/local-first**. O modo “produção” típico é distribuir o **instalador Windows (.exe)** que já inclui tudo necessário (Electron + backend Python + portables).
+
+Para testes/manutenção em ambiente de desenvolvimento, também existe o modo local via `py run.py`.
+
+## Requisitos do Sistema
 
 - **Sistema Operacional**: Windows 10/11 (64-bit)
 - **CPU**: 2+ núcleos (recomendado 4+)
 - **Memória RAM**: 4GB (mínimo), 8GB+ recomendado
-- **Armazenamento**: 10GB+ de espaço livre (dependendo do tamanho dos downloads)
-- **Python**: 3.10+
-- **Node.js**: 18+
+- **Armazenamento**: 10GB+ de espaço livre (depende do tamanho dos downloads)
 
-## Opções de Implantação
+## Opções de Execução
 
 ### 1. Instalador Windows (.exe)
 
@@ -27,16 +31,13 @@
 
 #### Atualização
 1. **Faça backup** da pasta de downloads (opcional)
-2. **Desinstale** a versão antiga
-3. **Instale** a nova versão
-4. **Restore** os arquivos de backup (se necessário)
+2. **Execute o instalador** da versão mais recente (ele atualiza a instalação)
 
 ### 2. Implantação Manual
 
-#### Pré-requisitos
+#### Pré-requisitos (somente para desenvolvimento/manutenção)
 - Python 3.10+
 - Node.js 18+
-- Aria2
 
 #### Passos para Instalação
 
@@ -61,52 +62,21 @@
    cd ..
    ```
 
-4. **Configure as variáveis de ambiente**
-   Crie um arquivo `.env` na raiz do projeto:
-   ```env
-   # Configurações gerais
-   DEBUG=0
-   SECRET_KEY=sua_chave_secreta_aqui
-   
-   # Banco de dados
-   DATABASE_URL=sqlite:///./app.db
-   
-   # Frontend
-   FRONTEND_URL=http://localhost:5173
-   
-   # Downloads
-   DOWNLOAD_DIR=./downloads
-   MAX_CONCURRENT_DOWNLOADS=3
-   
-   # Steam
-   STEAM_API_KEY=sua_chave_da_api_steam
-   STEAMGRIDDB_API_KEY=sua_chave_steamgriddb
-   ```
+4. **Inicie o servidor (modo local)**
+  ```bash
+  py run.py
+  ```
 
-5. **Inicialize o banco de dados**
-   ```bash
-   python -c "from backend.db import init_db; init_db()"
-   ```
-
-6. **Inicie o servidor**
-   ```bash
-   # Modo desenvolvimento
-   uvicorn backend.main:app --reload
-   
-   # Modo produção (com múltiplos workers)
-   uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 4
-   ```
-
-7. **Acesse a aplicação**
-   - Frontend: http://localhost:5173
-   - API Docs: http://localhost:8000/docs
+5. **Acesse a aplicação**
+  - UI: http://127.0.0.1:8000
+  - API Docs: http://127.0.0.1:8000/docs
 
 ## Configuração de Rede
 
 ### Portas Necessárias
-- **8000**: API Backend (HTTP)
-- **6800**: Aria2 RPC (opcional, para gerenciamento remoto)
-- **5173**: Frontend (apenas desenvolvimento)
+- **8000**: UI/API no modo local (`py run.py`)
+- **8001**: Backend no modo Electron (instalador)
+- **5173**: Frontend dev (somente desenvolvimento `npm run dev`)
 
 ### Configuração de Firewall
 ```powershell
@@ -144,9 +114,8 @@ New-NetFirewallRule -DisplayName "Aria2 RPC" -Direction Inbound -LocalPort 6800 
 ## Configuração de Logs
 
 ### Localização dos Logs
-- **Backend**: `backend.log` (na raiz do projeto)
-- **Aria2**: `aria2.log` (na pasta do Aria2)
-- **Aplicativo**: `%APPDATA%\furious-app\logs`
+- **Modo local (`py run.py`)**: `%LOCALAPPDATA%\furious-app-dev\backend.log`
+- **Electron**: `%APPDATA%\furious-app\logs\backend.log`
 
 ### Níveis de Log
 - `DEBUG`: Informações detalhadas para desenvolvimento
@@ -158,10 +127,10 @@ New-NetFirewallRule -DisplayName "Aria2 RPC" -Direction Inbound -LocalPort 6800 
 ## Backup e Recuperação
 
 ### Dados a serem copiados
-- Banco de dados SQLite: `app.db`
-- Pasta de downloads: `./downloads`
-- Configurações: `.env`
-- Logs importantes: `backend.log`, `aria2.log`
+- Banco de dados SQLite: `%APPDATA%\furious-app\app.db` (Electron) ou `./app.db` (local)
+- Pasta de downloads: configurada pelo usuário (padrão em Downloads)
+- Configurações: `%APPDATA%\furious-app\config.json` (Electron) ou `./config.json` (local)
+- Logs importantes: `backend.log`, `aria2.log` em `%APPDATA%\furious-app\logs`
 
 ### Script de Backup (Windows)
 ```powershell
@@ -209,13 +178,10 @@ Write-Host "Backup concluído em $backupDir"
 
 ## Monitoramento
 
-### Métricas da Aplicação
-A API expõe métricas no formato Prometheus em `/metrics`
-
-### Monitoramento Recomendado
-1. **Uso de CPU/Memória**: Task Manager ou um monitor externo
-2. **Espaço em Disco**: Verificar periodicamente a pasta de downloads
-3. **Logs**: Monitorar por erros e warnings
+Monitoramento recomendado:
+- Logs locais do backend
+- Uso de CPU/Memória (Task Manager)
+- Espaço em disco (pasta de downloads)
 
 ## Segurança
 
@@ -262,7 +228,6 @@ A API expõe métricas no formato Prometheus em `/metrics`
 
 ## Próximos Passos
 
-1. Configurar monitoramento em tempo real
-2. Implementar sistema de notificações
-3. Adicionar suporte a múltiplos usuários
-4. Desenvolver API para integração com outros sistemas
+1. Padronizar documentação e checklist de release
+2. Melhorar diagnósticos locais (logs/telemetria) para troubleshooting
+3. Ajustar UX de downloads (sugestão de alternativas ao falhar)
