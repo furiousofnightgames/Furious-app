@@ -48,7 +48,8 @@ class SteamGridDBProvider(ImageProvider):
             
             # 2. Fetch Assets (Grids, Heroes, Logos)
             # Parallel requests (compatible with Python 3.10)
-            t_grids = asyncio.create_task(self.client.get(f"{self.base_url}/grids/game/{game_id}?dimensions=600x900,460x215&styles=alternate,blurred,material"))
+            # REMOVED dimensions filter to ensure we get ANY art if available
+            t_grids = asyncio.create_task(self.client.get(f"{self.base_url}/grids/game/{game_id}?styles=alternate,blurred,material,no_logo"))
             t_heroes = asyncio.create_task(self.client.get(f"{self.base_url}/heroes/game/{game_id}"))
             t_logos = asyncio.create_task(self.client.get(f"{self.base_url}/logos/game/{game_id}"))
 
@@ -74,17 +75,23 @@ class SteamGridDBProvider(ImageProvider):
             header_url = None
             capsule_url = None
             
-            header_url = None
-            capsule_url = None
-            
-            # Tentar encontrar dimensões exatas primeiro
+            # Prioridade 1: Dimensões exatas Steam
             for g in grids:
-                if g["width"] == 460 and g["height"] == 215:
+                w, h = g.get("width"), g.get("height")
+                if w == 460 and h == 215:
                     header_url = g["url"]
-                if g["width"] == 600 and g["height"] == 900:
+                if w == 600 and h == 900:
                     capsule_url = g["url"]
             
-            # Se não achou exato, pega qualquer um disponível como fallback
+            # Prioridade 2: Dimensões próximas ou populares
+            # 920x430 (2x header)
+            if not header_url:
+                for g in grids:
+                    if g.get("width") == 920 and g.get("height") == 430:
+                        header_url = g["url"]
+                        break
+            
+            # Fallback final: Qualquer grid
             if not header_url and grids:
                  header_url = grids[0]["url"]
             if not capsule_url and grids:

@@ -56,7 +56,7 @@ class ItemMatchingService:
             "bundle", "collection", "anthology", "trilogy", "quadrology", "saga",
             "digital", "deluxe", "ultimate", "gold", "silver", "platinum", "premium",
             "definitive", "director's", "directors", "cut", "expanded", "extended", "enhanced",
-            "season", "pass"
+            "season", "pass", "multiplayer", "online", "fix", "hotfix"
         ]
         
         # Remove "Number + Quantity Tag" (e.g. "5 DLCs")
@@ -75,24 +75,40 @@ class ItemMatchingService:
         return s
 
     @staticmethod
+    def _tokenize(norm_name: str) -> set:
+        if not norm_name:
+            return set()
+        # Common English/Gaming stopwords that dilute matching quality
+        stopwords = {
+            "the", "of", "and", "in", "at", "to", "for", "a", "an", "is", "by", 
+            "edition", "version", "build", "v", "update", "dlc", "dlcs", "bonus"
+        }
+        tokens = set(norm_name.split())
+        return tokens - stopwords
+
+    @staticmethod
+    def _jaccard_similarity(set1: set, set2: set) -> float:
+        union = len(set1.union(set2))
+        return len(set1.intersection(set2)) / union if union > 0 else 0.0
+
+    @staticmethod
     def find_equivalents(target_item: Item, candidates: List) -> List:
         """
-        Finds equivalent items in a provided list of candidates.
-        Returns a list of Items (or objects) that match the target item's name.
+        Finds equivalent items using robust token-based similarity (Jaccard Index).
+        Prevents false positives where items share only 1 common word (e.g. 'Multiplayer').
         """
         if not target_item or not target_item.name:
             return []
             
         target_norm = ItemMatchingService.normalize_name(target_item.name)
-        if len(target_norm) < 3: # Too short to be reliable
+        if len(target_norm) < 3: 
             return []
             
+        target_tokens = ItemMatchingService._tokenize(target_norm)
         matches = []
         
         for item in candidates:
-            # Skip the target item itself (if present in candidates)
-            # Check by ID if available, or just ignore since we handled that in main.py loop
-            # But let's be safe. Handle objects or dicts.
+            # Skip the target item itself
             i_id = getattr(item, 'id', None) or (item.get('id') if isinstance(item, dict) else None)
             i_source = getattr(item, 'source_id', None) or (item.get('source_id') if isinstance(item, dict) else None)
             
@@ -106,18 +122,24 @@ class ItemMatchingService:
             name = getattr(item, 'name', '') or (item.get('name') if isinstance(item, dict) else '')
             item_norm = ItemMatchingService.normalize_name(name)
             
-            # Relaxed Match: Substring check
-            # Handles cases like "Game v1.0" vs "Game"
-            if item_norm and target_norm:
-                 if item_norm == target_norm:
-                     matches.append(item)
-                     continue
-                 # Bidirectional containment
-                 # Ensure we don't match short common words by accident (len check at start helps)
-                 if len(item_norm) > 4 and len(target_norm) > 4:
-                     if item_norm in target_norm or target_norm in item_norm:
-                         matches.append(item)
-                         continue
+            if not item_norm:
+                continue
+
+            # Exact match (Fast path)
+            if item_norm == target_norm:
+                matches.append(item)
+                continue
+                
+            # Token Similarity (Robust path)
+            item_tokens = ItemMatchingService._tokenize(item_norm)
+            score = ItemMatchingService._jaccard_similarity(target_tokens, item_tokens)
+            
+            # Threshold: 
+            # 0.5 is safer after removing stopwords.
+            # "Lords of the Fallen" vs "Lords of Ravage" (Tokens: {lords, fallen} vs {lords, ravage}) -> 0.33 (Rejected)
+            # "Lords of the Fallen" vs "Lords of the Fallen Deluxe" (Tokens: {lords, fallen} vs {lords, fallen}) -> 1.0 (Accepted)
+            if score >= 0.5:
+                matches.append(item)
             
         return matches
 
@@ -175,112 +197,47 @@ class SourceHealthService:
             
             if stats:
                 if isinstance(item, dict):
-                    item['seeders'] = stats['seeders']
-                    item['leechers'] = stats['leechers']
-                    # Force recalc of score tag later or update it here?
-                    # The main loop calls calculate_health_score AFTER this likely.
+                    # Optimistic approach: Keep the highest value to avoid false negatives
+                    old_s = int(item.get('seeders') or 0)
+                    old_l = int(item.get('leechers') or 0)
+                    item['seeders'] = max(old_s, stats['seeders'])
+                    item['leechers'] = max(old_l, stats['leechers'])
                 else:
-                    setattr(item, 'seeders', stats['seeders'])
-                    setattr(item, 'leechers', stats['leechers'])
+                    old_s = int(getattr(item, 'seeders', 0) or 0)
+                    old_l = int(getattr(item, 'leechers', 0) or 0)
+                    setattr(item, 'seeders', max(old_s, stats['seeders']))
+                    setattr(item, 'leechers', max(old_l, stats['leechers']))
 
         # Process in parallel
         # Limit to avoid massive spam if list is huge, but usually candidates are few (<10)
-        tasks = [process_item(c) for c in candidates[:10]]
+        tasks = [process_item(c) for c in candidates]
         if tasks:
             await asyncio.gather(*tasks)
 
     @staticmethod
+    @staticmethod
     def calculate_health_score(item: Item) -> Dict:
         """
         Calculates a health score based on Seeders/Leechers (if available/parsed).
-        The Item model in this codebase might not have explicit 'seeders' column in DB 
-        (checked models.py, it doesn't have 'seeders'). 
-        
-        Wait, Item in models.py (Step 122) DOES NOT have seeders.
-        However, the JSON data often has it. 
-        If the Item model doesn't store it, we can't sort by it unless we load it from the JSON 'extra' data or if it was added.
-        
-        Re-checking models.py from Step 122:
-        Item has: id, source_id, name, url, size, category, type, image, icon, thumbnail, created_at.
-        It misses 'seeders', 'peers'.
-        
-        However, in 'main.py' list_items loop (Step 131), we see:
-        It loops raw items but returns a dict. It doesn't seem to persist seeders in DB Item table.
-        
-        CRITICAL: The Item table seems to be a cache of "known items" but mainly for 'Jobs' reference?
-        Or is it populated from Sources?
-        
-        If 'Item' table does not have seeders, we might need to rely on the 'raw' data if we can get it,
-        OR update the model.
-        
-        BUT, the requirement says "Preserve existing logic".
-        
-        Strategy:
-        The `get_source_item` endpoint I added earlier and `list_items` return dictionaries with extra fields potentially?
-        Let's look at `list_items` in `main.py` again.
-        It returns a list of dicts. The dicts are built from `raw` JSON.
-        They contain `seeders` if the JSON has it?
-        Let's check `list_items` implementation in `main.py` (Step 131).
-        It extracts: name, size, category, type, image, icon, thumbnail, uploadDate.
-        IT DOES NOT EXPLICITLY EXTRACT SEEDERS in the snippet I saw!
-        
-        Wait, I need to check if `list_items` puts seeders in the dict.
-        Line 1212 in Step 131:
-        dict(id=..., name=..., url=..., size=..., category=..., type=..., source_id=..., image=..., icon=..., thumbnail=..., uploadDate=...)
-        
-        IT DOES NOT RETURN SEEDERS.
-        
-        This means Phase 1 also needs to ensure we extract/pass Seeders!
-        
-        Options:
-        1. Modify `list_items` (and `Item` model?) to include seeders.
-        2. Parse seeders in `find_equivalents` by re-reading the source JSON? That's heavy.
-        
-        The Plan says: "Métricas Coletadas por Fonte: Seeders ativos...".
-        Functionality "Score " requires this.
-        
-        Correction: I should modify `main.py`'s `list_items` to extract seeders/peers from JSON data and pass it in the returned dicts.
-        I don't necessarily need to save it to the DB if the DB is just a reference, but if `Item` is `table=True`, it's a DB table.
-        
-        If I change `list_items` to return raw seeders in the list (in-memory), I can use that for the analysis logic.
-        But `find_equivalents` receives `Item` (DB objects) or `dict`?
-        
-        If `all_items` comes from `session.exec(select(Item))`, those are DB objects. They won't have seeders if the column doesn't exist.
-        
-        Hypothesis: The "Item" table only contains items that created Jobs? OR does it cache everything?
-        `backend/main.py` logic:
-        Line 886: `item = Item(...)` is created when creating a job.
-        Line 1248: `delete(Item).where(Item.source_id == source_id)` implies items ARE stored per source?
-        NO. `list_items` (endpoint) loads from JSON on demand!
-        Line 1070: "Carrega items sob demanda da fonte (releitura do JSON)."
-        
-        So the DB `Item` table might NOT be the primary list of browsing items. The browsing happens via `list_items` which reads JSON.
-        
-        So, `find_equivalents` needs to:
-        1. Iterate over all REGISTERED SOURCES in DB.
-        2. For each source, LOAD its items (parse JSON).
-        3. Search for matches.
-        
-        This is heavier but accurate to the current architecture (On-demand JSON).
-        
-        Matches User's "Heurística" requirement.
-        
-        So in `analysis.py`, I need `find_equivalents` to take `session` and iterate sources.
-        
         """
-        seeders = item.get('seeders', 0) if isinstance(item, dict) else getattr(item, 'seeders', 0)
-        peers = item.get('leechers', 0) if isinstance(item, dict) else getattr(item, 'leechers', 0)
-        
-        # Safe cast to int
+        # Extract seeders and leechers from the item (dict or object)
+        if isinstance(item, dict):
+            seeders = item.get('seeders')
+            leechers = item.get('leechers')
+        else:
+            seeders = getattr(item, 'seeders', None)
+            leechers = getattr(item, 'leechers', None)
+            
+        # Ensure integers
         try:
             seeders = int(seeders) if seeders is not None else 0
         except (ValueError, TypeError):
             seeders = 0
             
         try:
-            peers = int(peers) if peers is not None else 0
+            leechers = int(leechers) if leechers is not None else 0
         except (ValueError, TypeError):
-            peers = 0
+            leechers = 0
         
         # Check for Direct Download (HTTP/HTTPS) vs Magnet
         url = item.get('url') if isinstance(item, dict) else getattr(item, 'url', None)
@@ -297,12 +254,12 @@ class SourceHealthService:
 
         # Magnet Logic (Standard)
         if seeders >= 50:
-            return {"score": 100, "label": "Excelente", "color": "emerald", "seeders": seeders, "leechers": peers}
+            return {"score": 100, "label": "Excelente", "color": "emerald", "seeders": seeders, "leechers": leechers}
         elif seeders >= 20:
-            return {"score": 75, "label": "Bom", "color": "green", "seeders": seeders, "leechers": peers}
+            return {"score": 75, "label": "Bom", "color": "green", "seeders": seeders, "leechers": leechers}
         elif seeders >= 5:
-            return {"score": 50, "label": "Regular", "color": "yellow", "seeders": seeders, "leechers": peers}
+            return {"score": 50, "label": "Regular", "color": "yellow", "seeders": seeders, "leechers": leechers}
         else:
-            return {"score": 25, "label": f"Fraco ({seeders} seeds)", "color": "red", "seeders": seeders, "leechers": peers}
+            return {"score": 25, "label": f"Fraco ({seeders} seeds)", "color": "red", "seeders": seeders, "leechers": leechers}
         # End of calculate_health_score
 

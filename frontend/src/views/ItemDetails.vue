@@ -1,26 +1,40 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-    <!-- Header simples com uma única imagem grande (sem duplicação) -->
+  <div class="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 relative overflow-hidden">
+    <!-- Animated background particles -->
+    <div class="absolute inset-0 opacity-30 pointer-events-none">
+      <div class="absolute top-20 left-20 w-96 h-96 bg-cyan-500 rounded-full mix-blend-multiply filter blur-[128px] animate-blob"></div>
+      <div class="absolute top-40 right-20 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-[128px] animate-blob animation-delay-2000"></div>
+      <div class="absolute bottom-20 left-40 w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-[128px] animate-blob animation-delay-4000"></div>
+    </div>
+    
+    <!-- Header com gradiente premium -->
     <div class="relative overflow-hidden pb-0">
-      <!-- Botão voltar -->
-      <div class="absolute top-4 left-4 z-10">
+      <!-- Gradiente overlay superior -->
+      <div class="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent pointer-events-none z-[5]"></div>
+      
+      <!-- Botão voltar premium -->
+      <div class="absolute top-6 left-6 z-20">
         <button 
           @click="goBack"
-          class="flex items-center gap-2 px-4 py-2 bg-slate-800/80 hover:bg-slate-700 rounded-lg transition text-cyan-400"
+          class="group flex items-center gap-2 px-5 py-2.5 bg-slate-900/60 hover:bg-slate-800/80 backdrop-blur-xl rounded-xl transition-all duration-300 text-cyan-400 hover:text-cyan-300 border border-slate-700/50 hover:border-cyan-500/30 shadow-lg hover:shadow-cyan-500/20"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
-          Voltar
+          <span class="font-medium">Voltar</span>
         </button>
       </div>
 
-      <!-- Imagem principal do header ocupando bem o espaço disponível -->
-      <div v-if="headerImageUrl" class="pt-16 px-4 md:px-8 flex justify-center">
+      <!-- Imagem principal premium com efeitos -->
+      <div v-if="headerImageUrl" class="pt-20 px-4 md:px-8 flex justify-center relative">
+        <!-- Glow effect atrás da imagem -->
+        <div class="absolute inset-0 flex justify-center items-center">
+          <div class="w-full max-w-5xl h-96 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 blur-3xl"></div>
+        </div>
         <img
           :src="headerImageUrl"
           alt="Header do jogo"
-          class="w-full max-w-6xl max-h-[500px] rounded-2xl shadow-2xl border border-slate-700/80 object-contain object-center"
+          class="relative w-full max-w-6xl max-h-[500px] rounded-3xl shadow-2xl shadow-black/50 border border-slate-700/50 object-contain object-center transition-transform hover:scale-[1.02] duration-500"
         />
       </div>
 
@@ -38,8 +52,8 @@
     <!-- Conteúdo principal -->
     <div class="relative mt-[3px] z-10 px-4 md:px-8 pb-12">
       <div class="max-w-6xl mx-auto">
-        <!-- Card principal -->
-        <div class="bg-slate-800 border border-slate-700 rounded-lg p-8 mb-8">
+        <!-- Card principal premium -->
+        <div class="bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 mb-8 shadow-[0_20px_70px_-10px_rgba(0,0,0,0.7)] hover:shadow-[0_30px_90px_-10px_rgba(6,182,212,0.3)] transition-all duration-500 animate-fade-in-up">
           <!-- Título e informações básicas -->
           <div class="mb-8">
             <!-- Alerta de Fonte Alternativa (SteamGridDB) -->
@@ -58,7 +72,7 @@
             </div>
 
             <div class="flex items-start justify-between gap-4 mb-4">
-              <h1 class="text-4xl font-bold text-white">{{ item?.name }}</h1>
+              <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-white via-cyan-50 to-purple-100 bg-clip-text text-transparent drop-shadow-lg leading-tight">{{ item?.name }}</h1>
               <div class="flex-shrink-0">
                 <FavoriteToggleButton v-if="item" :item="item" />
               </div>
@@ -66,13 +80,13 @@
             
             <!-- Badges de informação -->
             <div class="flex flex-wrap gap-3 mb-6">
-              <span v-if="item?.category" class="px-3 py-1 bg-cyan-500/20 border border-cyan-500/50 rounded-full text-cyan-300 text-sm">
+              <span v-if="item?.category" class="px-4 py-2 bg-gradient-to-r from-cyan-500/30 to-blue-500/30 border border-cyan-400/50 rounded-xl text-cyan-200 text-sm font-semibold shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all hover:scale-105">
                 {{ item.category }}
               </span>
-              <span v-if="item?.uploadDate" class="px-3 py-1 bg-purple-500/20 border border-purple-500/50 rounded-full text-purple-300 text-sm">
+              <span v-if="item?.uploadDate" class="px-4 py-2 bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-400/50 rounded-xl text-purple-200 text-sm font-semibold shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 transition-all hover:scale-105">
                 {{ formatDate(item.uploadDate) }}
               </span>
-              <span v-if="item?.size" class="px-3 py-1 bg-amber-500/20 border border-amber-500/50 rounded-full text-amber-300 text-sm">
+              <span v-if="item?.size" class="px-4 py-2 bg-gradient-to-r from-amber-500/30 to-orange-500/30 border border-amber-400/50 rounded-xl text-amber-200 text-sm font-semibold shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 transition-all hover:scale-105">
                 {{ formatSize(item.size) }}
               </span>
             </div>
@@ -196,40 +210,65 @@
           </div>
         </div>
 
-        <!-- Vídeos da Steam -->
+        <!-- Vídeos da Steam - Carousel Horizontal -->
         <div v-if="item?.gameDetails?.movies && item.gameDetails.movies.length > 0" class="bg-slate-800 border border-slate-700 rounded-lg p-8 mb-8">
           <h2 class="text-2xl font-bold text-white mb-6">Vídeos ({{ item.gameDetails.movies.length }})</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div
-              v-for="(video, idx) in item.gameDetails.movies"
-              :key="idx"
-              class="group cursor-pointer"
-              @click="openVideo(video)"
+          <div class="relative">
+            <!-- Seta esquerda -->
+            <button 
+              @click="scrollVideos('left')"
+              class="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full transition"
             >
-              <!-- Debug: mostrar dados do vídeo -->
-              <div style="display: none;">
-                {{ console.log(`[Template] Renderizando vídeo ${idx}:`, video) }}
-              </div>
-              <div class="relative overflow-hidden rounded-lg bg-gradient-to-br from-slate-700 to-slate-800 aspect-video mb-3">
-                <img 
-                  v-if="video.thumbnail"
-                  :src="getVideoThumbnailUrl(video.thumbnail)" 
-                  :alt="video.name"
-                  class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                />
-                <div v-else class="w-full h-full flex items-center justify-center bg-slate-700">
-                  <svg class="w-12 h-12 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            <!-- Container do carousel -->
+            <div ref="videoScrollRef" class="overflow-x-auto pb-4 scrollbar-hide">
+              <div class="flex gap-6 min-w-max px-12">
+                <div
+                  v-for="(video, idx) in item.gameDetails.movies"
+                  :key="idx"
+                  class="group cursor-pointer flex-shrink-0"
+                  @click="openVideo(video)"
+                >
+                  <!-- Debug: mostrar dados do vídeo -->
+                  <div style="display: none;">
+                    {{ console.log(`[Template] Renderizando vídeo ${idx}:`, video) }}
+                  </div>
+                  <div class="relative overflow-hidden rounded-lg bg-gradient-to-br from-slate-700 to-slate-800 w-80 h-48 mb-3">
+                    <img 
+                      v-if="video.thumbnail"
+                      :src="getVideoThumbnailUrl(video.thumbnail)" 
+                      :alt="video.name"
+                      class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    />
+                    <div v-else class="w-full h-full flex items-center justify-center bg-slate-700">
+                      <svg class="w-12 h-12 text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/20 transition-colors">
+                      <svg class="w-16 h-16 text-white opacity-80 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p class="text-white font-semibold text-sm w-80 truncate">{{ video.name }}</p>
                 </div>
-                <div class="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/20 transition-colors">
-                  <svg class="w-16 h-16 text-white opacity-80 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </div>
               </div>
-              <p class="text-white font-semibold text-sm">{{ video.name }}</p>
             </div>
+
+            <!-- Seta direita -->
+            <button 
+              @click="scrollVideos('right')"
+              class="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full transition"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -324,6 +363,144 @@
           </div>
         </div>
 
+        <!-- Sobre o Jogo (Rich HTML Description) -->
+        <div v-if="item?.gameDetails?.about_the_game" class="bg-slate-800 border border-slate-700 rounded-lg p-8 mb-8">
+          <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+            <svg class="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Sobre o Jogo
+          </h2>
+          <div 
+            class="prose prose-invert prose-slate max-w-none text-slate-300 leading-relaxed about-game-content"
+            v-html="processedAboutTheGame"
+          ></div>
+        </div>
+
+
+        <!-- Card Unificado: Especificações Técnicas Premium -->
+        <div v-if="item?.gameDetails?.found" class="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-2xl p-8 mb-8 shadow-2xl shadow-black/30">
+          <h2 class="text-2xl font-bold bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent mb-8 flex items-center gap-3">
+            <div class="p-2 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-xl border border-amber-500/30">
+              <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            Especificações Técnicas
+          </h2>
+
+          <!-- Grid Principal: 2 Colunas -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Coluna Esquerda: Requisitos -->
+            <div v-if="item?.gameDetails?.pc_requirements && (item.gameDetails.pc_requirements.minimum || item.gameDetails.pc_requirements.recommended)" class="space-y-5">
+              <h3 class="text-lg font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Requisitos de Sistema
+              </h3>
+              
+              <!-- Mínimo -->
+              <div v-if="item.gameDetails.pc_requirements.minimum" class="group bg-gradient-to-br from-slate-900/60 to-slate-950/60 backdrop-blur-sm border border-slate-700/50 hover:border-cyan-500/30 rounded-xl p-4 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10">
+                <h4 class="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                  <span class="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></span>
+                  Mínimo
+                </h4>
+                <div class="prose prose-xs prose-invert prose-slate max-w-none text-slate-300 text-xs leading-relaxed" v-html="item.gameDetails.pc_requirements.minimum"></div>
+              </div>
+
+              <!-- Recomendado -->
+              <div v-if="item.gameDetails.pc_requirements.recommended" class="group bg-gradient-to-br from-slate-900/60 to-slate-950/60 backdrop-blur-sm border border-slate-700/50 hover:border-emerald-500/30 rounded-xl p-4 transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/10">
+                <h4 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">
+                  <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                  Recomendado
+                </h4>
+                <div class="prose prose-xs prose-invert prose-slate max-w-none text-slate-300 text-xs leading-relaxed" v-html="item.gameDetails.pc_requirements.recommended"></div>
+              </div>
+            </div>
+
+            <!-- Coluna Direita: Idiomas + Info Técnica -->
+            <div class="space-y-5">
+              
+              <!-- Idiomas -->
+              <div v-if="dubbedLanguages.length > 0 || subtitledLanguages.length > 0">
+                <h3 class="text-lg font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent mb-4 flex items-center gap-2">
+                  <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                  </svg>
+                  Idiomas
+                </h3>
+
+                <!-- Dublados -->
+                <div v-if="dubbedLanguages.length > 0" class="mb-4">
+                  <p class="text-xs text-cyan-400 font-semibold mb-2 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clip-rule="evenodd" />
+                    </svg>
+                    Áudio Completo (Dublagem)
+                  </p>
+                  <div class="flex flex-wrap gap-2">
+                    <span v-for="(lang, idx) in dubbedLanguages" :key="idx" class="px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-400/40 rounded-lg text-xs text-cyan-300 font-medium shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/20 transition-shadow">
+                      {{ lang }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Apenas Legendas -->
+                <div v-if="subtitledLanguages.length > 0">
+                  <p class="text-xs text-slate-400 font-semibold mb-2 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                    </svg>
+                    Interface / Legendas
+                  </p>
+                  <div class="flex flex-wrap gap-2">
+                    <span v-for="(lang, idx) in subtitledLanguages" :key="idx" class="px-3 py-1.5 bg-slate-800/60 border border-slate-600/40 rounded-lg text-xs text-slate-400 hover:text-slate-300 hover:border-slate-500/50 transition-colors">
+                      {{ lang }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Informações Técnicas Compactas Premium -->
+              <div class="bg-gradient-to-br from-slate-900/60 to-slate-950/60 backdrop-blur-sm border border-slate-700/50 rounded-xl p-4 space-y-3 shadow-lg">
+                <div v-if="item.gameDetails.controller_support && item.gameDetails.controller_support !== 'none'" class="flex items-center justify-between text-sm group hover:bg-slate-800/30 p-2 rounded-lg transition-colors">
+                  <span class="text-slate-400 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    </svg>
+                    Controle
+                  </span>
+                  <span class="text-white font-semibold">{{ item.gameDetails.controller_support === 'full' ? 'Suporte Completo' : 'Parcial' }}</span>
+                </div>
+                <div v-if="item.gameDetails.developers && item.gameDetails.developers.length > 0" class="flex items-center justify-between text-sm group hover:bg-slate-800/30 p-2 rounded-lg transition-colors">
+                  <span class="text-slate-400">Desenvolvedora</span>
+                  <span class="text-white font-semibold truncate ml-2" :title="item.gameDetails.developers.join(', ')">{{ item.gameDetails.developers.join(', ') }}</span>
+                </div>
+                <div v-if="item.gameDetails.publishers && item.gameDetails.publishers.length > 0" class="flex items-center justify-between text-sm group hover:bg-slate-800/30 p-2 rounded-lg transition-colors">
+                  <span class="text-slate-400">Publicadora</span>
+                  <span class="text-white font-semibold truncate ml-2" :title="item.gameDetails.publishers.join(', ')">{{ item.gameDetails.publishers.join(', ') }}</span>
+                </div>
+                <div v-if="item.gameDetails.release_date" class="flex items-center justify-between text-sm group hover:bg-slate-800/30 p-2 rounded-lg transition-colors">
+                  <span class="text-slate-400">Lançamento</span>
+                  <span class="text-white font-semibold">{{ item.gameDetails.release_date }}</span>
+                </div>
+                <div v-if="item.gameDetails.metacritic_score" class="flex items-center justify-between text-sm group hover:bg-slate-800/30 p-2 rounded-lg transition-colors">
+                  <span class="text-slate-400 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                    Metacritic
+                  </span>
+                  <span class="text-xl font-bold" :style="{ color: getMetacriticColor(item.gameDetails.metacritic_score) }">{{ item.gameDetails.metacritic_score }}</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
         <!-- Modal para reproduzir vídeo da Steam -->
         <!-- Modal para reproduzir vídeo da Steam -->
         <div v-if="showVideoModal && currentVideo" class="fixed inset-0 z-50 flex items-center justify-center bg-black/95" @click.self="closeVideo">
@@ -339,7 +516,10 @@
             </svg>
           </button>
 
-          <div class="relative w-full max-w-4xl mx-4 aspect-video bg-black rounded-lg shadow-2xl overflow-hidden border border-slate-800">
+          <div 
+            class="relative w-full max-w-4xl mx-4 aspect-video bg-black rounded-xl overflow-hidden transition-all duration-300"
+            style="box-shadow: 0 0 60px rgba(6, 182, 212, 0.6), 0 0 30px rgba(6, 182, 212, 0.4), 0 25px 50px -12px rgba(0, 0, 0, 0.9); border: 2px solid rgba(6, 182, 212, 0.5);"
+          >
             <!-- Botão Fechar (X) -->
             <button
               class="absolute top-4 right-4 text-white/70 hover:text-white z-20 bg-black/50 hover:bg-black/80 rounded-full p-2 transition backdrop-blur-sm"
@@ -356,7 +536,7 @@
             </div>
             
             <!-- Player de Vídeo -->
-            <div :key="currentVideo.name" v-if="currentVideo.mp4 || currentVideo.webm" class="w-full h-full flex items-center justify-center bg-black">
+            <div :key="currentVideo.name" v-if="currentVideo.hls || currentVideo.mp4 || currentVideo.webm" class="w-full h-full flex items-center justify-center bg-black">
               <iframe
                 v-if="videoIframeHtml"
                 :srcDoc="videoIframeHtml"
@@ -378,6 +558,9 @@
                 @loadstart="onVideoLoadStart"
                 @canplay="onVideoCanPlay"
               >
+                <!-- Priorizar HLS (formato moderno com áudio) -->
+                <source v-if="currentVideo.hls" :src="getProxyVideoUrl(currentVideo.hls)" type="application/x-mpegURL" />
+                <!-- Fallback para formatos legados -->
                 <source v-if="currentVideo.mp4" :src="getProxyVideoUrl(currentVideo.mp4)" type="video/mp4" />
                 <source v-if="currentVideo.webm" :src="getProxyVideoUrl(currentVideo.webm)" type="video/webm" />
                 Seu navegador não suporta reprodução de vídeo.
@@ -496,7 +679,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api'
 import { useDownloadStore } from '../stores/download'
@@ -506,6 +689,7 @@ import Modal from '../components/Modal.vue'
 import Input from '../components/Input.vue'
 import Button from '../components/Button.vue'
 import FavoriteToggleButton from '../components/FavoriteToggleButton.vue'
+import Hls from 'hls.js'
 
 // Obter base URL da API para usar em URLs absolutas
 const getApiBaseUrl = () => {
@@ -519,6 +703,7 @@ const item = ref(null)
 const loadingDetails = ref(true)
 const copied = ref(false)
 const screenshotScrollRef = ref(null)
+const videoScrollRef = ref(null)
 const showVideoModal = ref(false)
 const currentVideo = ref(null)
 const headerImageUrl = ref(null)
@@ -832,23 +1017,135 @@ const getProxyVideoUrl = (videoUrl) => {
   // O proxy estava causando problemas de buffering e codecs
   return videoUrl
 }
+const processedAboutTheGame = computed(() => {
+  if (!item.value?.gameDetails?.about_the_game) return ''
+  
+  let html = item.value.gameDetails.about_the_game
+  
+  // Usar DOMParser para manipular o HTML de forma segura
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  
+  // Processar todas as imagens
+  const images = doc.querySelectorAll('img')
+  const baseUrl = getApiBaseUrl()
+  
+  images.forEach(img => {
+    const src = img.getAttribute('src')
+    if (src && src.startsWith('http')) {
+      // Usar proxy para evitar problemas de CORS e erros de carregamento
+      // Codificar a URL corretamente
+      const proxyUrl = `${baseUrl}/api/proxy/image?url=${encodeURIComponent(src)}`
+      img.setAttribute('src', proxyUrl)
+      
+      // Também corrigir data-src se existir (comum em lazy loading)
+      const dataSrc = img.getAttribute('data-src')
+      if (dataSrc && dataSrc.startsWith('http')) {
+         img.setAttribute('data-src', `${baseUrl}/api/proxy/image?url=${encodeURIComponent(dataSrc)}`)
+      }
+    }
+  })
+  
+  // Retornar o HTML processado
+  return doc.body.innerHTML
+})
 
+// ================= VIDEO PLAYER LOGIC =================
 const openVideo = async (video) => {
   if (!video) return
 
   console.log('[ItemDetails] openVideo chamado. Vídeo recebido:', {
     name: video?.name,
+    hls: video?.hls,
     mp4: video?.mp4,
     webm: video?.webm,
     isElectron: !!window.electronAPI
   })
 
-
-
-  // We want to open the modal, not external player
+  // Abrir modal
   currentVideo.value = video
   showVideoModal.value = true
 }
+
+// Variável para armazenar instância do HLS
+let hlsInstance = null
+
+// Watch para inicializar HLS quando o vídeo mudar
+watch([showVideoModal, currentVideo], async ([isOpen, video]) => {
+  // Limpar instância anterior
+  if (hlsInstance) {
+    hlsInstance.destroy()
+    hlsInstance = null
+  }
+
+  if (!isOpen || !video) return
+
+  // Aguardar próximo tick para garantir que o elemento de vídeo foi renderizado
+  await nextTick()
+
+  const videoElement = document.querySelector('.w-full.h-full.object-contain')
+  if (!videoElement) {
+    console.warn('[ItemDetails] Elemento de vídeo não encontrado')
+    return
+  }
+
+  // Se o vídeo for HLS, usar hls.js
+  if (video.hls) {
+    const hlsUrl = getProxyVideoUrl(video.hls)
+    console.log('[ItemDetails] Inicializando HLS player para:', hlsUrl)
+
+    if (Hls.isSupported()) {
+      hlsInstance = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 90,
+        // Otimizações para fluidez (Smoothness)
+        maxBufferLength: 30, // Aumentar buffer para 30s
+        maxMaxBufferLength: 60,
+        capLevelToPlayerSize: true, // Limitar qualidade ao tamanho do player para economizar recursos
+        startLevel: -1, // Auto start level
+        abrEwmaDefaultEstimate: 5000000, // Estimativa inicial de banda (5mbps)
+      })
+
+      hlsInstance.loadSource(hlsUrl)
+      hlsInstance.attachMedia(videoElement)
+
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('[ItemDetails] HLS manifest carregado, iniciando reprodução')
+        videoElement.play().catch(e => console.warn('[ItemDetails] Autoplay bloqueado:', e))
+      })
+
+      hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+        console.error('[ItemDetails] HLS Error:', data)
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.error('[ItemDetails] Fatal network error, tentando recuperar...')
+              hlsInstance.startLoad()
+              break
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.error('[ItemDetails] Fatal media error, tentando recuperar...')
+              hlsInstance.recoverMediaError()
+              break
+            default:
+              console.error('[ItemDetails] Erro fatal irrecuperável')
+              hlsInstance.destroy()
+              break
+          }
+        }
+      })
+    } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari nativo suporta HLS
+      videoElement.src = hlsUrl
+      videoElement.addEventListener('loadedmetadata', () => {
+        videoElement.play().catch(e => console.warn('[ItemDetails] Autoplay bloqueado:', e))
+      })
+    } else {
+      console.error('[ItemDetails] HLS não suportado neste navegador')
+    }
+  }
+}, { immediate: true })
+
 
 const currentVideoIndex = computed(() => {
   if (!item.value?.gameDetails?.movies || !currentVideo.value) return -1
@@ -888,8 +1185,8 @@ const closeVideo = () => {
 const openVideoInBrowser = () => {
   if (!currentVideo.value) return
   
-  // Usar URL original da Steam (sem proxy) para abrir no navegador externo
-  const videoUrl = currentVideo.value.mp4 || currentVideo.value.webm
+  // Priorizar HLS (formato moderno com áudio) sobre MP4/WebM legados
+  const videoUrl = currentVideo.value.hls || currentVideo.value.mp4 || currentVideo.value.webm
   
   if (videoUrl) {
     // Extrair URL original (remover proxy se existir)
@@ -918,6 +1215,17 @@ const scrollScreenshots = (direction) => {
       screenshotScrollRef.value.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
     } else {
       screenshotScrollRef.value.scrollBy({ left: scrollAmount, behavior: 'smooth' })
+    }
+  }
+}
+
+const scrollVideos = (direction) => {
+  if (videoScrollRef.value) {
+    const scrollAmount = 400
+    if (direction === 'left') {
+      videoScrollRef.value.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
+    } else {
+      videoScrollRef.value.scrollBy({ left: scrollAmount, behavior: 'smooth' })
     }
   }
 }
@@ -1091,10 +1399,89 @@ const confirmDownload = async () => {
     try { const ts = useToastStore(); ts.push('Erro', `Falha ao iniciar: ${e.message}`) } catch (ee) { alert(e.message) }
   }
 }
+
+// Helper function para cor dinâmica do Metacritic
+const getMetacriticColor = (score) => {
+  if (score >= 75) return '#66cc33' // Verde (bom)
+  if (score >= 50) return '#ffcc33' // Amarelo (médio)
+  return '#ff6666' // Vermelho (ruim)
+}
+
+// Computed property para parsear idiomas do HTML
+const parsedLanguages = computed(() => {
+  const langs = item.value?.gameDetails?.supported_languages
+  if (!langs) return []
+  
+  // Remover tags HTML mas preservar asteriscos que indicam áudio completo
+  const tempDiv = document.createElement('div')
+  tempDiv.innerHTML = langs
+  const text = tempDiv.textContent || tempDiv.innerText || ''
+  
+  // Dividir por vírgulas e processar cada idioma
+  return text
+    .split(',')
+    .map(lang => {
+      const trimmed = lang.trim()
+      // Verificar se tem asterisco (áudio completo/dublagem)
+      const hasFullAudio = trimmed.includes('*')
+      const cleanName = trimmed.replace(/\*/g, '').trim()
+      
+      // Ignorar linhas de rodapé explicativas
+      if (cleanName.toLowerCase().includes('idiomas com suporte') || 
+          cleanName.toLowerCase().includes('languages with full') ||
+          cleanName.length === 0) {
+        return null
+      }
+      
+      return {
+        name: cleanName,
+        hasFullAudio: hasFullAudio
+      }
+    })
+    .filter(lang => lang !== null)
+    .slice(0, 30) // Limitar a 30 idiomas
+})
+
+// Idiomas com dublagem completa
+const dubbedLanguages = computed(() => {
+  return parsedLanguages.value
+    .filter(lang => lang.hasFullAudio)
+    .map(lang => lang.name)
+})
+
+// Idiomas apenas com legendas/interface
+const subtitledLanguages = computed(() => {
+  return parsedLanguages.value
+    .filter(lang => !lang.hasFullAudio)
+    .map(lang => lang.name)
+})
 </script>
 
 <style scoped>
-/* Animações customizadas */
+/* Animações Premium */
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -1104,6 +1491,22 @@ const confirmDownload = async () => {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
 }
 
 :deep(.animate-in) {
@@ -1118,5 +1521,62 @@ const confirmDownload = async () => {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Centralizar imagens e vídeos na seção "Sobre o Jogo" */
+.about-game-content :deep(img),
+.about-game-content :deep(video),
+.about-game-content :deep(.bb_img_ctn) {
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  text-align: center; /* Para spans */
+}
+
+/* Aplicar estilo visual APENAS nas mídias, NÃO nos containers */
+.about-game-content :deep(img),
+.about-game-content :deep(video) {
+  max-width: 95% !important; /* Limitar largura */
+  max-height: 600px !important; /* Limitar altura máxima */
+  width: auto !important; /* Manter proporção */
+  height: auto !important; /* Manter proporção */
+  object-fit: contain !important; /* Garantir que caiba */
+  
+  /* Moldura Premium - Apenas na midia real */
+  border-radius: 12px;
+  border: 1px solid rgba(167, 243, 208, 0.2); 
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.5), 
+    0 0 15px rgba(6, 182, 212, 0.15); 
+  
+  transition: all 0.3s ease;
+}
+
+/* Remover qualquer estilo visual do container para não ficar um quadrado feio */
+.about-game-content :deep(.bb_img_ctn) {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.about-game-content :deep(img):hover,
+.about-game-content :deep(video):hover {
+  transform: scale(1.01);
+  box-shadow: 
+    0 10px 20px -5px rgba(0, 0, 0, 0.6), 
+    0 0 30px rgba(6, 182, 212, 0.5); /* Glow mais forte no hover */
+  border-color: rgba(34, 211, 238, 0.8);
+}
+
+
+/* Tentar centralizar containers que possam ter sobrado */
+.about-game-content :deep(p) {
+  text-align: left; /* Manter texto alinhado a esquerda */
+}
+
+/* Mas se o P tiver apenas imagem/video, centralizar (se suportado) */
+.about-game-content :deep(p:has(img)),
+.about-game-content :deep(p:has(video)) {
+  text-align: center;
 }
 </style>

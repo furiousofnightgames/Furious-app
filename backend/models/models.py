@@ -25,6 +25,8 @@ class Item(SQLModel, table=True):
     icon: Optional[str] = None  # URL de um ícone alternativo
     thumbnail: Optional[str] = None  # URL de uma miniatura
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    seeders: Optional[int] = Field(default=None)
+    leechers: Optional[int] = Field(default=None)
 
     source: Optional[Source] = Relationship(back_populates="items")
 

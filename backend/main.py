@@ -10,7 +10,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
@@ -2291,7 +2291,15 @@ async def broadcast_progress():
 
 # Mount static files at root AFTER all API endpoints (CRITICAL: must be last!)
 # This prevents StaticFiles from capturing /api/* routes
+
+# Ensure frontend_path is defined
+frontend_path = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
+
 if frontend_path.exists():
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(frontend_path / "index.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
     app.mount("/", StaticFiles(directory=str(frontend_path), html=True), name="frontend")
 
 if __name__ == "__main__":

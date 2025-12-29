@@ -559,7 +559,8 @@ class SteamClient:
                         "app_id": app_id,
                         "name": app_data.get("name", ""),
                         "description": app_data.get("short_description", ""),
-                        "full_description": app_data.get("detailed_description", "")[:500],  # Primeiros 500 chars
+                        "full_description": app_data.get("detailed_description", "")[:500],  # Primeiros 500 chars (legacy use)
+                        "about_the_game": app_data.get("about_the_game", ""), # Full description HTML
                         "developers": app_data.get("developers", []),
                         "publishers": app_data.get("publishers", []),
                         "genres": [g.get("description", "") for g in app_data.get("genres", [])],
@@ -568,14 +569,26 @@ class SteamClient:
                         "price": app_data.get("price_overview", {}).get("final_formatted", "Free"),
                         "metacritic": app_data.get("metacritic", {}).get("score", None),
                         "videos": videos,
-                        "website": app_data.get("website", "")
+                        "website": app_data.get("website", ""),
+                        # New Fields
+                        "supported_languages": app_data.get("supported_languages", ""),
+                        "pc_requirements": app_data.get("pc_requirements", {}),
+                        "controller_support": app_data.get("controller_support", ""),
+                        "legal_notice": app_data.get("legal_notice", ""),
                     }
+                    
+                    print(f"[SteamService] DEBUG: Dados extraídos para {app_id}:")
+                    print(f"  - PC Req (Raw): {app_data.get('pc_requirements')}")
+                    print(f"  - Controller (Raw): {app_data.get('controller_support')}")
+                    print(f"  - Idiomas (Raw): {app_data.get('supported_languages')}")
                     
                     # Cachear por 24h
                     self._set_cache(cache_key, details)
                     return details
         except Exception as e:
             print(f"[SteamService] Erro ao buscar detalhes: {e}")
+            import traceback
+            traceback.print_exc()
         
         return {}
 
@@ -610,28 +623,36 @@ class SteamClient:
                      details = await steam_api_client.get_appdetails(app_id)
                 
                 app_type = str(details.get("type") or "").lower().strip()
+                
+                header = (details.get("header_image") or "").strip()
+                capsule = (details.get("capsule") or details.get("capsule_large") or "").strip()
+                background = (details.get("background") or "").strip()
+                
+                has_art = bool(header or capsule or background)
+
                 if app_type and app_type not in ("game", "application"):
-                    print(f"[SteamService] ALERTA: AppID {app_id} é type='{app_type}' (Provável DLC/Soundtrack). Ignorando.")
-                else:
-                    header = (details.get("header_image") or "").strip()
-                    capsule = (details.get("capsule") or details.get("capsule_large") or "").strip()
-                    background = (details.get("background") or "").strip()
-
-                    if header or capsule or background:
-                        result = {
-                            "app_id": app_id,
-                            "header": header or None,
-                            "capsule": capsule or None,
-                            "hero": None,
-                            "logo": None,
-                            "background": background or None,
-                        }
-
-                        cache_key = f"art:{app_id}"
-                        self._set_cache(cache_key, result)
-                        return result
+                    if has_art:
+                        print(f"[SteamService] AppID {app_id} é type='{app_type}' mas possui arte. Usando.")
                     else:
-                        print(f"[SteamService] ALERTA: AppID {app_id} encontrado mas sem arte via appdetails. Ignorando.")
+                        print(f"[SteamService] ALERTA: AppID {app_id} é type='{app_type}' e sem arte. Ignorando.")
+                        # Tentar próximo candidato ou fallback
+                        continue
+
+                if has_art:
+                    result = {
+                        "app_id": app_id,
+                        "header": header or None,
+                        "capsule": capsule or None,
+                        "hero": None,
+                        "logo": None,
+                        "background": background or None,
+                    }
+
+                    cache_key = f"art:{app_id}"
+                    self._set_cache(cache_key, result)
+                    return result
+                else:
+                    print(f"[SteamService] ALERTA: AppID {app_id} encontrado mas sem arte via appdetails. Ignorando.")
             
             # Se não achou na Steam (ou imagem falhou), e temos SGDB, tentamos SGDB para este Q
             if self.sgdb:

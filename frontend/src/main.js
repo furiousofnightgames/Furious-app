@@ -9,10 +9,12 @@ import './styles/tailwind.css'
 
 const pinia = createPinia()
 
+console.log('App initialized. Version: LibraryCacheFix')
+
 // Prevent multiple initializations during hot reload
 if (!window.__appInitialized) {
   window.__appInitialized = true
-  
+
   const app = createApp(App)
 
   app.use(pinia)
@@ -24,7 +26,7 @@ if (!window.__appInitialized) {
       const store = useDownloadStore()
       if (store) {
         if (typeof store.checkAria2Status === 'function') {
-          store.checkAria2Status().catch(() => {})
+          store.checkAria2Status().catch(() => { })
         }
         if (typeof store.connectWebSocket === 'function') {
           store.connectWebSocket()

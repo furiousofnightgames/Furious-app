@@ -98,6 +98,10 @@ def init_db():
             conn.exec_driver_sql("ALTER TABLE item ADD COLUMN icon TEXT")
         if not has_column('item', 'thumbnail'):
             conn.exec_driver_sql("ALTER TABLE item ADD COLUMN thumbnail TEXT")
+        if not has_column('item', 'seeders'):
+            conn.exec_driver_sql("ALTER TABLE item ADD COLUMN seeders INTEGER")
+        if not has_column('item', 'leechers'):
+            conn.exec_driver_sql("ALTER TABLE item ADD COLUMN leechers INTEGER")
 
         # JobPart table columns
         if not has_column('jobpart', 'downloaded'):

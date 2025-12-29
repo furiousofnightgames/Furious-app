@@ -116,9 +116,8 @@ def _make_session_cache_key(raw_name: str, normalized_name: str) -> Optional[str
     if not raw:
         return None
 
-    # Base title antes de ':' ou ' – ' / ' - ' etc.
-    base = re.split(r"(?:\s[–\-—]\s|:\s)", raw, maxsplit=1)[0].strip() or raw
-    key = steam_client.sanitize_search_term(base) or steam_client.sanitize_search_term(raw) or (normalized_name or "")
+    # Removed aggressive splitting to preserve subtitles (e.g. "Hollow Knight: Silksong")
+    key = steam_client.sanitize_search_term(raw) or (normalized_name or "")
     key = (key or "").strip().lower()
     return key if _is_safe_cache_key(key) else None
 

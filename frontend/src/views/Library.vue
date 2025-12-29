@@ -133,13 +133,46 @@
       </div>
     </div>
 
-    <div v-if="!loading && filteredGroups.length > pageSize" class="flex items-center justify-center gap-3 pt-2">
-      <Button variant="outline" class="btn-translucent" :disabled="page <= 1" @click="goPrevPage">Anterior</Button>
-      <div class="text-sm text-gray-400">
-        Página <span class="text-cyan-300 font-semibold">{{ page }}</span>
-        de <span class="text-cyan-300 font-semibold">{{ totalPages }}</span>
-      </div>
-      <Button variant="outline" class="btn-translucent" :disabled="page >= totalPages" @click="goNextPage">Próxima</Button>
+    <div v-if="!loading && filteredGroups.length > pageSize" class="flex flex-wrap items-center justify-center gap-2 pt-4 pb-8">
+      <!-- Botão Anterior -->
+      <button 
+        @click="goPrevPage" 
+        :disabled="page <= 1"
+        class="px-3 py-2 rounded-lg border border-cyan-500/30 bg-gray-900/50 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
+      <!-- Números das Páginas -->
+      <template v-for="(p, index) in visiblePages" :key="index">
+        <span v-if="p === '...'" class="px-2 text-gray-500">...</span>
+        
+        <button 
+          v-else
+          @click="libraryStore.setPage(p); scrollToItemsTop()"
+          :class="[
+            'min-w-[40px] h-10 px-3 rounded-lg font-semibold transition border',
+            page === p 
+              ? 'bg-cyan-500 text-white border-cyan-400 shadow-lg shadow-cyan-500/30' 
+              : 'bg-gray-900/50 text-gray-400 border-gray-700 hover:text-cyan-300 hover:border-cyan-500/30'
+          ]"
+        >
+          {{ p }}
+        </button>
+      </template>
+
+      <!-- Botão Próxima -->
+      <button 
+        @click="goNextPage" 
+        :disabled="page >= totalPages"
+        class="px-3 py-2 rounded-lg border border-cyan-500/30 bg-gray-900/50 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
     </div>
 
     <Modal v-if="showVersionsModal" @close="closeVersions" :showDefaultButtons="false" title="Versões disponíveis" maxWidthClass="max-w-[calc(28rem+50px)]">
@@ -289,9 +322,12 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import api from '../services/api'
 import { useDownloadStore } from '../stores/download'
+import { useLibraryStore } from '../stores/library'
 import Card from '../components/Card.vue'
 import SteamGameCard from '../components/SteamGameCard.vue'
 import Modal from '../components/Modal.vue'
@@ -302,15 +338,16 @@ import SourceAnalysisModal from '../components/SourceAnalysisModal.vue'
 import { formatBytes, formatRelativeDate } from '../utils/format'
 import { useToastStore } from '../stores/toast'
 
+
+
 const downloadStore = useDownloadStore()
+const libraryStore = useLibraryStore()
+const { groups, stats, loading, error, page, searchQuery } = storeToRefs(libraryStore)
 const router = useRouter()
 
 const itemsTopRef = ref(null)
 
-const groups = ref([])
-const stats = ref({ total_sources: 0, total_items: 0, built_at: null })
-const loading = ref(false)
-const error = ref('')
+// groups, stats, loading, error managed by store
 
 const cacheBust = ref(0)
 
@@ -394,7 +431,7 @@ const formattedBuiltAt = computed(() => {
   } catch (e) {}
   return String(v)
 })
-const searchQuery = ref('')
+// searchQuery is in store
 
 const showVersionsModal = ref(false)
 const activeGroup = ref(null)
@@ -415,28 +452,24 @@ const browseLoading = ref(false)
 const modalInfo = ref({ size: null, accept_range: false, eta: null, checking: false })
 
 const pageSize = 21
-const page = ref(1)
+
+// page and searchQuery are now in the store (mapped above)
 
 async function fetchLibrary(refresh = false) {
-  try {
-    loading.value = true
+  if (refresh || !libraryStore.isLoaded) {
     startLoadingProgress()
-    error.value = ''
-    const resp = await api.get('/api/library' + (refresh ? '?refresh=true' : ''))
-    const data = resp.data || {}
-    groups.value = data.groups || []
-    page.value = 1
-    stats.value = {
-      total_sources: data.total_sources || 0,
-      total_items: data.total_items || 0,
-      built_at: data.built_at || null
-    }
-  } catch (e) {
-    error.value = e.message || 'Erro ao carregar biblioteca'
-  } finally {
-    loading.value = false
-    finishLoadingProgress()
+  } else {
+    // Debug log to verify cache usage
+    console.log('Library cache hit! Not reloading.')
   }
+  
+  await libraryStore.fetchLibrary(refresh)
+  
+  if (refresh) {
+    libraryStore.setPage(1)
+  }
+  
+  finishLoadingProgress()
 }
 
 function refreshLibrary() {
@@ -472,6 +505,41 @@ const paginatedGroups = computed(() => {
   return filteredGroups.value.slice(start, start + pageSize)
 })
 
+const visiblePages = computed(() => {
+  const current = page.value
+  const total = totalPages.value
+  const delta = 2 // Numbers to show on each side of current
+  const range = []
+  const rangeWithDots = []
+  let l
+
+  range.push(1)
+
+  if (total <= 1) return [1]
+
+  for (let i = current - delta; i <= current + delta; i++) {
+    if (i < total && i > 1) {
+      range.push(i)
+    }
+  }
+
+  range.push(total)
+
+  for (const i of range) {
+    if (l) {
+      if (i - l === 2) {
+        rangeWithDots.push(l + 1)
+      } else if (i - l !== 1) {
+        rangeWithDots.push('...')
+      }
+    }
+    rangeWithDots.push(i)
+    l = i
+  }
+
+  return rangeWithDots
+})
+
 function scrollToItemsTop() {
   try {
     nextTick(() => {
@@ -486,17 +554,32 @@ function scrollToItemsTop() {
 }
 
 function goPrevPage() {
-  page.value = Math.max(1, page.value - 1)
-  scrollToItemsTop()
+  if (page.value > 1) {
+    libraryStore.setPage(page.value - 1)
+    scrollToItemsTop()
+  }
 }
 
 function goNextPage() {
-  page.value = Math.min(totalPages.value, page.value + 1)
-  scrollToItemsTop()
+  if (page.value < totalPages.value) {
+    libraryStore.setPage(page.value + 1)
+    scrollToItemsTop()
+  }
 }
 
-watch(searchQuery, () => {
-  page.value = 1
+// Update store when search query changes (handled by v-model on input which should map to store)
+// However, since we used storeToRefs, searchQuery is a ref.
+// But to trigger side effects like page reset, we should watch it or use the action.
+// Better: use a writable computed for the input.
+// For now, let's watch the ref and ensure page is reset if it wasn't done by the setter.
+
+watch(searchQuery, (newVal) => {
+  // If we change search, we usually want to go to page 1.
+  // The store action setSearchQuery does this, but v-model bypasses action.
+  // So we watch here.
+  if (page.value !== 1) {
+    libraryStore.setPage(1)
+  }
   scrollToItemsTop()
 })
 
@@ -702,7 +785,12 @@ async function confirmDownload() {
   }
 }
 
+// Save scroll position before leaving -> REMOVED
+// onBeforeRouteLeave -> REMOVED
+
 onMounted(() => {
   fetchLibrary(false)
 })
+
+
 </script>

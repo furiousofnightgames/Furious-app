@@ -63,8 +63,10 @@ class SteamAPIClient:
             try:
                 client = await self._get_client()
                 url = "https://store.steampowered.com/api/appdetails"
-                # Idioma PT-BR (código "brazilian" na Steam)
-                params = {"appids": app_id, "l": "brazilian"}
+                # IMPORTANTE: Remover parametro de idioma 'brazilian' pois em alguns jogos (ex: Lords of the Fallen)
+                # ele retorna HTML antigo com URLs de imagens quebradas (404).
+                # O padrão (sem parametro 'l') retorna HTML atualizado com .avif que funcionam.
+                params = {"appids": app_id}
 
                 resp = await client.get(url, params=params, timeout=self._timeout)
 
@@ -119,6 +121,43 @@ class SteamAPIClient:
 
         return self._empty_response(app_id)
 
+
+    def _replace_steam_placeholders(self, html_content: str, app_id: int) -> str:
+        """Substitui placeholders do HTML da Steam por URLs reais."""
+        if not html_content:
+            return html_content
+        
+        # Substituir {STEAM_APP_IMAGE} pela URL base da CDN da Steam
+        steam_app_image_url = f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}"
+        html_content = html_content.replace("{STEAM_APP_IMAGE}", steam_app_image_url)
+        
+        # Outros placeholders comuns da Steam
+        html_content = html_content.replace("{STEAM_CLAN_IMAGE}", "https://cdn.akamai.steamstatic.com/steamcommunity/public/images/clans")
+        html_content = html_content.replace("{STEAM_CLAN_LOC_IMAGE}", "https://cdn.akamai.steamstatic.com/steamcommunity/public/images/clans")
+        
+        # FIX: Limpar URLs malformadas que podem causar erro no frontend (ex: /src=https:...)
+        # Algumas vezes a Steam ou o parser pode deixar lixo no src
+        import re
+        
+        def fix_src(match):
+            src = match.group(1)
+            # Remove prefixo /src= ou src= se existir (erro comum de parseamento)
+            if "/src=" in src:
+                src = src.replace("/src=", "")
+            if "src=" in src:
+                src = src.replace("src=", "")
+            
+            # Se a URL ficou relativa ou quebrada, tentar consertar
+            if src.startswith("//"):
+                src = "https:" + src
+            
+            return f'src="{src}"'
+
+        # Substituir src="..." por versão limpa
+        html_content = re.sub(r'src=["\']([^"\']+)["\']', fix_src, html_content)
+
+        return html_content
+
     def _normalize_appdetails(self, app_id: int, app_data: Dict) -> Dict[str, Any]:
         """Normaliza resposta da Steam API, extraindo apenas campos relevantes."""
 
@@ -140,23 +179,35 @@ class SteamAPIClient:
                     "thumbnail": movie.get("thumbnail", ""),
                 }
 
-                # URLs de vídeo - PRIORIDADE para 'max' (melhor qualidade e áudio) vs '480' (muito comprimido)
+                # NOVO: Steam agora usa HLS streaming (hls_h264) para vídeos modernos
+                # Prioridade: hls_h264 > webm.max > mp4.max > webm.480 > mp4.480
+                
+                # Tentar HLS primeiro (formato moderno com áudio)
+                hls_h264 = movie.get("hls_h264")
+                if hls_h264:
+                    movie_obj["hls"] = hls_h264
+                    movie_obj["format"] = "hls"
+                
+                # Fallback para formatos legados (webm/mp4)
                 webm = movie.get("webm")
                 if isinstance(webm, dict):
+                    # Priorizar 'max' (melhor qualidade) sobre '480' (comprimido/sem áudio)
                     movie_obj["webm"] = webm.get("max") or webm.get("480") or ""
 
                 mp4 = movie.get("mp4")
                 if isinstance(mp4, dict):
                     movie_obj["mp4"] = mp4.get("max") or mp4.get("480") or ""
 
-                # Filtrar microtrailers (videos de hover sem som)
+                # Filtrar microtrailers (vídeos de hover sem som)
                 mp4_url = movie_obj.get("mp4", "")
                 webm_url = movie_obj.get("webm", "")
+                hls_url = movie_obj.get("hls", "")
                 
-                if "microtrailer" in str(mp4_url) or "microtrailer" in str(webm_url):
+                if "microtrailer" in str(mp4_url) or "microtrailer" in str(webm_url) or "microtrailer" in str(hls_url):
                     continue
 
-                if mp4_url or webm_url:
+                # Adicionar se tiver pelo menos uma URL válida
+                if hls_url or mp4_url or webm_url:
                     movies.append(movie_obj)
         
         # Se não achou vídeos na API, tentar extrair do HTML da description_long
@@ -173,7 +224,14 @@ class SteamAPIClient:
         if "categories" in app_data:
             categories = [c.get("description", "") for c in app_data["categories"] if c.get("description")]
 
-        # Montar resposta normalizada
+        # Extended Metadata (processar placeholders em campos HTML)
+        pc_requirements = app_data.get("pc_requirements", {})
+        if isinstance(pc_requirements, dict):
+            if "minimum" in pc_requirements:
+                pc_requirements["minimum"] = self._replace_steam_placeholders(pc_requirements["minimum"], app_id)
+            if "recommended" in pc_requirements:
+                pc_requirements["recommended"] = self._replace_steam_placeholders(pc_requirements["recommended"], app_id)
+        
         return {
             "found": True,
             "app_id": app_id,
@@ -187,17 +245,41 @@ class SteamAPIClient:
             "movies": movies,
             "description_short": app_data.get("short_description", ""),
             # Manter descrição longa completa para extrair vídeos do HTML
-            "description_long": app_data.get("detailed_description", ""),
+            "description_long": self._replace_steam_placeholders(app_data.get("detailed_description", ""), app_id),
             "genres": genres,
             "categories": categories,
             "developers": app_data.get("developers", []),
             "publishers": app_data.get("publishers", []),
-            "release_date": app_data.get("release_date", {}).get("date", ""),
             "price": app_data.get("price_overview", {}).get("final_formatted", "Free"),
             "metacritic_score": app_data.get("metacritic", {}).get("score"),
             "website": app_data.get("website", ""),
             "support_url": app_data.get("support_info", {}).get("url", ""),
+            "release_date": app_data.get("release_date", {}).get("date", ""),
+            # Extended Metadata
+            "supported_languages": app_data.get("supported_languages", ""),
+            "pc_requirements": pc_requirements,
+            "mac_requirements": app_data.get("mac_requirements", {}),
+            "linux_requirements": app_data.get("linux_requirements", {}),
+            "legal_notice": app_data.get("legal_notice", ""),
+            "controller_support": self._extract_controller_support(app_data.get("categories", []), app_data.get("controller_support", "")),
+            "about_the_game": self._replace_steam_placeholders(app_data.get("about_the_game", ""), app_id),
         }
+
+    def _extract_controller_support(self, categories: List[Dict], raw_support: str) -> str:
+        """Extrai nível de suporte a controle (full, partial, none)."""
+        # 1. Tentar campo direto (nova API)
+        if raw_support:
+            return raw_support
+
+        # 2. Tentar via categorias (legacy)
+        # 28 = Full controller support, 18 = Partial controller support
+        cat_ids = [c.get("id") for c in categories]
+        if 28 in cat_ids:
+            return "full"
+        if 18 in cat_ids:
+            return "partial"
+        
+        return "none"
 
     def _extract_videos_from_html(self, html_content: str) -> List[Dict[str, Any]]:
         """

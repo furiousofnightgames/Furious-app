@@ -45,7 +45,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHashHistory(), // Changed from createWebHistory for Electron compatibility
+  history: createWebHashHistory(),
   routes
 })
 
