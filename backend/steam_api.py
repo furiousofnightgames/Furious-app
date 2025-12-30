@@ -6,6 +6,9 @@ Implementa timeouts, retries com backoff, e tratamento de erros
 import httpx
 import asyncio
 import time
+import locale
+import re
+import ctypes
 from typing import Dict, Optional, List, Any
 
 
@@ -17,6 +20,66 @@ class SteamAPIClient:
         # Cache simples em memória: appId -> (dados_normalizados, timestamp)
         self._cache: Dict[int, tuple[Dict, float]] = {}
         self._cache_ttl = 600  # 10 minutos
+        self._language_param = self._get_system_language_param()
+        print(f"[SteamAPI] Idioma do sistema detectado: {self._language_param}")
+
+    def _get_system_language_param(self) -> str:
+        """
+        Detecta o idioma do sistema e mapeia para parametro Steam.
+        Tenta usar ctypes no Windows para pegar o idioma de UI real (MUI),
+        pois locale.getdefaultlocale() muitas vezes retorna en_US devido a formatação regional.
+        """
+        lang_code = "english"
+        
+        # 1. Tentar ctypes no Windows (Mais confiável para UI Language)
+        try:
+            if hasattr(ctypes, 'windll'):
+                windll = ctypes.windll.kernel32
+                # GetUserDefaultUILanguage retorna o ID numérico (ex: 1046 para pt-BR)
+                lang_id = windll.GetUserDefaultUILanguage()
+                
+                # Mapeamento de IDs comuns
+                # https://learn.microsoft.com/en-us/windows/win32/intl/language-identifier-constants-and-strings
+                if lang_id == 1046: return "brazilian" # pt-BR
+                if lang_id == 2070: return "portuguese" # pt-PT
+                if lang_id == 1034: return "spanish" # es-ES
+                if lang_id == 1036: return "french" # fr-FR
+                if lang_id == 1031: return "german" # de-DE
+                if lang_id == 1040: return "italian" # it-IT
+                if lang_id == 1049: return "russian" # ru-RU
+                if lang_id == 1041: return "japanese" # ja-JP
+                if lang_id == 2052: return "schinese" # zh-CN
+                
+        except Exception as e:
+            print(f"[SteamAPI] Erro ao detectar idioma via ctypes: {e}")
+
+        # 2. Fallback para locale (Linux/Mac ou se ctypes falhar)
+        try:
+            sys_lang, _ = locale.getdefaultlocale()
+            if not sys_lang:
+                return "english"
+            
+            sys_lang = sys_lang.lower()
+            if "pt" in sys_lang:
+                return "brazilian"
+            if "es" in sys_lang:
+                return "spanish"
+            if "fr" in sys_lang:
+                return "french"
+            if "de" in sys_lang:
+                return "german"
+            if "it" in sys_lang:
+                return "italian"
+            if "ru" in sys_lang:
+                return "russian"
+            if "ja" in sys_lang:
+                return "japanese"
+            if "zh" in sys_lang:
+                return "schinese"
+            
+            return "english"
+        except:
+            return "english"
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -42,14 +105,9 @@ class SteamAPIClient:
     async def get_appdetails(self, app_id: int) -> Dict[str, Any]:
         """
         Busca detalhes completos do jogo na Steam API.
-
-        Retorna dados já normalizados:
-        - imagens (header, capsule, background)
-        - screenshots
-        - movies (com URLs mp4/webm)
-        - descrição curta/longa
-        - gêneros, categorias
-        - devs, publishers, data de lançamento, preço, metacritic, site, suporte
+        Implementa estratégia "Dual Fetch" para tradução robusta:
+        - Se idioma != english, busca English + Localized simultaneamente.
+        - Usa texto do Localized + Assets do English (reparando URLs quebradas).
         """
 
         # Cache
@@ -57,56 +115,71 @@ class SteamAPIClient:
             print(f"[SteamAPI] Cache hit para AppID {app_id}")
             return self._cache[app_id][0]
 
-        print(f"[SteamAPI] Buscando detalhes para AppID {app_id}...")
+        print(f"[SteamAPI] Buscando detalhes para AppID {app_id} (Lang: {self._language_param})...")
 
         for attempt in range(self._max_retries + 1):
             try:
                 client = await self._get_client()
                 url = "https://store.steampowered.com/api/appdetails"
-                # IMPORTANTE: Remover parametro de idioma 'brazilian' pois em alguns jogos (ex: Lords of the Fallen)
-                # ele retorna HTML antigo com URLs de imagens quebradas (404).
-                # O padrão (sem parametro 'l') retorna HTML atualizado com .avif que funcionam.
-                params = {"appids": app_id}
+                
+                # Definir tarefas de fetch
+                tasks = []
+                
+                # 1. Fetch Inlgês (Padrão Ouro para Assets)
+                tasks.append(client.get(url, params={"appids": app_id, "l": "english"}, timeout=self._timeout))
+                
+                # 2. Fetch Localizado (se necessario)
+                if self._language_param != "english":
+                    tasks.append(client.get(url, params={"appids": app_id, "l": self._language_param}, timeout=self._timeout))
+                
+                # Executar em paralelo
+                responses = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                resp_en = responses[0]
+                resp_loc = responses[1] if len(responses) > 1 else None
 
-                resp = await client.get(url, params=params, timeout=self._timeout)
-
-                if resp.status_code == 200:
-                    data = resp.json()
-
-                    if str(app_id) in data and data[str(app_id)].get("success"):
-                        app_data = data[str(app_id)]["data"]
+                # Verificar resposta em inglês (obrigatória)
+                if isinstance(resp_en, Exception):
+                    raise resp_en
+                
+                if resp_en.status_code == 200:
+                    data_en = resp_en.json()
+                    
+                    if str(app_id) in data_en and data_en[str(app_id)].get("success"):
+                        app_data_en = data_en[str(app_id)]["data"]
+                        
+                        # Se tiver dados localizados validos, fazer o merge
+                        app_data_final = app_data_en
+                        if resp_loc and not isinstance(resp_loc, Exception) and resp_loc.status_code == 200:
+                            data_loc = resp_loc.json()
+                            if str(app_id) in data_loc and data_loc[str(app_id)].get("success"):
+                                app_data_loc = data_loc[str(app_id)]["data"]
+                                print(f"[SteamAPI] Mesclando tradução ({self._language_param}) com assets originais...")
+                                app_data_final = self._merge_localized_data(app_data_en, app_data_loc)
 
                         # Extrair e normalizar dados
-                        details = self._normalize_appdetails(app_id, app_data)
-
+                        details = self._normalize_appdetails(app_id, app_data_final)
+                        
                         # Cachear
                         self._cache[app_id] = (details, time.time())
-
-                        try:
-                            print(f"[SteamAPI] OK Detalhes obtidos para AppID {app_id}")
-                        except:
-                            pass
                         return details
                     else:
                         print(f"[SteamAPI] AppID {app_id} não encontrado ou indisponível")
                         return self._empty_response(app_id)
 
-                elif resp.status_code == 429:
-                    # Rate limit — aguardar e tentar de novo
+                elif resp_en.status_code == 429:
                     wait_time = 2 ** attempt
                     print(f"[SteamAPI] Rate limit! Aguardando {wait_time}s antes de retry...")
                     await asyncio.sleep(wait_time)
                     continue
-
                 else:
-                    print(f"[SteamAPI] Status {resp.status_code} para AppID {app_id}")
                     if attempt < self._max_retries:
                         await asyncio.sleep(2 ** attempt)
                         continue
                     return self._empty_response(app_id)
 
             except asyncio.TimeoutError:
-                print(f"[SteamAPI] Timeout na tentativa {attempt + 1}/{self._max_retries + 1}")
+                print(f"[SteamAPI] Timeout na tentativa {attempt + 1}")
                 if attempt < self._max_retries:
                     await asyncio.sleep(2 ** attempt)
                     continue
@@ -120,6 +193,104 @@ class SteamAPIClient:
                 return self._empty_response(app_id)
 
         return self._empty_response(app_id)
+
+    def _merge_localized_data(self, data_en: Dict, data_loc: Dict) -> Dict:
+        """
+        Mescla dados em inglês (base confiavel) com dados localizados (texto).
+        Repara URLs de imagem quebradas no HTML localizado usando o inglês como referência.
+        """
+        merged = data_en.copy()
+        
+        # Campos de texto seguros para substituir diretamente
+        text_fields = [
+            "short_description", 
+            "supported_languages",
+            "header_image", # As vezes a imagem localizada é customizada (ex: logo traduzido)
+            "capsule_image",
+            "capsule_imagev5"
+        ]
+        
+        for field in text_fields:
+            if data_loc.get(field):
+                merged[field] = data_loc[field]
+                
+        # Campos HTML complexos (about_the_game, detailed_description)
+        # Precisam de reparo de URLs
+        html_fields = ["about_the_game", "detailed_description"]
+        
+        for field in html_fields:
+            if data_loc.get(field):
+                html_loc = data_loc[field]
+                html_en = data_en.get(field, "")
+                
+                # Tentar reparar imagens quebradas (src="http...", src="...store_skinny...")
+                # Estrategia: Extrair todas as URLs do EN e substituir no LOC na mesma ordem
+                try:
+                    repaired_html = self._repair_html_images(html_loc, html_en)
+                    merged[field] = repaired_html
+                except Exception as e:
+                    print(f"[SteamAPI] Falha ao reparar HTML do campo {field}: {e}")
+                    merged[field] = html_loc # Fallback para original (mesmo que quebrado)
+
+        return merged
+
+    def _repair_html_images(self, html_loc: str, html_en: str) -> str:
+        """
+        Substitui URLs de imagens "feias/quebradas" do HTML localizado
+        pelas URLs limpas do HTML em inglês.
+        """
+        # Extrair URLs de imagem (src="...")
+        # Regex simplificado que pega o conteúdo do src
+        url_pattern = r'src=["\']([^"\']+)["\']'
+        
+        urls_en = re.findall(url_pattern, html_en)
+        urls_loc = re.findall(url_pattern, html_loc)
+        
+        # Se a quantidade de imagens for diferente, é arriscado substituir por índice.
+        # Mas geralmente é igual. Se for diferente, tentamos substituir apenas as que parecem quebradas.
+        if len(urls_en) == len(urls_loc) and len(urls_en) > 0:
+            # Substituição cirúrgica
+            # Vai iterar sobre as URLs localizadas e substituir no HTML original
+            # Cuidado para não substituir a string errada se houver duplicatas
+            
+            # Abordagem melhor: reconstruir o HTML? Não, muito difícil sem parser.
+            # Abordagem de substituição sequencial:
+            # Vamos quebrar o HTML localizado pelos matches e reconstruir intercalando com as URLs EN.
+            
+            parts = re.split(url_pattern, html_loc)
+            # parts[0] + urls_loc[0] + parts[1] + ...
+            # O split retorna: [texto_antes, url_capturada, texto_depois, url_capturada, ...]
+            
+            new_html = []
+            for i, part in enumerate(parts):
+                new_html.append(part)
+                # Se for uma posição ímpar, é onde estava uma URL (no split do re com grupo de captura)
+                # O re.split com capturing group inclui os matches na lista.
+                # parts[0] = texto antes
+                # parts[1] = url match 1
+                # parts[2] = texto entre 1 e 2
+                
+                # Mas espera, re.split coloca o separator na lista. 
+                # Se eu tenho N urls, eu tenho 2N+1 elementos?
+                # Ex: "img src='A' end" -> split -> ["img src='", "A", "' end"]
+                pass 
+                
+            # Simplificando: Apenas rodar um sub com callback que usa um iterador das URLs EN
+            iter_en = iter(urls_en)
+            
+            def replace_match(match):
+                try:
+                    new_url = next(iter_en)
+                    # Forçar HTTPS se vier http
+                    if new_url.startswith("http:"):
+                        new_url = new_url.replace("http:", "https:")
+                    return f'src="{new_url}"'
+                except StopIteration:
+                    return match.group(0) # Acabou as do EN, mantem original
+            
+            return re.sub(r'src=["\']([^"\']+)["\']', replace_match, html_loc)
+            
+        return html_loc
 
 
     def _replace_steam_placeholders(self, html_content: str, app_id: int) -> str:

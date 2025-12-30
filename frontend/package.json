@@ -1,6 +1,6 @@
 {
   "name": "launcher-json-accelerator",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
     "hls.js": "^1.6.15",
     "pinia": "^2.1.7",
     "vue": "^3.4.0",
+    "vue-i18n": "^9.14.5",
     "vue-router": "^4.2.0",
     "vue-toastification": "^2.0.0-rc.5"
   },

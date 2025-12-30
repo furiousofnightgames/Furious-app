@@ -315,6 +315,36 @@
         </div>
       </div>
     </Card>
+
+    <!-- Promotional Footer -->
+    <div class="mt-8 relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700/50 shadow-2xl">
+      <!-- Glow Effects -->
+      <div class="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="relative z-10 p-8 flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
+        <div class="space-y-2">
+          <h3 class="text-xl font-bold bg-gradient-to-r from-cyan-300 via-white to-purple-200 bg-clip-text text-transparent">
+            O Launcher Definitivo para sua Coleção
+          </h3>
+          <p class="text-slate-400 max-w-2xl text-sm leading-relaxed">
+            Uma plataforma robusta, gratuita e desenhada para entusiastas. Conheça todos os recursos e tecnologias que elevam sua experiência.
+          </p>
+        </div>
+
+        <router-link to="/about" class="flex-shrink-0">
+          <button class="group relative px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl border border-slate-600 hover:border-cyan-500/50 transition-all duration-300 shadow-lg hover:shadow-cyan-500/20 overflow-hidden">
+            <span class="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></span>
+            <span class="relative flex items-center gap-2">
+              <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Sobre o Projeto
+            </span>
+          </button>
+        </router-link>
+      </div>
+    </div>
   </div>
 </template>
 
