@@ -20,6 +20,7 @@ from typing import List, Optional
 from datetime import datetime
 import asyncio
 import pathlib
+import time
 import zlib
 import re
 import unicodedata
@@ -37,6 +38,27 @@ from backend.resolver import clear_session_cache, get_resolver_telemetry
 from backend.steam_api import steam_api_client
 
 _library_cache: Dict[str, Any] = {"valid": False, "value": None, "built_at": None, "sources_sig": None}
+
+_magnet_health_cache: Dict[str, Any] = {}
+
+
+def _magnet_cache_key(url: str) -> str:
+    try:
+        s = str(url or '').strip()
+        if not s:
+            return ''
+        # Use infohash when possible (stable key), fallback to CRC32 of whole URL.
+        if 'urn:btih:' in s:
+            start = s.find('urn:btih:') + 9
+            end = s.find('&', start)
+            if end == -1:
+                end = len(s)
+            h = s[start:end].strip().lower()
+            if h:
+                return f"btih:{h}"
+        return f"crc:{zlib.crc32(s.encode('utf-8')) & 0x7FFFFFFF}"
+    except Exception:
+        return ''
 
 
 def _invalidate_library_cache() -> None:
@@ -1630,24 +1652,22 @@ async def resolver_telemetry_reset():
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: int):
     session = get_session()
-    j = session.get(Job, job_id)
-    if not j:
-        raise HTTPException(status_code=404, detail="Job not found")
-    prog = job_manager.get_progress(job_id) or {}
-    out = dict(id=j.id, item_id=j.item_id, status=j.status, progress=j.progress or prog.get('progress'), updated_at=j.updated_at.isoformat(), last_error=j.last_error, downloaded=prog.get('downloaded'), total=prog.get('total'), speed=prog.get('speed'), resume_on_start=j.resume_on_start, verify_ssl=j.verify_ssl)
-    # include item details
-    if j.item_id:
-        it = session.get(Item, j.item_id)
-        if it:
-            out.update({"item_url": it.url, "item_name": it.name, "item_size": it.size})
-            # derive destination and filename
-            if j.dest:
-                from os.path import basename
-                filename = basename(it.url.split('?')[0]) if it.url else it.name
-                out.update({"dest": j.dest, "filename": filename})
-    out.update(prog)
-    session.close()
-    return out
+    try:
+        j = session.get(Job, job_id)
+        if not j:
+            raise HTTPException(status_code=404, detail="Job not found")
+        prog = job_manager.get_progress(job_id) or {}
+        out = dict(id=j.id, item_id=j.item_id, status=j.status, progress=j.progress or prog.get('progress'), updated_at=j.updated_at.isoformat(), last_error=j.last_error, downloaded=prog.get('downloaded'), total=prog.get('total'), speed=prog.get('speed'), resume_on_start=j.resume_on_start, verify_ssl=j.verify_ssl)
+        # include item details
+        if j.item_id:
+            it = session.get(Item, j.item_id)
+            if it:
+                out.update({"item_url": it.url, "item_name": it.name, "item_size": it.size})
+        # merge progress data
+        out.update(prog)
+        return out
+    finally:
+        session.close()
 
 
 @app.post("/api/jobs/{job_id}/pause")
@@ -1793,12 +1813,9 @@ async def get_source_item(source_id: int, item_id: int):
 
 class AnalyzeReq(BaseModel):
     item: dict
-    
-@app.post("/api/analysis/pre-job")
-async def pre_job_analysis(req: AnalyzeReq):
-    """
-    Analyzes all available sources to find healthier alternatives for the target item.
-    """
+
+async def _analysis_core(req: AnalyzeReq):
+    """Core analysis logic shared by both endpoints."""
     try:
         from backend.services.analysis import ItemMatchingService, SourceHealthService
     except ImportError:
@@ -1807,7 +1824,7 @@ async def pre_job_analysis(req: AnalyzeReq):
         sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from backend.services.analysis import ItemMatchingService, SourceHealthService
 
-    print(f"\n[ANALYSIS] Iniciando análise pré-job para: {req.item.get('name')}")
+    print(f"\n[ANALYSIS] Iniciando análise para: {req.item.get('name')}")
     
     session = get_session()
     sources = session.exec(select(Source)).all()
@@ -1832,9 +1849,7 @@ async def pre_job_analysis(req: AnalyzeReq):
         source_items = await _load_items_internal(source)
         
         # Convert dicts to pseudo-items for matching
-        # Optimize: Create objects only for matching service
         from types import SimpleNamespace
-        
         source_objs = []
         for i in source_items:
             obj = SimpleNamespace(**i)
@@ -1855,8 +1870,7 @@ async def pre_job_analysis(req: AnalyzeReq):
     print(f"[ANALYSIS] Initial matches found: {len(all_raw_matches)}. Starting live probe...")
     
     # 2. PROBE LIVE HEALTH (UDP Scraper)
-    # Include the ORIGINAL item in the probe list so we get its stats too!
-    target_item_obj.url = req.item.get('url') # Ensure URL is set for scraper
+    target_item_obj.url = req.item.get('url')
     items_to_probe = all_raw_matches + [target_item_obj]
     
     if items_to_probe:
@@ -1866,7 +1880,6 @@ async def pre_job_analysis(req: AnalyzeReq):
     original_health = SourceHealthService.calculate_health_score(target_item_obj.__dict__)
     
     for m in all_raw_matches:
-        # Convert back to dict context for score calc
         d = m.__dict__
         health = SourceHealthService.calculate_health_score(d)
         
@@ -1879,17 +1892,199 @@ async def pre_job_analysis(req: AnalyzeReq):
 
     session.close()
     
-    # Sort by Health Score (seeds)
-    candidates.sort(key=lambda x: x['health']['seeders'], reverse=True)
-    
-    # Identify if original choice is healthy?
-    # We return the candidates. Frontend compares.
+    # Sort by Health Score
+    candidates.sort(key=lambda x: (x['health']['score'], x['health']['seeders'] or 0), reverse=True)
     
     print(f"[ANALYSIS] Encontradas {len(candidates)} alternativas.")
     return {
         "candidates": candidates,
-        "original_health": original_health # Send enriched original health back
+        "original_health": original_health
     }
+
+@app.post("/api/analysis/pre-job")
+async def pre_job_analysis(req: AnalyzeReq):
+    """
+    Analyzes all available sources to find healthier alternatives for the target item.
+    """
+    return await _analysis_core(req)
+
+
+class MagnetHealthReq(BaseModel):
+    url: str
+    force_refresh: Optional[bool] = False
+
+
+@app.post("/api/magnet/health")
+async def magnet_health(req: MagnetHealthReq):
+    """Probe magnet health (seeders/leechers) locally using UDP trackers.
+
+    This endpoint is optimized for pre-flight checks:
+    - Small payload
+    - In-memory TTL cache to avoid tracker spam
+    - Short timeout
+    """
+    url = (req.url or '').strip()
+    if not url or not url.startswith('magnet:'):
+        raise HTTPException(status_code=400, detail="url must be a magnet link")
+
+    ttl_sec = int(os.environ.get('MAGNET_HEALTH_CACHE_TTL_SEC', '600') or 600)
+    timeout_sec = float(os.environ.get('MAGNET_HEALTH_TIMEOUT_SEC', '4.0') or 4.0)
+    if req.force_refresh:
+        timeout_sec = float(os.environ.get('MAGNET_HEALTH_FORCE_TIMEOUT_SEC', '20.0') or 20.0)
+    cache_key = _magnet_cache_key(url)
+
+    now = time.time()
+    print(f"[MAGNET-HEALTH] Cache key: {cache_key}, force_refresh: {req.force_refresh}")
+    stale_cache_fallback = None
+    stale_cache_age_sec = None
+    if cache_key and not req.force_refresh:
+        try:
+            cached = _magnet_health_cache.get(cache_key)
+            if cached and isinstance(cached, dict):
+                ts = float(cached.get('ts') or 0)
+                if ts > 0 and (now - ts) <= ttl_sec:
+                    print(f"[MAGNET-HEALTH] Usando cache com {int(now - ts)}s de idade")
+                    out = dict(cached.get('data') or {})
+                    out.update({"cached": True, "cache_age_sec": int(now - ts), "took_ms": 0})
+                    return out
+        except Exception:
+            pass
+    elif cache_key and req.force_refresh:
+        # Keep any existing cache as a fallback if the live probe times out.
+        try:
+            cached = _magnet_health_cache.get(cache_key)
+            if cached and isinstance(cached, dict):
+                ts = float(cached.get('ts') or 0)
+                if ts > 0:
+                    stale_cache_fallback = dict(cached.get('data') or {})
+                    stale_cache_age_sec = int(now - ts)
+        except Exception:
+            stale_cache_fallback = None
+            stale_cache_age_sec = None
+
+    t0 = time.time()
+    try:
+        from backend.services.analysis import SourceHealthService
+        from backend.utils.tracker import UDPTrackerClient
+    except ImportError:
+        import sys
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from backend.services.analysis import SourceHealthService
+        from backend.utils.tracker import UDPTrackerClient
+
+    # Probe a single-item list in-place, with extra trackers for better consistency with pre-job.
+    TRACKERS_EXTRAS = [
+        "udp://tracker.opentrackr.org:1337/announce",
+        "udp://open.stealth.si:80/announce",
+        "udp://tracker.torrent.eu.org:451/announce",
+        "udp://exodus.desync.com:6969/announce",
+        "udp://tracker.moeking.me:6969/announce",
+        "udp://tracker.openbittorrent.com:6969/announce",
+        "udp://opentracker.i2p.rocks:6969/announce",
+        "udp://tracker.internetwarriors.net:1337/announce",
+        "udp://explodie.org:6969/announce",
+        "udp://tracker.cyberia.is:6969/announce",
+        "udp://tracker.birkenwald.de:6969/announce",
+        "udp://tracker.tiny-vps.com:6969/announce",
+        "udp://retracker.lanta-net.ru:2710/announce",
+        "udp://ipv4.tracker.harry.lu:80/announce",
+        "udp://tracker.theoks.net:6969/announce",
+        "udp://tracker.ccp.ovh:6969/announce",
+        "udp://bt1.archive.org:6969/announce",
+        "udp://bt2.archive.org:6969/announce",
+        "udp://tracker.filemail.com:6969/announce",
+        "udp://tracker1.bt.moack.co.kr:80/announce",
+        "udp://9.rarbg.com:2810/announce",
+        "udp://tracker.uw0.xyz:6969/announce",
+    ]
+    # Append extra trackers to maximize chances of finding seeds (same as SourceHealthService)
+    full_url = url
+    for tr in TRACKERS_EXTRAS:
+        full_url += f"&tr={tr}"
+    item_dict: Dict[str, Any] = {"url": full_url, "seeders": 0, "leechers": 0}
+
+    # For force_refresh we prefer a *live* partial result over a timed-out full probe.
+    # This avoids repeating stale cache values just because one tracker is slow.
+    timed_out = False
+    responded = None
+    total = None
+    if req.force_refresh:
+        try:
+            print(f"[MAGNET-HEALTH] Iniciando sondagem force_refresh=True (partial) timeout={timeout_sec}s")
+            client_timeout = float(os.environ.get('MAGNET_TRACKER_TIMEOUT_SEC', '2.0') or 2.0)
+            client_retries = int(os.environ.get('MAGNET_TRACKER_RETRIES', '2') or 2)
+            client = UDPTrackerClient(timeout=client_timeout, retries=client_retries)
+            stats = await client.get_stats_partial(full_url, overall_timeout=timeout_sec)
+            if stats and isinstance(stats, dict):
+                responded = int(stats.get('responded') or 0)
+                total = int(stats.get('total') or 0)
+                timed_out = bool(stats.get('timed_out'))
+                item_dict['seeders'] = int(stats.get('seeders') or 0)
+                item_dict['leechers'] = int(stats.get('leechers') or 0)
+            print(f"[MAGNET-HEALTH] Sondagem parcial concluída. Seeds={item_dict.get('seeders')} Leechers={item_dict.get('leechers')} responded={responded}/{total} timed_out={timed_out}")
+        except Exception as e:
+            timed_out = True
+            print(f"[MAGNET-HEALTH] Erro na sondagem parcial: {e}")
+    else:
+        async def _probe() -> None:
+            await SourceHealthService.enrich_candidates([item_dict])
+
+        try:
+            print(f"[MAGNET-HEALTH] Iniciando sondagem force_refresh=False timeout={timeout_sec}s")
+            await asyncio.wait_for(_probe(), timeout=timeout_sec)
+            print(f"[MAGNET-HEALTH] Sondagem concluída. Seeds={item_dict.get('seeders')} Leechers={item_dict.get('leechers')}")
+        except asyncio.TimeoutError:
+            timed_out = True
+            print(f"[MAGNET-HEALTH] Timeout após {timeout_sec}s. Retornando parcial: Seeds={item_dict.get('seeders')} Leechers={item_dict.get('leechers')}")
+            # Keep whatever we got so far (likely 0/0)
+            pass
+        except Exception as e:
+            print(f"[MAGNET-HEALTH] Erro na sondagem: {e}")
+            pass
+
+    health = SourceHealthService.calculate_health_score(item_dict)
+    took_ms = int((time.time() - t0) * 1000)
+    out = {
+        "seeders": health.get('seeders'),
+        "leechers": health.get('leechers'),
+        "score": health.get('score'),
+        "label": health.get('label'),
+        "color": health.get('color'),
+        "cached": False,
+        "timed_out": timed_out,
+        "responded": responded,
+        "total": total,
+        "took_ms": took_ms,
+    }
+
+    # If the live probe timed out, prefer returning the last good cached value instead of 0/0.
+    # For force_refresh, ONLY fallback if no tracker replied (responded=0) to keep the result as live as possible.
+    if timed_out and stale_cache_fallback and isinstance(stale_cache_fallback, dict) and (not req.force_refresh or int(responded or 0) == 0):
+        try:
+            fallback_out = dict(stale_cache_fallback)
+            fallback_out.update({
+                "cached": True,
+                "cache_age_sec": stale_cache_age_sec,
+                "timed_out": True,
+                "used_stale_cache": True,
+                "responded": responded,
+                "total": total,
+                "took_ms": took_ms,
+            })
+            print(f"[MAGNET-HEALTH] Timeout -> usando fallback do cache: age={stale_cache_age_sec}s seeders={fallback_out.get('seeders')} leechers={fallback_out.get('leechers')}")
+            return fallback_out
+        except Exception:
+            pass
+
+    # Não cachear quando houve timeout, pois pode retornar 0/0 mesmo com trackers respondendo.
+    if cache_key and not timed_out:
+        try:
+            _magnet_health_cache[cache_key] = {"ts": now, "data": out}
+        except Exception:
+            pass
+
+    print(f"[MAGNET-HEALTH] Retornando: cached=False, took_ms={took_ms}, seeders={out.get('seeders')}, leechers={out.get('leechers')}")
+    return out
 
 
 

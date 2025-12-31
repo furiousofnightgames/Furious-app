@@ -209,3 +209,32 @@ Este planejamento transforma velocidade em **apenas um dos pilares**, ao lado de
 
 O resultado é um produto **mais sólido, mais profissional e mais sustentável** que qualquer concorrente direto.
 
+---
+
+## Roadmap de Implementação (Status Atual)
+
+### ✅ FASE 1 – Consolidação (Concluído)
+
+- **✅ RM1 - Pré-flight Check**: Análise explícita antes do download com saúde/estimativa/avisos
+- **✅ RM1fix - Pré-flight para magnet/aria2**: Dados reais via probe (trackers) + cache/timeout
+- **✅ RM1fix-auto - Disparo automático**: Pré-flight de magnet ao abrir modal (Library.vue e ItemDetails.vue)
+- **✅ RM1fix-cache - Cache inteligente**: Invalidação + botão "Forçar nova sondagem"
+- **✅ RM1fix-timeout - Robustez**: Evitar 0/0, fallback de cache bom, UI sempre renderiza
+- **✅ RM1fix-peers-ui - UI limpa**: Remover exibição de Peers, mostrar só Seeders
+- **✅ RM1fix-force-live - Sondagem avançada**: Parcial ao vivo + retries + timeout 20s
+- **✅ RM1fix-ui-single-button - UI simplificada**: Remover "Analisar", manter só "Forçar nova sondagem"
+
+### 🚀 Próximos Passos (Prioridade Alta)
+
+- **⏳ RM2 - Log Visual Didático**: Timeline/status humano dos eventos de download/engine
+
+### 📋 Futuro (Média/Baixa Prioridade)
+
+- **⏳ RM3 - Métricas Reais de Qualidade**: TTI, estabilidade, retomadas + persistência local
+- **⏳ RM4 - Biblioteca Viva Orientada a Jogos**: Entidade jogo, histórico local por jogo, status por versão
+- **⏳ RM5 - Comparador de Versões**: Tamanho, idioma, DLCs, multiplayer
+- **⏳ RM6 - Fila Inteligente Condicional**: Dependências X após Y, limites simultâneos
+- **⏳ RM7 - Arquitetura de Módulos Locais**: Plugins locais (sem marketplace/servidor)
+
+**Legenda:** ✅ Concluído | 🔄 Em andamento | ⏳ Pendente
+

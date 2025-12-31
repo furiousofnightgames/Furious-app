@@ -219,6 +219,7 @@ class SourceHealthService:
     def calculate_health_score(item: Item) -> Dict:
         """
         Calculates a health score based on Seeders/Leechers (if available/parsed).
+        Uses PEERS (leechers) as fallback if seeders are 0 (valid in swarm-only networks).
         """
         # Extract seeders and leechers from the item (dict or object)
         if isinstance(item, dict):
@@ -247,19 +248,26 @@ class SourceHealthService:
                 "score": 100,
                 "label": "Direto",
                 "color": "cyan",
-                "seeders": None,
-                "leechers": None,
+                "seeders": 0,
+                "leechers": 0,
                 "is_direct": True
             }
 
-        # Magnet Logic (Standard)
-        if seeders >= 50:
-            return {"score": 100, "label": "Excelente", "color": "emerald", "seeders": seeders, "leechers": leechers}
-        elif seeders >= 20:
-            return {"score": 75, "label": "Bom", "color": "green", "seeders": seeders, "leechers": leechers}
-        elif seeders >= 5:
-            return {"score": 50, "label": "Regular", "color": "yellow", "seeders": seeders, "leechers": leechers}
+        # Magnet Logic: Use seeders, but fallback to peers (leechers) if seeders=0
+        # This handles swarm-only networks (common in GOG torrents)
+        effective_count = seeders if seeders > 0 else leechers
+        
+        if effective_count >= 50:
+            label = "Excelente" if seeders > 0 else f"Swarm Saudável ({leechers} peers)"
+            return {"score": 100, "label": label, "color": "emerald", "seeders": seeders, "leechers": leechers}
+        elif effective_count >= 20:
+            label = "Bom" if seeders > 0 else f"Peers Ativos ({leechers})"
+            return {"score": 75, "label": label, "color": "green", "seeders": seeders, "leechers": leechers}
+        elif effective_count >= 5:
+            label = "Regular" if seeders > 0 else f"Poucos Peers ({leechers})"
+            return {"score": 50, "label": label, "color": "yellow", "seeders": seeders, "leechers": leechers}
         else:
-            return {"score": 25, "label": f"Fraco ({seeders} seeds)", "color": "red", "seeders": seeders, "leechers": leechers}
+            label = f"Fraco ({seeders} seeds)" if seeders > 0 else f"Crítico ({leechers} peers)"
+            return {"score": 25, "label": label, "color": "red", "seeders": seeders, "leechers": leechers}
         # End of calculate_health_score
 

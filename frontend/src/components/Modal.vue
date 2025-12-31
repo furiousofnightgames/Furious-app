@@ -2,25 +2,25 @@
   <transition name="fade">
     <div
       v-if="isOpen"
-      class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40"
+      class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-40"
       @click="close"
       style="pointer-events: auto; position: fixed; top: 0; left: 0; right: 0; bottom: 0;"
     >
       <div
-        :class="['bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/30 rounded-xl p-8 w-full m-4 shadow-2xl z-50 relative', maxWidthClass]"
+        :class="['bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-3xl p-8 w-full m-4 shadow-2xl z-50 relative', maxWidthClass]"
         @click.stop
         ref="dialog"
         style="max-height: 90vh; overflow-y: auto; pointer-events: auto;"
       >
-        <h2 class="text-2xl font-bold text-cyan-300 mb-4">{{ title }}</h2>
-        <div style="pointer-events: auto;">
+        <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-4 font-display">{{ title }}</h2>
+        <div style="pointer-events: auto;" class="text-slate-600 dark:text-slate-300">
           <slot />
         </div>
         <div v-if="showDefaultButtons" class="flex gap-3 mt-6" style="pointer-events: auto;">
           <Button
             v-if="showCancel"
             variant="outline"
-            class="flex-1 btn-translucent"
+            class="flex-1"
             @click="close"
           >
             {{ cancelLabel }}

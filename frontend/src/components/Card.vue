@@ -1,13 +1,14 @@
 <template>
   <div
     :class="[
-      'bg-gradient-to-br from-slate-800/50 to-slate-900/50',
-      'border border-cyan-500/30 rounded-xl p-6',
-      'backdrop-blur-sm shadow-2xl',
-      'hover:border-cyan-500/60 transition-all duration-300',
-      'hover:shadow-lg hover:shadow-cyan-500/20',
+      'bg-white dark:bg-slate-800',
+      'border border-slate-200 dark:border-slate-700/50',
+      'rounded-2xl p-6',
+      'shadow-subtle dark:shadow-soft',
+      'hover:shadow-soft dark:hover:shadow-soft transition-all duration-200',
+      'backdrop-blur-sm',
       className,
-      interactive ? 'cursor-pointer hover:scale-[1.02]' : ''
+      interactive ? 'cursor-pointer hover:shadow-glow/20 hover:scale-[1.01]' : ''
     ]"
   >
     <slot />

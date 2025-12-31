@@ -1,7 +1,7 @@
 <template>
-  <div class="min-h-screen flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-black">
+  <div class="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
     <!-- Navigation -->
-    <nav class="bg-gradient-to-r from-gray-900/90 to-black/90 border-b border-cyan-500/30 shadow-lg shadow-cyan-500/10 sticky top-0 z-40" style="will-change: auto;">
+    <nav class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-subtle sticky top-0 z-40" style="will-change: auto;">
       <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-center justify-between gap-3">
@@ -11,11 +11,11 @@
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <defs>
                     <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" style="stop-color: #06b6d4; stop-opacity: 1" />
-                      <stop offset="100%" style="stop-color: #ec4899; stop-opacity: 1" />
+                      <stop offset="0%" style="stop-color: #0ea5e9; stop-opacity: 1" />
+                      <stop offset="100%" style="stop-color: #0284c7; stop-opacity: 1" />
                     </linearGradient>
                     <filter id="logoGlow" x="-50%" y="-50%" width="200%" height="200%">
-                      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
                       <feMerge>
                         <feMergeNode in="coloredBlur"/>
                         <feMergeNode in="SourceGraphic"/>
@@ -26,10 +26,10 @@
                   <circle cx="12" cy="12" r="10" stroke="url(#logoGrad)" stroke-width="0.5" fill="none"/>
                 </svg>
                 </div>
-                <h1 class="text-base sm:text-2xl font-bold text-cyan-300 uppercase tracking-widest truncate">fURIOUS APP</h1>
+                <h1 class="text-base sm:text-2xl font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest truncate font-display">fURIOUS APP</h1>
               </div>
               <div class="flex items-center gap-2 flex-shrink-0 sm:hidden">
-                <div :class="['w-2 h-2 rounded-full transition-all', isConnected ? 'bg-green-500 shadow-lg shadow-green-500/50 animate-pulse' : 'bg-red-500 shadow-lg shadow-red-500/50 animate-pulse']" />
+                <div :class="['w-2 h-2 rounded-full transition-all', isConnected ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse' : 'bg-rose-500 shadow-lg shadow-rose-500/50 animate-pulse']" />
               </div>
             </div>
 
@@ -41,18 +41,18 @@
                     :key="link.path"
                     :to="link.path"
                     :class="[
-                      'shrink-0 whitespace-nowrap px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center gap-2',
+                      'shrink-0 whitespace-nowrap px-3 sm:px-4 md:px-5 py-2 rounded-lg font-semibold transition-all duration-200 text-sm md:text-base flex items-center gap-2',
                       isActiveLink(link.path)
-                        ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50 shadow-lg shadow-cyan-500/20' 
-                        : 'text-gray-400 hover:text-cyan-300 hover:border hover:border-cyan-500/30'
+                        ? 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400 border border-sky-300 dark:border-sky-700/50 shadow-soft' 
+                        : 'text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/20'
                     ]"
                   >
             <!-- Dashboard Icon -->
             <svg v-if="link.path === '/'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 svg-icon">
               <defs>
                 <linearGradient id="dashGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style="stop-color: #06b6d4" />
-                  <stop offset="100%" style="stop-color: #8b5cf6" />
+                  <stop offset="0%" style="stop-color: #0ea5e9" />
+                  <stop offset="100%" style="stop-color: #0284c7" />
                 </linearGradient>
               </defs>
               <rect x="3" y="11" width="5" height="10" fill="url(#dashGrad)" opacity="0.8" rx="1" class="animate-bounce" style="animation-delay: 0s"/>
@@ -65,7 +65,7 @@
               <defs>
                 <linearGradient id="sourceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" style="stop-color: #f59e0b" />
-                  <stop offset="100%" style="stop-color: #ec4899" />
+                  <stop offset="100%" style="stop-color: #d97706" />
                 </linearGradient>
               </defs>
               <path d="M4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6C2 4.9 2.9 4 4 4Z" 
@@ -80,8 +80,8 @@
             <svg v-else-if="link.path === '/downloads'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 svg-icon">
               <defs>
                 <linearGradient id="downloadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style="stop-color: #06b6d4" />
-                  <stop offset="100%" style="stop-color: #0ea5e9" />
+                  <stop offset="0%" style="stop-color: #0ea5e9" />
+                  <stop offset="100%" style="stop-color: #0284c7" />
                 </linearGradient>
               </defs>
               <line x1="12" y1="2" x2="12" y2="14" stroke="url(#downloadGrad)" stroke-width="2.5" stroke-linecap="round" class="animate-bounce"/>
@@ -94,7 +94,7 @@
               <defs>
                 <linearGradient id="newGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" style="stop-color: #10b981" />
-                  <stop offset="100%" style="stop-color: #34d399" />
+                  <stop offset="100%" style="stop-color: #059669" />
                 </linearGradient>
               </defs>
               <!-- Central dot -->
@@ -110,8 +110,8 @@
               </div>
 
               <div class="hidden sm:flex items-center gap-2 flex-shrink-0">
-                <div :class="['w-2 h-2 md:w-3 md:h-3 rounded-full transition-all', isConnected ? 'bg-green-500 shadow-lg shadow-green-500/50 animate-pulse' : 'bg-red-500 shadow-lg shadow-red-500/50 animate-pulse']" />
-                <span class="text-xs text-gray-400">{{ isConnected ? 'Online' : 'Offline' }}</span>
+                <div :class="['w-2 h-2 md:w-3 md:h-3 rounded-full transition-all', isConnected ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse' : 'bg-rose-500 shadow-lg shadow-rose-500/50 animate-pulse']" />
+                <span class="text-xs text-slate-600 dark:text-slate-400">{{ isConnected ? 'Online' : 'Offline' }}</span>
               </div>
             </div>
           </div>
@@ -136,9 +136,11 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useDownloadStore } from './stores/download'
+import { useLibraryStore } from './stores/library'
 import { useFavoritesStore } from './stores/favorites'
 import Toast from './components/Toast.vue'
 import HamburgerButton from './components/HamburgerButton.vue'
@@ -146,7 +148,9 @@ import FavoritesDrawer from './components/FavoritesDrawer.vue'
 
 const route = useRoute()
 const downloadStore = useDownloadStore()
+const libraryStore = useLibraryStore()
 const favoritesStore = useFavoritesStore()
+const { sources } = storeToRefs(downloadStore)
 
 const navLinks = [
   { path: '/', label: 'Dashboard' },
@@ -162,7 +166,24 @@ function isActiveLink(path) {
   return route.path === path || (path === '/' && route.path === '')
 }
 
+// GLOBAL watch - monitora mudanças nas fontes DE QUALQUER LUGAR
+let lastSourceCount = 0
+watch(() => sources.value.length, (newCount) => {
+  console.log(`[App] Mudança global de fontes: ${lastSourceCount} → ${newCount}`)
+  
+  if (lastSourceCount === 0 && newCount > 0) {
+    console.log(`[App] ✨ Primeira fonte detectada! Limpando cache da biblioteca...`)
+    libraryStore.clearCache()
+  } else if (newCount !== lastSourceCount) {
+    console.log(`[App] 🔄 Fontes mudaram! Limpando cache da biblioteca...`)
+    libraryStore.clearCache()
+  }
+  
+  lastSourceCount = newCount
+})
+
 onMounted(() => {
+  lastSourceCount = sources.value.length
   downloadStore.fetchJobs()
   downloadStore.fetchSources()
   favoritesStore.fetchFavorites()
@@ -179,16 +200,20 @@ onUnmounted(() => {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: #f8fafc;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #0891b2;
+  background: #0ea5e9;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #06b6d4;
+  background: #0284c7;
 }
 
 @keyframes pulse {
@@ -230,6 +255,6 @@ onUnmounted(() => {
 }
 
 .svg-icon {
-  filter: drop-shadow(0 0 2px rgba(6, 182, 212, 0.3));
+  filter: drop-shadow(0 0 1px rgba(14, 165, 233, 0.3));
 }
 </style>

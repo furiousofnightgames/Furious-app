@@ -2,9 +2,10 @@
   <component
     :is="as"
     :class="[
-      'px-4 py-2 rounded-lg font-semibold transition-all duration-300',
+      'font-semibold transition-all duration-200',
       'transform hover:scale-105 active:scale-95',
-      'disabled:opacity-50 disabled:cursor-not-allowed',
+      'disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100',
+      'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500',
       variantClasses,
       sizeClasses,
       className
@@ -45,22 +46,22 @@ const emit = defineEmits(['click'])
 
 const variantClasses = computed(() => {
   const variants = {
-    primary: 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/50 hover:shadow-cyan-500/80',
-    secondary: 'bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg shadow-purple-500/50',
-    danger: 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-lg shadow-red-500/50',
-    success: 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/50',
-    outline: 'border-2 border-cyan-500 text-cyan-300 hover:bg-cyan-500/10',
-    ghost: 'bg-cyan-500/20 backdrop-blur-md border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 hover:border-cyan-500/60 shadow-lg shadow-cyan-500/20'
+    primary: 'bg-sky-500 text-white hover:bg-sky-600 shadow-soft hover:shadow-glow',
+    secondary: 'bg-violet-600 text-white hover:bg-violet-700 shadow-soft hover:shadow-glow-violet',
+    danger: 'bg-rose-600 text-white hover:bg-rose-700 shadow-soft hover:shadow-glow-rose',
+    success: 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-soft',
+    outline: 'border-2 border-sky-300 dark:border-sky-500 text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 hover:border-sky-500',
+    ghost: 'text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/20'
   }
   return variants[props.variant]
 })
 
 const sizeClasses = computed(() => {
   const sizes = {
-    sm: 'px-2 py-1 text-xs',
-    md: 'px-3 py-1.5 text-sm',
-    lg: 'px-5 py-2 text-base',
-    xl: 'px-6 py-3 text-lg'
+    sm: 'px-3 py-1.5 text-xs rounded-md',
+    md: 'px-4 py-2 text-sm rounded-lg',
+    lg: 'px-5 py-2.5 text-base rounded-lg',
+    xl: 'px-6 py-3 text-lg rounded-xl'
   }
   return sizes[props.size]
 })

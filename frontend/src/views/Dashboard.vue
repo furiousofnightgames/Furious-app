@@ -2,44 +2,44 @@
   <div class="space-y-6">
     <!-- Main Stats with SVG Icons -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <div class="p-4 bg-gradient-to-br from-cyan-900/30 to-cyan-900/10 rounded-lg border border-cyan-500/20 hover:border-cyan-500/50 transition">
+      <div class="p-4 bg-gradient-to-br from-sky-50 dark:from-sky-900/30 to-sky-50/50 dark:to-sky-900/10 rounded-lg border border-sky-200 dark:border-sky-500/20 hover:border-sky-300 dark:hover:border-sky-500/50 transition">
         <div class="flex items-center gap-3 mb-2">
           <div class="w-10 h-10">
             <DashboardIcon type="speed" />
           </div>
-          <h3 class="text-sm font-semibold text-cyan-400">Velocidade</h3>
+          <h3 class="text-sm font-semibold text-sky-700 dark:text-sky-400">Velocidade</h3>
         </div>
-        <p class="text-2xl font-bold text-cyan-300">{{ formatSpeed(downloadStore.totalSpeed) }}</p>
+        <p class="text-2xl font-bold text-sky-600 dark:text-sky-300">{{ formatSpeed(downloadStore.totalSpeed) }}</p>
       </div>
 
-      <div class="p-4 bg-gradient-to-br from-purple-900/30 to-purple-900/10 rounded-lg border border-purple-500/20 hover:border-purple-500/50 transition">
+      <div class="p-4 bg-gradient-to-br from-violet-50 dark:from-violet-900/30 to-violet-50/50 dark:to-violet-900/10 rounded-lg border border-violet-200 dark:border-violet-500/20 hover:border-violet-300 dark:hover:border-violet-500/50 transition">
         <div class="flex items-center gap-3 mb-2">
           <div class="w-10 h-10">
             <DashboardIcon type="progress" />
           </div>
-          <h3 class="text-sm font-semibold text-purple-400">Progresso Total</h3>
+          <h3 class="text-sm font-semibold text-violet-700 dark:text-violet-400">Progresso Total</h3>
         </div>
-        <p class="text-2xl font-bold text-purple-300">{{ downloadStore.totalProgress }}%</p>
+        <p class="text-2xl font-bold text-violet-600 dark:text-violet-300">{{ downloadStore.totalProgress }}%</p>
       </div>
 
-      <div class="p-4 bg-gradient-to-br from-blue-900/30 to-blue-900/10 rounded-lg border border-blue-500/20 hover:border-blue-500/50 transition">
+      <div class="p-4 bg-gradient-to-br from-blue-50 dark:from-blue-900/30 to-blue-50/50 dark:to-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-500/20 hover:border-blue-300 dark:hover:border-blue-500/50 transition">
         <div class="flex items-center gap-3 mb-2">
           <div class="w-10 h-10">
             <DashboardIcon type="downloads" />
           </div>
-          <h3 class="text-sm font-semibold text-blue-400">Downloads Ativos</h3>
+          <h3 class="text-sm font-semibold text-blue-700 dark:text-blue-400">Downloads Ativos</h3>
         </div>
-        <p class="text-2xl font-bold text-blue-300">{{ downloadStore.activeDownloads.length }}</p>
+        <p class="text-2xl font-bold text-blue-600 dark:text-blue-300">{{ downloadStore.activeDownloads.length }}</p>
       </div>
 
-      <div class="p-4 bg-gradient-to-br" :class="downloadStore.isConnected ? 'from-green-900/30 to-green-900/10 border-green-500/20 hover:border-green-500/50' : 'from-red-900/30 to-red-900/10 border-red-500/20 hover:border-red-500/50'" >
+      <div class="p-4 bg-gradient-to-br" :class="downloadStore.isConnected ? 'from-emerald-50 dark:from-emerald-900/30 to-emerald-50/50 dark:to-emerald-900/10 border-emerald-200 dark:border-emerald-500/20 hover:border-emerald-300 dark:hover:border-emerald-500/50' : 'from-rose-50 dark:from-rose-900/30 to-rose-50/50 dark:to-rose-900/10 border-rose-200 dark:border-rose-500/20 hover:border-rose-300 dark:hover:border-rose-500/50'" >
         <div class="flex items-center gap-3 mb-2">
           <div class="w-10 h-10">
             <DashboardIcon type="connection" :isConnected="downloadStore.isConnected" />
           </div>
-          <h3 :class="downloadStore.isConnected ? 'text-green-400' : 'text-red-400'" class="text-sm font-semibold">Status</h3>
+          <h3 :class="downloadStore.isConnected ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'" class="text-sm font-semibold">Status</h3>
         </div>
-        <p :class="downloadStore.isConnected ? 'text-green-300' : 'text-red-300'" class="text-2xl font-bold">{{ downloadStore.isConnected ? 'Online' : 'Offline' }}</p>
+        <p :class="downloadStore.isConnected ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'" class="text-2xl font-bold">{{ downloadStore.isConnected ? 'Online' : 'Offline' }}</p>
       </div>
     </div>
 
@@ -49,15 +49,15 @@
         <div class="w-6 h-6">
           <DashboardIcon type="progress" />
         </div>
-        <h2 class="text-lg font-bold text-cyan-400">Progresso Geral</h2>
+        <h2 class="text-lg font-bold text-sky-600 dark:text-sky-400">Progresso Geral</h2>
       </div>
       <div class="flex justify-between items-center mb-2">
-        <p class="text-gray-400">{{ downloadStore.totalProgress }}% Completo</p>
-        <p class="text-sm text-gray-500">{{ formatBytes(totalDownloaded) }} / {{ formatBytes(totalSize) }}</p>
+        <p class="text-slate-600 dark:text-slate-400">{{ downloadStore.totalProgress }}% Completo</p>
+        <p class="text-sm text-slate-500 dark:text-slate-500">{{ formatBytes(totalDownloaded) }} / {{ formatBytes(totalSize) }}</p>
       </div>
-      <div class="w-full bg-gray-900 rounded-full h-3">
+      <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3">
         <div 
-          class="bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 h-3 rounded-full transition-all"
+          class="bg-gradient-to-r from-sky-500 via-violet-500 to-rose-500 h-3 rounded-full transition-all"
           :style="{ width: `${Math.min(downloadStore.totalProgress, 100)}%` }"
         />
       </div>
@@ -69,32 +69,32 @@
         <div class="w-6 h-6">
           <DashboardIcon type="active" />
         </div>
-        <h2 class="text-lg font-bold text-cyan-400">Downloads Ativos</h2>
+        <h2 class="text-lg font-bold text-sky-600 dark:text-sky-400">Downloads Ativos</h2>
       </div>
       <div class="space-y-3">
         <div 
           v-for="job in downloadStore.activeDownloads.slice(0, 3)" 
           :key="job.id"
-          class="p-3 bg-gray-900/50 rounded border border-cyan-500/20 hover:border-cyan-500/50 transition"
+          class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-200 dark:border-slate-700/50 hover:border-sky-300 dark:hover:border-sky-500/50 transition"
         >
           <div class="flex justify-between items-center mb-2">
-            <p class="font-semibold text-cyan-300 truncate">{{ job.name }}</p>
-            <span class="text-sm font-bold text-green-400">{{ downloadStore.formatProgress(Math.min(job.progress, 100)) }}%</span>
+            <p class="font-semibold text-slate-900 dark:text-slate-100 truncate">{{ job.name }}</p>
+            <span class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{ downloadStore.formatProgress(Math.min(job.progress, 100)) }}%</span>
           </div>
-          <div class="w-full bg-gray-800 rounded-full h-1.5 mb-2">
+          <div class="w-full bg-slate-300 dark:bg-slate-600 rounded-full h-1.5 mb-2">
             <div 
-              class="bg-gradient-to-r from-cyan-500 to-purple-500 h-1.5 rounded-full"
+              class="bg-gradient-to-r from-sky-500 to-violet-500 h-1.5 rounded-full"
               :style="{ width: `${Math.min(job.progress, 100)}%` }"
             />
           </div>
-          <div class="flex justify-between text-xs text-gray-500">
+          <div class="flex justify-between text-xs text-slate-600 dark:text-slate-400">
             <span>{{ formatBytes(job.downloaded) }} {{ (job.size || job.total) ? '/ ' + formatBytes(job.size || job.total) : '(desconhecido)' }}</span>
             <span>{{ formatSpeed(job.speed) }}</span>
           </div>
         </div>
         
         <router-link v-if="downloadStore.activeDownloads.length > 3" to="/downloads">
-          <Button variant="outline" class="w-full btn-translucent">
+          <Button variant="outline" class="w-full">
             Ver Todos os Downloads ({{ downloadStore.activeDownloads.length }})
           </Button>
         </router-link>
@@ -172,32 +172,32 @@
           </div>
         </router-link>
 
-        <!-- Biblioteca - Ciano -->
+        <!-- Biblioteca - Sky -->
         <router-link to="/library">
-          <div class="p-3 bg-gradient-to-br from-cyan-900/30 to-sky-900/10 rounded-lg border border-cyan-500/40 hover:border-cyan-500/70 hover:shadow-lg hover:shadow-cyan-500/20 transition cursor-pointer text-center">
+          <div class="p-3 bg-gradient-to-br from-sky-50 dark:from-sky-900/30 to-sky-50/50 dark:to-sky-900/10 rounded-lg border border-sky-200 dark:border-sky-500/40 hover:border-sky-300 dark:hover:border-sky-500/70 hover:shadow-lg hover:shadow-sky-500/20 transition cursor-pointer text-center">
             <div class="w-7 h-7 mx-auto mb-1.5">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
                 <defs>
                   <linearGradient id="libGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color: #22d3ee" />
-                    <stop offset="100%" style="stop-color: #38bdf8" />
+                    <stop offset="0%" style="stop-color: #0ea5e9" />
+                    <stop offset="100%" style="stop-color: #0284c7" />
                   </linearGradient>
                 </defs>
                 <path d="M6 4h12a2 2 0 012 2v14H6a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="url(#libGrad)" stroke-width="1.5" opacity="0.9"/>
                 <path d="M8 8h8M8 12h8M8 16h6" stroke="url(#libGrad)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
               </svg>
             </div>
-            <p class="font-bold text-cyan-300 text-sm">Biblioteca</p>
+            <p class="font-bold text-sky-600 dark:text-sky-300 text-sm">Biblioteca</p>
           </div>
         </router-link>
 
-        <!-- Reconectar - Roxo -->
-        <button @click="downloadStore.connectWebSocket(true)" class="p-3 bg-gradient-to-br from-purple-900/30 to-violet-900/10 rounded-lg border border-purple-500/40 hover:border-purple-500/70 hover:shadow-lg hover:shadow-purple-500/20 transition cursor-pointer text-center w-full btn-translucent">
+        <!-- Reconectar - Violet -->
+        <button @click="downloadStore.connectWebSocket(true)" class="p-3 bg-gradient-to-br from-violet-50 dark:from-violet-900/30 to-violet-50/50 dark:to-violet-900/10 rounded-lg border border-violet-200 dark:border-violet-500/40 hover:border-violet-300 dark:hover:border-violet-500/70 hover:shadow-lg hover:shadow-violet-500/20 transition cursor-pointer text-center w-full">
           <div class="w-7 h-7 mx-auto mb-1.5">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
               <defs>
                 <linearGradient id="connGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" :style="`stop-color: ${downloadStore.isConnected ? '#8b5cf6' : '#ec4444'}`" />
+                  <stop offset="0%" :style="`stop-color: ${downloadStore.isConnected ? '#8b5cf6' : '#f43f5e'}`" />
                   <stop offset="100%" :style="`stop-color: ${downloadStore.isConnected ? '#a78bfa' : '#f87171'}`" />
                 </linearGradient>
               </defs>

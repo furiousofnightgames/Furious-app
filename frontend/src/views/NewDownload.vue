@@ -95,6 +95,48 @@
           </Toggle>
         </div>
 
+        <div class="p-4 bg-gray-900/40 border border-cyan-500/20 rounded-lg space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="text-sm font-bold text-cyan-300">Pré-flight Check</div>
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              class="btn-translucent"
+              :disabled="preflightLoading"
+              @click="runPreflight"
+            >
+              <span v-if="preflightLoading">Analisando...</span>
+              <span v-else>Analisar</span>
+            </Button>
+          </div>
+
+          <div v-if="preflightError" class="text-xs text-red-300 border border-red-500/30 bg-red-900/10 rounded p-2">
+            {{ preflightError }}
+          </div>
+
+          <div v-else-if="preflightResult" class="text-xs text-gray-300 space-y-1">
+            <div>
+              <span class="text-gray-400">Range:</span>
+              <span class="text-cyan-300 font-semibold"> {{ preflightResult.accept_ranges ? 'Suportado' : 'Não suportado' }} </span>
+            </div>
+            <div v-if="preflightResult.size !== null && preflightResult.size !== undefined">
+              <span class="text-gray-400">Tamanho:</span>
+              <span class="text-cyan-300 font-semibold"> {{ formatBytes(preflightResult.size) }} </span>
+            </div>
+            <div v-if="preflightResult.status_code !== null && preflightResult.status_code !== undefined">
+              <span class="text-gray-400">HTTP:</span>
+              <span class="text-cyan-300 font-semibold"> {{ preflightResult.status_code }} </span>
+            </div>
+            <div v-if="preflightResult.note" class="text-gray-400">
+              {{ preflightResult.note }}
+            </div>
+          </div>
+          <div v-else class="text-xs text-gray-500">
+            Opcional: analisa rapidamente a URL antes de iniciar.
+          </div>
+        </div>
+
         <!-- Buttons -->
         <div class="flex gap-3 pt-4 border-t border-cyan-500/20">
           <Button type="submit" variant="primary" size="md" class="flex-1" :disabled="downloadStore.loading">
@@ -201,6 +243,58 @@ const downloadForm = ref({
 const showManualFolderModal = ref(false)
 const manualFolderPath = ref('')
 const browseLoading = ref(false)
+
+const preflightLoading = ref(false)
+const preflightResult = ref(null)
+const preflightError = ref(null)
+
+function formatBytes(bytes) {
+  try {
+    const b = Number(bytes)
+    if (!Number.isFinite(b) || b <= 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.min(Math.floor(Math.log(b) / Math.log(1024)), units.length - 1)
+    const v = b / Math.pow(1024, i)
+    return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
+  } catch (e) {
+    return `${bytes}`
+  }
+}
+
+async function runPreflight() {
+  preflightError.value = null
+  preflightResult.value = null
+
+  const urlRaw = (downloadForm.value.url || '').trim()
+  if (!urlRaw) {
+    preflightError.value = 'Insira uma URL para analisar.'
+    return
+  }
+
+  // Basic validation: allow magnet or http(s)
+  if (!urlRaw.startsWith('magnet:')) {
+    try {
+      const u = new URL(urlRaw)
+      if (!u.protocol.startsWith('http')) {
+        preflightError.value = 'URL inválida - use http:// ou https://'
+        return
+      }
+    } catch (e) {
+      preflightError.value = 'URL inválida - use http:// ou https://'
+      return
+    }
+  }
+
+  preflightLoading.value = true
+  try {
+    const resp = await api.get('/api/supports_range', { params: { url: urlRaw } })
+    preflightResult.value = resp.data || null
+  } catch (e) {
+    preflightError.value = e?.message || 'Falha ao analisar URL'
+  } finally {
+    preflightLoading.value = false
+  }
+}
 
 async function browseFolder() {
   // Try backend native picker first, then fallback to manual modal

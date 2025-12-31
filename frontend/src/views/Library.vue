@@ -272,6 +272,58 @@
             </div>
           </div>
 
+          <div class="p-3 bg-gray-900/40 border border-cyan-500/20 rounded space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-sm font-bold text-cyan-300">Pré-flight Check</div>
+              <div class="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  class="btn-translucent text-xs"
+                  :disabled="preflightLoading"
+                  @click="runPreflightForce"
+                >
+                  <span v-if="preflightLoading">Analisando...</span>
+                  <span v-else>Forçar nova sondagem</span>
+                </Button>
+              </div>
+            </div>
+
+            <div v-if="preflightError" class="text-xs text-red-300 border border-red-500/30 bg-red-900/10 rounded p-2">
+              {{ preflightError }}
+            </div>
+
+            <div v-else-if="preflightResult" class="text-xs text-gray-300 space-y-1">
+              <div v-if="preflightAria2" class="text-gray-300">
+                <span class="text-gray-400">aria2:</span>
+                <span class="text-cyan-300 font-semibold"> {{ preflightAria2.available ? 'Disponível' : 'Indisponível' }} </span>
+              </div>
+              <div v-if="preflightHealth" class="text-gray-300">
+                <span class="text-gray-400">Saúde:</span>
+                <span class="text-cyan-300 font-semibold"> {{ preflightHealthLabel }} </span>
+                <span v-if="preflightHealth.seeders !== null && preflightHealth.seeders !== undefined" class="ml-2 text-amber-200">Seeders {{ preflightHealth.seeders }}</span>
+              </div>
+              <div>
+                <span class="text-gray-400">Range:</span>
+                <span class="text-cyan-300 font-semibold"> {{ ((selectedItem?.url || '').startsWith('magnet:') || String(preflightResult.note || '').toLowerCase().includes('magnet')) ? 'N/A (Magnet/aria2)' : (preflightResult.accept_ranges ? 'Suportado' : 'Não suportado') }} </span>
+              </div>
+              <div v-if="preflightResult.size !== null && preflightResult.size !== undefined">
+                <span class="text-gray-400">Tamanho:</span>
+                <span class="text-cyan-300 font-semibold"> {{ formatBytes(preflightResult.size) }} </span>
+              </div>
+              <div v-if="preflightResult.status_code !== null && preflightResult.status_code !== undefined">
+                <span class="text-gray-400">HTTP:</span>
+                <span class="text-cyan-300 font-semibold"> {{ preflightResult.status_code }} </span>
+              </div>
+              <div v-if="preflightResult.note" class="text-gray-400">
+                {{ preflightResult.note }}
+              </div>
+            </div>
+            <div v-else class="text-xs text-gray-500">
+              Opcional: analisa rapidamente a URL antes de iniciar.
+            </div>
+          </div>
+
           <div class="flex gap-2 pt-4 border-t border-gray-700">
             <button
               type="button"
@@ -447,6 +499,24 @@ const selectedItem = ref(null)
 const downloadDestination = ref('downloads')
 const downloadVerifySsl = ref({})
 const showManualFolderModal = ref(false)
+
+const preflightLoading = ref(false)
+const preflightResult = ref(null)
+const preflightError = ref(null)
+const preflightAria2 = ref(null)
+const preflightHealth = ref(null)
+const preflightHealthLabel = computed(() => {
+  const h = preflightHealth.value
+  if (!h) return ''
+  const s = Number(h.seeders ?? 0)
+  if (Number.isFinite(s)) {
+    if (s >= 20) return 'Saudável'
+    if (s >= 5) return 'Ok'
+    if (s >= 1) return 'Baixa'
+    return 'Crítica'
+  }
+  return 'Desconhecida'
+})
 const manualFolderPath = ref('')
 const browseLoading = ref(false)
 const modalInfo = ref({ size: null, accept_range: false, eta: null, checking: false })
@@ -658,7 +728,7 @@ async function startDownloadFlow(item) {
   showAnalysisModal.value = true
 
   try {
-    const resp = await api.post('/api/analysis/pre-job', { item })
+    const resp = await api.post('/api/analysis/pre-job/with-recommendations', { item })
     if (resp.data && resp.data.candidates && resp.data.candidates.length > 0) {
       analysisCandidates.value = resp.data.candidates
 
@@ -671,6 +741,7 @@ async function startDownloadFlow(item) {
         }
       }
       analysisOriginalItem.value = enrichedOriginal
+      
       analysisLoading.value = false
       return
     }
@@ -697,30 +768,97 @@ function openDownloadConfigurationDialog(item) {
   selectedItem.value = item
   downloadDestination.value = 'downloads'
 
+  preflightError.value = null
+  preflightResult.value = null
+  preflightAria2.value = null
+  preflightHealth.value = null
+
   const sourceId = item.source_id
-  if (sourceId !== undefined && sourceId !== null && !(sourceId in downloadVerifySsl.value)) {
+  if (!(sourceId in downloadVerifySsl.value)) {
     Object.assign(downloadVerifySsl.value, { [sourceId]: true })
   }
 
   modalInfo.value = { size: null, accept_range: false, eta: null, checking: true }
 
-  try {
-    const url = encodeURIComponent(item.url)
-    api.get(`/api/supports_range?url=${url}`).then(({ data }) => {
-      modalInfo.value.size = data.size || null
-      modalInfo.value.accept_range = !!data.accept_ranges
-      if (data.size && modalInfo.value.accept_range) {
-        const baseline = 1024 * 1024
-        modalInfo.value.eta = Math.round((data.size / baseline))
-      }
-    }).catch(() => {}).finally(() => {
-      modalInfo.value.checking = false
-    })
-  } catch (e) {
+  const urlRaw = (item.url || '').toString().trim()
+  if (urlRaw.startsWith('magnet:')) {
+    // Magnet: always run pre-flight with real probe, even if coming from pre-job flow.
     modalInfo.value.checking = false
+    preflightLoading.value = true
+    ;(async () => {
+      try {
+        const aria2Resp = await api.get('/api/aria2/status')
+        preflightAria2.value = aria2Resp.data || null
+      } catch (e) {
+        preflightAria2.value = null
+      }
+
+      try {
+        const healthResp = await api.post('/api/magnet/health', { url: urlRaw })
+        preflightHealth.value = healthResp.data || null
+      } catch (e) {
+        preflightHealth.value = { seeders: item?.seeders ?? null, leechers: item?.leechers ?? null }
+      }
+
+      preflightResult.value = { accept_ranges: false, size: null, status_code: null, note: 'Magnet links use aria2' }
+      preflightError.value = null
+      preflightLoading.value = false
+    })().catch(() => {
+      preflightLoading.value = false
+    })
+  } else {
+    // HTTP/HTTPS: keep existing behavior for size/range.
+    try {
+      const url = encodeURIComponent(urlRaw)
+      api.get(`/api/supports_range?url=${url}`).then(({ data }) => {
+        modalInfo.value.size = data.size || null
+        modalInfo.value.accept_range = !!data.accept_ranges
+        if (data.size && modalInfo.value.accept_range) {
+          const baseline = 1024 * 1024
+          modalInfo.value.eta = Math.round((data.size / baseline))
+        }
+      }).catch(() => {}).finally(() => {
+        modalInfo.value.checking = false
+      })
+    } catch (e) {
+      modalInfo.value.checking = false
+    }
   }
 
   showDownloadDialog.value = true
+}
+
+async function runPreflightForce() {
+  preflightError.value = null
+  preflightResult.value = null
+  preflightAria2.value = null
+  preflightHealth.value = null
+
+  const urlRaw = (selectedItem.value?.url || '').toString().trim()
+  if (!urlRaw) {
+    preflightError.value = 'URL inválida para análise.'
+    return
+  }
+
+  preflightLoading.value = true
+  try {
+    if (urlRaw.startsWith('magnet:')) {
+      const aria2Resp = await api.get('/api/aria2/status')
+      preflightAria2.value = aria2Resp.data || null
+
+      const healthResp = await api.post('/api/magnet/health', { url: urlRaw, force_refresh: true })
+      console.log('[LIBRARY] Resposta force_refresh:', healthResp.data)
+      preflightHealth.value = healthResp.data || null
+      preflightResult.value = { accept_ranges: false, size: null, status_code: null, note: 'Magnet links use aria2' }
+    } else {
+      const resp = await api.get('/api/supports_range', { params: { url: urlRaw } })
+      preflightResult.value = resp.data || null
+    }
+  } catch (e) {
+    preflightError.value = e?.message || 'Falha ao analisar URL'
+  } finally {
+    preflightLoading.value = false
+  }
 }
 
 async function browsePath() {
@@ -789,6 +927,7 @@ async function confirmDownload() {
 // onBeforeRouteLeave -> REMOVED
 
 onMounted(() => {
+  console.log('[Library] Montado - carregando biblioteca')
   fetchLibrary(false)
 })
 

@@ -1,12 +1,12 @@
 <template>
   <div class="w-full">
     <div class="flex items-center justify-between mb-2">
-      <span class="text-xs font-semibold text-cyan-300">{{ label }}</span>
-      <span class="text-xs text-cyan-400">{{ percentage }}%</span>
+      <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">{{ label }}</span>
+      <span class="text-xs text-slate-600 dark:text-slate-400">{{ percentage }}%</span>
     </div>
-    <div class="w-full h-2 rounded-full bg-slate-800 border border-cyan-500/30 overflow-hidden">
+    <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
       <div
-        class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 transition-all duration-500 shadow-lg shadow-cyan-500/50"
+        class="h-full bg-gradient-to-r from-sky-500 to-sky-600 transition-all duration-500 shadow-soft"
         :style="{ width: percentage + '%' }"
       />
     </div>

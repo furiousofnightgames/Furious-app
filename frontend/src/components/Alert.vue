@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-center gap-2 p-3 rounded-lg" :class="bgColor">
+  <div class="flex items-center gap-2 p-4 rounded-xl" :class="bgColor">
     <div :class="iconColor">
       <slot name="icon" />
     </div>
@@ -25,40 +25,40 @@ const props = defineProps({
 
 const bgColor = computed(() => {
   const colors = {
-    success: 'bg-green-500/20 border border-green-500/50',
-    error: 'bg-red-500/20 border border-red-500/50',
-    warning: 'bg-yellow-500/20 border border-yellow-500/50',
-    info: 'bg-blue-500/20 border border-blue-500/50'
+    success: 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50',
+    error: 'bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-700/50',
+    warning: 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50',
+    info: 'bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-700/50'
   }
   return colors[props.type]
 })
 
 const iconColor = computed(() => {
   const colors = {
-    success: 'text-green-400',
-    error: 'text-red-400',
-    warning: 'text-yellow-400',
-    info: 'text-blue-400'
+    success: 'text-emerald-600 dark:text-emerald-400',
+    error: 'text-rose-600 dark:text-rose-400',
+    warning: 'text-amber-600 dark:text-amber-400',
+    info: 'text-sky-600 dark:text-sky-400'
   }
   return colors[props.type]
 })
 
 const titleColor = computed(() => {
   const colors = {
-    success: 'text-green-300',
-    error: 'text-red-300',
-    warning: 'text-yellow-300',
-    info: 'text-blue-300'
+    success: 'text-emerald-900 dark:text-emerald-200',
+    error: 'text-rose-900 dark:text-rose-200',
+    warning: 'text-amber-900 dark:text-amber-200',
+    info: 'text-sky-900 dark:text-sky-200'
   }
   return colors[props.type]
 })
 
 const messageColor = computed(() => {
   const colors = {
-    success: 'text-green-200',
-    error: 'text-red-200',
-    warning: 'text-yellow-200',
-    info: 'text-blue-200'
+    success: 'text-emerald-700 dark:text-emerald-300',
+    error: 'text-rose-700 dark:text-rose-300',
+    warning: 'text-amber-700 dark:text-amber-300',
+    info: 'text-sky-700 dark:text-sky-300'
   }
   return colors[props.type]
 })

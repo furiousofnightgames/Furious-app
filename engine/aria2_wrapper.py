@@ -308,7 +308,7 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
         # DO NOT include magnet URL - that would create a NEW download with NEW GID
         print(f"RESUME MODE: Using ONLY --input-file={session_file}")
         print(f"   aria2 will load GID, folder name, and all parameters from session")
-        print(f"   Using --force-save=true to ensure session is updated with real GID")
+        print(f"   NOT using --force-save to preserve .aria2 metadata progress information")
         cmd = [
             aria2_path,
             '--enable-rpc=false',
@@ -317,9 +317,8 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--reuse-uri=true',
             '--allow-overwrite=true',
             '--max-resume-failure-tries=10',
-            '--force-save=true',
             '--save-session=' + str(session_file),
-            '--save-session-interval=1',
+            '--save-session-interval=5',
             '--bt-save-metadata=true',
             '--bt-metadata-only=false',
             '--bt-load-saved-metadata=true',

@@ -422,6 +422,12 @@ class JobManager:
                         j.dest = final_path if final_path else dest_path
                         dest_to_save = final_path if final_path else dest_path
                         
+                        # Record download completion for source scoring
+                        if it and it.source_id:
+                            from backend.services.source_scoring import SourceScoringService
+                            SourceScoringService.record_download_completion(session, job_id, success=True)
+                            print(f"[RM2] Download completion recorded for source #{it.source_id}")
+                        
                         # Calculate and save actual file size
                         try:
                             actual_path = final_path if final_path else dest_path
@@ -492,6 +498,12 @@ class JobManager:
                     j.dest = dest_to_save
                     print(f"[DEBUG] Salvando job.dest = {dest_to_save}")
                     
+                    # Record download completion for source scoring
+                    if it and it.source_id:
+                        from backend.services.source_scoring import SourceScoringService
+                        SourceScoringService.record_download_completion(session, job_id, success=True)
+                        print(f"[RM2] Download completion recorded for source #{it.source_id}")
+                    
                     # Calculate and save actual file size
                     try:
                         if os.path.isfile(dest_to_save):
@@ -538,12 +550,30 @@ class JobManager:
             # Remove from memory progress
             if job_id in self._in_memory_progress:
                 del self._in_memory_progress[job_id]
-            # Clean up metadata files after download (success or failure)
-            # Use dest_to_save which contains the actual path where download happened
+            
+            # CRITICAL: Only cleanup partial files if NOT paused
+            # If paused, we MUST preserve .aria2 metadata for resume!
+            should_cleanup = True
             try:
-                await self._cleanup_partial_files(dest_to_save, job_id)
+                session = get_session()
+                j = session.get(Job, job_id)
+                if j and j.status == "paused":
+                    # Job was paused - DO NOT cleanup metadata files!
+                    print(f"[PAUSE] Skipping cleanup to preserve metadata for resume")
+                    should_cleanup = False
+                session.close()
             except Exception as e:
-                print(f"[WARN] Error during final cleanup: {e}")
+                print(f"[WARN] Could not check job status for cleanup decision: {e}")
+            
+            # Clean up metadata files after download (success, failure, or cancel)
+            # Use dest_to_save which contains the actual path where download happened
+            if should_cleanup:
+                try:
+                    await self._cleanup_partial_files(dest_to_save, job_id)
+                except Exception as e:
+                    print(f"[WARN] Error during final cleanup: {e}")
+            else:
+                print(f"[PAUSE] Metadata preserved: download can be resumed later")
 
     async def _cleanup_partial_files(self, dest_path: str, job_id: int):
         """Clean up partial files and metadata residuals from downloads"""

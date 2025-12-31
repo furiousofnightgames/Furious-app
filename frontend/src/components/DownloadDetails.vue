@@ -51,7 +51,7 @@
       <div class="grid grid-cols-3 gap-4 p-3 bg-slate-900/50 rounded">
         <div>
           <p class="text-xs text-slate-400">Velocidade</p>
-          <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex items-center gap-2 whitespace-nowrap overflow-hidden">
             <span class="px-2 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold tracking-wide">
               {{ formatSpeed(job.speed || 0) }}
             </span>

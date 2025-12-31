@@ -27,7 +27,7 @@ if (isElectron || !baseURL || baseURL === 'null' || baseURL === '') {
 
 const api = axios.create({
   baseURL: baseURL,
-  timeout: 30000,
+  timeout: 60000,  // 1 minutes - Increased from 30s for large library loads
   headers: {
     'Content-Type': 'application/json'
   }

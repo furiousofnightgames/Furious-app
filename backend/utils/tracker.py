@@ -56,6 +56,66 @@ class UDPTrackerClient:
         print(f"[Tracker] Sucesso! Seeds: {max_seeds}, Peers: {max_peers}")
         return {"seeders": max_seeds, "leechers": max_peers}
 
+    async def get_stats_partial(self, magnet_link, overall_timeout=3.0):
+        """Queries trackers but returns as soon as the overall timeout elapses.
+
+        This is useful for interactive pre-flight checks where we prefer a partial,
+        *real* result (max over responders) instead of timing out and returning 0/0.
+
+        Returns:
+          {
+            "seeders": int,
+            "leechers": int,
+            "responded": int,
+            "total": int,
+            "timed_out": bool
+          }
+        """
+        info_hash = self._extract_info_hash(magnet_link)
+        if not info_hash:
+            print("[Tracker] Erro: Não foi possível extrair hash do magnet link.")
+            return None
+
+        trackers = self._extract_trackers(magnet_link)
+        if not trackers:
+            print("[Tracker] Aviso: Nenhum tracker UDP encontrado no magnet link.")
+            return None
+
+        print(f"[Tracker] Sondando {len(trackers)} trackers para hash {info_hash.hex()}...")
+
+        tasks = [asyncio.create_task(self._scrape_tracker(tracker, info_hash)) for tracker in trackers]
+        done, pending = await asyncio.wait(tasks, timeout=overall_timeout)
+
+        max_seeds = 0
+        max_peers = 0
+        responded = 0
+
+        for t in done:
+            try:
+                res = t.result()
+            except Exception:
+                continue
+            if isinstance(res, dict) and res:
+                responded += 1
+                if res.get('seeds', 0) > max_seeds:
+                    max_seeds = int(res.get('seeds') or 0)
+                if res.get('peers', 0) > max_peers:
+                    max_peers = int(res.get('peers') or 0)
+
+        for t in pending:
+            t.cancel()
+
+        timed_out = len(pending) > 0
+        if responded == 0:
+            if timed_out:
+                print(f"[Tracker] Timeout parcial ({overall_timeout}s): nenhum tracker respondeu.")
+            else:
+                print("[Tracker] Falha: Nenhum tracker respondeu com sucesso.")
+            return {"seeders": 0, "leechers": 0, "responded": 0, "total": len(trackers), "timed_out": timed_out}
+
+        print(f"[Tracker] Sucesso parcial! Seeds: {max_seeds}, Peers: {max_peers} (responded={responded}/{len(trackers)})")
+        return {"seeders": max_seeds, "leechers": max_peers, "responded": responded, "total": len(trackers), "timed_out": timed_out}
+
     def _extract_info_hash(self, magnet_link):
         try:
             # simple extraction for urn:btih:HASH
@@ -98,79 +158,87 @@ class UDPTrackerClient:
         if not host or not port:
             return None
 
-        try:
-            # Create socket
-            loop = asyncio.get_running_loop()
-            transport, protocol = await loop.create_datagram_endpoint(
-                lambda: TrackerProtocol(),
-                remote_addr=(host, port)
-            )
-            
-            try:
-                # 1. Connect
-                transaction_id = random.randint(0, 65535)
-                connect_req = struct.pack("!QII", self.connection_id, 0, transaction_id)
-                transport.sendto(connect_req)
-                
-                # Wait for response
-                data = await asyncio.wait_for(protocol.response_future, self.timeout)
-                
-                if len(data) < 16:
-                    print(f"[Tracker] {host} Erro: Resposta curta no Connect ({len(data)} bytes)")
-                    return None
-                    
-                action, res_trans_id, conn_id = struct.unpack("!IIQ", data[:16])
-                
-                if res_trans_id != transaction_id:
-                    print(f"[Tracker] {host} Erro: Transaction ID mismatch no Connect")
-                    return None
-                
-                # 2. Scrape
-                # Reset for next packet
-                protocol.response_future = asyncio.Future()
-                
-                transaction_id = random.randint(0, 65535)
-                scrape_req = struct.pack("!QII20s", conn_id, 2, transaction_id, info_hash)
-                transport.sendto(scrape_req)
-                
-                data = await asyncio.wait_for(protocol.response_future, self.timeout)
-                
-                if len(data) < 8:
-                    print(f"[Tracker] {host} Erro: Resposta curta no Scrape")
-                    return None
-                    
-                action, res_trans_id = struct.unpack("!II", data[:8])
-                
-                if res_trans_id != transaction_id:
-                    print(f"[Tracker] {host} Erro: Transaction ID mismatch no Scrape")
-                    return None
-                
-                if len(data) >= 20:
-                    seeds, completed, leechers = struct.unpack("!III", data[8:20])
-                    
-                    # Sanity Check: Valores absurdos (ex: > 500.000) geralmente são bugs do tracker ou overflow
-                    if seeds > 500000 or leechers > 500000:
-                         print(f"[Tracker] {host} IGNORADO: Valores suspeitos (Seeds={seeds}, Peers={leechers})")
-                         return None
+        attempts = max(1, int(self.retries or 1))
+        last_error = None
 
-                    print(f"[Tracker] {host} OK! Seeds={seeds} Peers={leechers}")
-                    return {"seeds": seeds, "peers": leechers}
-                else:
-                    print(f"[Tracker] {host} Erro: Dados insuficientes no Scrape ({len(data)})")
-                    return None
-                    
-            except asyncio.TimeoutError:
-                # print(f"[Tracker] {host} warn: Timeout ({self.timeout}s)")
-                return None
+        for _ in range(attempts):
+            try:
+                # Create socket
+                loop = asyncio.get_running_loop()
+                transport, protocol = await loop.create_datagram_endpoint(
+                    lambda: TrackerProtocol(),
+                    remote_addr=(host, port)
+                )
+
+                try:
+                    # 1. Connect
+                    transaction_id = random.randint(0, 65535)
+                    connect_req = struct.pack("!QII", self.connection_id, 0, transaction_id)
+                    transport.sendto(connect_req)
+
+                    # Wait for response
+                    data = await asyncio.wait_for(protocol.response_future, self.timeout)
+
+                    if len(data) < 16:
+                        last_error = Exception(f"Connect short response ({len(data)} bytes)")
+                        continue
+
+                    action, res_trans_id, conn_id = struct.unpack("!IIQ", data[:16])
+
+                    if res_trans_id != transaction_id:
+                        last_error = Exception("Transaction ID mismatch no Connect")
+                        continue
+
+                    # 2. Scrape
+                    protocol.response_future = asyncio.Future()
+
+                    transaction_id = random.randint(0, 65535)
+                    scrape_req = struct.pack("!QII20s", conn_id, 2, transaction_id, info_hash)
+                    transport.sendto(scrape_req)
+
+                    data = await asyncio.wait_for(protocol.response_future, self.timeout)
+
+                    if len(data) < 8:
+                        last_error = Exception("Scrape short response")
+                        continue
+
+                    action, res_trans_id = struct.unpack("!II", data[:8])
+
+                    if res_trans_id != transaction_id:
+                        last_error = Exception("Transaction ID mismatch no Scrape")
+                        continue
+
+                    if len(data) >= 20:
+                        seeds, completed, leechers = struct.unpack("!III", data[8:20])
+
+                        # Sanity Check: Valores absurdos (ex: > 500.000) geralmente são bugs do tracker ou overflow
+                        if seeds > 500000 or leechers > 500000:
+                            last_error = Exception(f"Valores suspeitos (Seeds={seeds}, Peers={leechers})")
+                            continue
+
+                        print(f"[Tracker] {host} OK! Seeds={seeds} Peers={leechers}")
+                        return {"seeds": seeds, "peers": leechers}
+
+                    last_error = Exception(f"Dados insuficientes no Scrape ({len(data)})")
+                    continue
+
+                except asyncio.TimeoutError as e:
+                    last_error = e
+                    continue
+                except Exception as e:
+                    last_error = e
+                    continue
+                finally:
+                    try:
+                        transport.close()
+                    except Exception:
+                        pass
+
             except Exception as e:
-                # print(f"[Tracker] {host} Erro: {e}")
-                return None
-            finally:
-                transport.close()
-                
-        except Exception as e:
-            # print(f"[Tracker] {host} Falha Socket: {e}")
-            return None
+                last_error = e
+                continue
+
+        return None
 
 class TrackerProtocol(asyncio.DatagramProtocol):
     def __init__(self):
