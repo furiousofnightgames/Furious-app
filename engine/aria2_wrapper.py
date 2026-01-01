@@ -318,7 +318,7 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--allow-overwrite=true',
             '--max-resume-failure-tries=10',
             '--save-session=' + str(session_file),
-            '--save-session-interval=5',
+            '--save-session-interval=1',
             '--bt-save-metadata=true',
             '--bt-metadata-only=false',
             '--bt-load-saved-metadata=true',
@@ -795,7 +795,7 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                 try:
                     proc.terminate()  # Graceful shutdown
                     try:
-                        proc.wait(timeout=3)
+                        proc.wait(timeout=10)
                     except subprocess.TimeoutExpired:
                         proc.kill()
                 except Exception as e:
@@ -1059,7 +1059,7 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                 pass
 
         try:
-            proc.wait(timeout=5)
+            proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()

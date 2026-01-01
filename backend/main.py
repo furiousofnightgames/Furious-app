@@ -1909,6 +1909,15 @@ async def pre_job_analysis(req: AnalyzeReq):
     return await _analysis_core(req)
 
 
+@app.post("/api/analysis/pre-job/with-recommendations")
+async def pre_job_analysis_with_recommendations(req: AnalyzeReq):
+    """
+    Analyzes all available sources to find healthier alternatives for the target item.
+    Alias endpoint for frontend compatibility.
+    """
+    return await _analysis_core(req)
+
+
 class MagnetHealthReq(BaseModel):
     url: str
     force_refresh: Optional[bool] = False
@@ -2003,44 +2012,31 @@ async def magnet_health(req: MagnetHealthReq):
         full_url += f"&tr={tr}"
     item_dict: Dict[str, Any] = {"url": full_url, "seeders": 0, "leechers": 0}
 
-    # For force_refresh we prefer a *live* partial result over a timed-out full probe.
-    # This avoids repeating stale cache values just because one tracker is slow.
+    # CRITICAL FIX: Always use partial probe for preflight checks (fast, returns partial results)
+    # Prejob analysis uses SourceHealthService.enrich_candidates() separately (slower, full results)
     timed_out = False
     responded = None
     total = None
-    if req.force_refresh:
-        try:
-            print(f"[MAGNET-HEALTH] Iniciando sondagem force_refresh=True (partial) timeout={timeout_sec}s")
-            client_timeout = float(os.environ.get('MAGNET_TRACKER_TIMEOUT_SEC', '2.0') or 2.0)
-            client_retries = int(os.environ.get('MAGNET_TRACKER_RETRIES', '2') or 2)
-            client = UDPTrackerClient(timeout=client_timeout, retries=client_retries)
-            stats = await client.get_stats_partial(full_url, overall_timeout=timeout_sec)
-            if stats and isinstance(stats, dict):
-                responded = int(stats.get('responded') or 0)
-                total = int(stats.get('total') or 0)
-                timed_out = bool(stats.get('timed_out'))
-                item_dict['seeders'] = int(stats.get('seeders') or 0)
-                item_dict['leechers'] = int(stats.get('leechers') or 0)
-            print(f"[MAGNET-HEALTH] Sondagem parcial concluída. Seeds={item_dict.get('seeders')} Leechers={item_dict.get('leechers')} responded={responded}/{total} timed_out={timed_out}")
-        except Exception as e:
-            timed_out = True
-            print(f"[MAGNET-HEALTH] Erro na sondagem parcial: {e}")
-    else:
-        async def _probe() -> None:
-            await SourceHealthService.enrich_candidates([item_dict])
-
-        try:
-            print(f"[MAGNET-HEALTH] Iniciando sondagem force_refresh=False timeout={timeout_sec}s")
-            await asyncio.wait_for(_probe(), timeout=timeout_sec)
-            print(f"[MAGNET-HEALTH] Sondagem concluída. Seeds={item_dict.get('seeders')} Leechers={item_dict.get('leechers')}")
-        except asyncio.TimeoutError:
-            timed_out = True
-            print(f"[MAGNET-HEALTH] Timeout após {timeout_sec}s. Retornando parcial: Seeds={item_dict.get('seeders')} Leechers={item_dict.get('leechers')}")
-            # Keep whatever we got so far (likely 0/0)
-            pass
-        except Exception as e:
-            print(f"[MAGNET-HEALTH] Erro na sondagem: {e}")
-            pass
+    
+    # Use partial probe for both force_refresh and normal mode
+    # This ensures we get results even if some trackers are slow
+    try:
+        mode_label = "force_refresh=True" if req.force_refresh else "normal"
+        print(f"[MAGNET-HEALTH] Iniciando sondagem {mode_label} (partial) timeout={timeout_sec}s")
+        client_timeout = float(os.environ.get('MAGNET_TRACKER_TIMEOUT_SEC', '2.0') or 2.0)
+        client_retries = int(os.environ.get('MAGNET_TRACKER_RETRIES', '2') or 2)
+        client = UDPTrackerClient(timeout=client_timeout, retries=client_retries)
+        stats = await client.get_stats_partial(full_url, overall_timeout=timeout_sec)
+        if stats and isinstance(stats, dict):
+            responded = int(stats.get('responded') or 0)
+            total = int(stats.get('total') or 0)
+            timed_out = bool(stats.get('timed_out'))
+            item_dict['seeders'] = int(stats.get('seeders') or 0)
+            item_dict['leechers'] = int(stats.get('leechers') or 0)
+        print(f"[MAGNET-HEALTH] Sondagem parcial concluída. Seeds={item_dict.get('seeders')} Leechers={item_dict.get('leechers')} responded={responded}/{total} timed_out={timed_out}")
+    except Exception as e:
+        timed_out = True
+        print(f"[MAGNET-HEALTH] Erro na sondagem parcial: {e}")
 
     health = SourceHealthService.calculate_health_score(item_dict)
     took_ms = int((time.time() - t0) * 1000)

@@ -34,6 +34,9 @@ nsis:
   installerIcon: launcher/images/icone.ico
   uninstallerIcon: launcher/images/icone.ico
   installerHeaderIcon: launcher/images/icone.ico
+  installerSidebar: launcher/images/banner.bmp
+  uninstallerSidebar: launcher/images/banner.bmp
+  installerHeader: launcher/images/header.bmp
   include: null
   script: null
   artifactName: ${productName} Setup.${ext}
