@@ -103,6 +103,10 @@ def init_db():
         if not has_column('item', 'leechers'):
             conn.exec_driver_sql("ALTER TABLE item ADD COLUMN leechers INTEGER")
 
+        # Favorite table columns
+        if not has_column('favorite', 'image'):
+            conn.exec_driver_sql("ALTER TABLE favorite ADD COLUMN image TEXT")
+
         # JobPart table columns
         if not has_column('jobpart', 'downloaded'):
             conn.exec_driver_sql("ALTER TABLE jobpart ADD COLUMN downloaded INTEGER DEFAULT 0")

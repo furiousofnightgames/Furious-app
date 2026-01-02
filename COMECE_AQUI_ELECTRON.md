@@ -202,8 +202,8 @@ Sua aplicação está pronta para ser distribuída como .exe!
 
 ---
 
-**Versão:** 2.7.0  
-**Data:** Dezembro 2025  
+**Versão:** 3.1  
+**Data:** Janeiro 2026  
 **Status:** ✅ Pronto para Produção
 
 ## 📁 Onde ficam os dados (AppData)

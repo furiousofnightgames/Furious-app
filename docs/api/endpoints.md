@@ -333,9 +333,10 @@ Content-Type: application/json
 
 {
   "source_id": 1,
-  "item_id": 1,
+  "item_id": 123,
   "name": "Meu Jogo Favorito",
-  "url": "https://exemplo.com/jogo"
+  "url": "magnet:?xt=...",
+  "image": "https://cdn.akamai.steamstatic.com/steam/apps/123/header.jpg"
 }
 ```
 **Resposta de Sucesso (201 Created):**
@@ -343,12 +344,15 @@ Content-Type: application/json
 {
   "id": 1,
   "source_id": 1,
-  "item_id": 1,
+  "item_id": 123,
   "name": "Meu Jogo Favorito",
-  "url": "https://exemplo.com/jogo",
-  "created_at": "2023-01-01T00:00:00"
+  "url": "magnet:?xt=...",
+  "image": "https://cdn.akamai.steamstatic.com/steam/apps/123/header.jpg",
+  "created_at": "2026-01-02T12:00:00Z"
 }
 ```
+
+> **Novidade v3.1.0**: Campo `image` agora é salvo e retornado. Se não fornecido, a gaveta de favoritos resolve automaticamente via Steam/SteamGridDB.
 
 #### Remover Favorito
 ```http

@@ -1,19 +1,25 @@
 =======
-# 🚀 Furious App - Acelerador de Downloads Profissional v2.7.0
+# 🚀 Furious App - Acelerador de Downloads Profissional v3.1.0
 
 Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.
 
-**Versão 2.7.0 estável disponível!** - Com suporte completo a Windows e interface otimizada.
+**Versão 3.1 estável disponível!** - Com suporte completo a Windows e interface otimizada.
 
-## 🆕 Novidades na Versão 2.7.0
+## 🆕 Novidades na Versão 3.1.0
+- ✅ **Biblioteca Global Unificada**: Nova interface "Biblioteca" que agrega todos os itens de todas as fontes JSON. Inclui busca rápida, paginação otimizada, agrupamento inteligente de versões e cache de imagens.
+- ✅ **Pré-flight Check (Sondagem)**: Analisador pré-download que verifica saúde do link, disponibilidade do aria2, status HTTP e conta seeds/peers reais (UDP) antes de iniciar o download.
+- ✅ **Engine de Download Ultra-Robusto**: Sistema aprimorado com fallback automático e headers de navegador
+  - Headers browser-like (User-Agent, Accept) para evitar bloqueios de servidores restritivos
+  - Fallback inteligente: se download segmentado falhar, tenta automaticamente download serial
+  - Tratamento de erro aprimorado: downloads falhados são marcados corretamente como "failed"
+- ✅ **Detalhes de Itens Premium**: Página de detalhes totalmente refeita com carrosseis de vídeos/screenshots, requisitos de sistema detalhados (mín/rec), suporte a idiomas e descrições ricas.
+- ✅ **Seleção de Versões**: Para jogos com múltiplos uploads, escolha qual versão baixar (botão "Escolher versão").
+- ✅ **Data de Upload**: Visualização clara da data de upload dos itens (`uploadDate`) para identificar novidades.
 - ✅ **Análise Inteligente de Fontes (Pré-Job)**: Intercepta o download para sugerir fontes com mais seeds/saúde.
-- ✅ **Sondagem de Trackers em Tempo Real**: Verifica seeds/peers reais via UDP antes do download.
 - ✅ **Estabilidade Steam API**: Novo sistema de fila (Semáforo) para evitar erros 503.
-- ✅ Nova tela de inicialização holográfica com tema cyberpunk
-- ✅ Corrigidos problemas de codificação de caracteres
-- ✅ Melhorias de estabilidade e performance
-- ✅ Interface otimizada para melhor experiência do usuário
-- ✅ IDs de itens estáveis (favoritos continuam marcados após reiniciar servidor)
+- ✅ Nova tela de inicialização holográfica com tema cyberpunk.
+- ✅ Melhorias de estabilidade e performance.
+- ✅ IDs de itens estáveis (favoritos continuam marcados após reiniciar servidor).
 
 ---
 
@@ -21,8 +27,8 @@ Sistema completo de gerenciamento de downloads com interface web moderna. Suport
 
 ### 📦 Portabilidade Total
 - ✅ **Instalador automático** (.EXE com um clique)
-- ✅ **100% independente**: Python portátil e aria2 inclusos (sem depender de instalações no sistema)
-- ✅ **Sem dependências externas**: Funciona offline após instalação
+- ✅ **100% independente**: Python e Node.js portáteis + aria2 inclusos (sem depender de instalações no sistema)
+- ✅ **Sem dependências externas**: Funciona offline após instalação (exceto downloads)
 - ✅ **Desinstalação segura**: Remove apenas a aplicação, preserva downloads
 
 ## 🎮 Integração com Steam
@@ -39,14 +45,21 @@ Sistema completo de gerenciamento de downloads com interface web moderna. Suport
 
 ## ⚡ Recursos Avançados
 
+### 📚 Biblioteca Global
+- 🔍 **Busca Unificada**: Pesquise em todas as fontes JSON simultaneamente.
+- 📦 **Agrupamento Inteligente**: Itens repetidos ou versões diferentes do mesmo jogo são agrupados em um único card.
+- ⚡ **Performance**: Paginação virtual e cache agressivo de imagens para navegação fluida.
+- 🛠️ **Gestão de Cache**: Controles para limpar/recarregar metadados e imagens.
+
+### 🛡️ Pré-flight Check & Segurança
+- 🛑 **Validação Prévia**: Verifica se o link (HTTP/Magnet) está acessível antes de criar o job.
+- 📡 **Sondagem de Trackers**: (Magnets) Conecta via UDP para descobrir seeders/leechers reais, sem depender da API da fonte.
+- 🏥 **Health Check**: Exibe visualmente se o torrent está "Saudável" ou "Crítico".
+
 ### 🔄 WebSockets
 - Atualizações em tempo real de progresso de downloads
 - Notificações instantâneas
 - Reconexão automática (quando aplicável)
-
-### 🛡️ Segurança
-- Validação de entrada em todas as requisições
-- Isolamento de processos no Electron
 
 ### 💾 Cache Inteligente
 - Armazenamento em memória para dados frequentes
@@ -59,7 +72,7 @@ Observação:
 ## ♿ Acessibilidade
 
 ### 🎨 Interface
-- Temas claro/escuro
+- Temas claro/escuro (Cyberpunk)
 - Alto contraste para melhor legibilidade
 - Tamanho de fonte ajustável
 
@@ -74,13 +87,15 @@ Observação:
 📦 aplicacao-pessoal-json
 ├── 📁 backend/             # API FastAPI
 ├── 📁 docs/               # Documentação (opcional)
+│   ├── 📁 features/      # Documentação de features (Global Library, Pre-flight)
 ├── 📁 engine/             # Motor de downloads
 ├── 📁 frontend/           # Aplicação Vue.js
 ├── 📁 launcher/           # Tela de inicialização
-├── 📁 node_modules/       # Dependências Node.js
+├── 📁 node_modules/       # Dependências Node.js (Raiz)
 ├── 📁 portables/          # Dependências portáteis
-│   ├── python-64bits/    # Python 3.10.5
-│   └── aria2-1.37.0/
+│   ├── python-64bits/            # Python 3.10.5
+│   ├── node-v18.16.1-win-x64/    # Node.js Portátil
+│   └── aria2-1.37.0/             # Aria2c
 ├── 📄 .gitignore
 ├── 📄 COMECE_AQUI_ELECTRON.md
 ├── 📄 ELECTRON_GUIDE.md
@@ -94,7 +109,7 @@ Observação:
 ├── 📄 nsis-*.nsi         # Scripts do instalador
 ├── 📄 package.json        # Configuração do projeto
 ├── 📄 requirements.txt    # Dependências Python
-└── 📄 run.py             # Ponto de entrada
+└── 📄 run.py             # Ponto de entrada (Python Puro)
 ```
 
 ### 📥 Downloads Avançados
@@ -107,6 +122,7 @@ Observação:
 
 ### 🎨 Interface Web
 - ✅ **Design cyberpunk profissional** com TailwindCSS
+- ✅ **Detalhes Imersivos**: Página de item com carrosseis (vídeos/prints), badges de idiomas e requisitos de sistema.
 - ✅ **Dashboard** com estatísticas animadas
 - ✅ **Responsivo** (funciona em desktop, tablet, mobile)
 - ✅ **Notificações** para eventos (criação, conclusão, erro)
@@ -182,15 +198,18 @@ npm run build:installer
 
 ## ⭐ Favoritos
 
-- Favoritar/desfavoritar nos cards de item.
-- Favoritar/desfavoritar dentro da página de detalhes (`ItemDetails`).
-- Drawer de favoritos (botão ☰):
-  - Clique no item abre detalhes.
-  - Botão `X` remove o favorito direto da lista.
-- O nome do favorito é normalizado (remove versões/builds/tags como DLC/emuladores) para exibir só o nome principal.
+**Novidade v3.1.0**: Sistema de favoritos completamente reformulado com visual premium inspirado no Hydra Launcher!
 
-Importante:
-- O `item_id` é determinístico por URL, então os favoritos continuam marcados após reiniciar.
+- **Gaveta lateral ampliada** (420px de largura) para melhor visualização
+- **Ícones de jogos automáticos**: Cada favorito exibe a capa/ícone do jogo (56x40px)
+  - Resolução automática de imagens via Steam/SteamGridDB ao abrir a gaveta
+  - Imagens persistidas no banco de dados para carregamento instantâneo
+- **Limpeza inteligente de nomes**: Remove automaticamente versões, DLCs, repacks, builds, etc.
+  - Exemplo: "GTA V - Premium Edition v1.5 + DLC" → "GTA V"
+- **Acesso rápido**: Botão ☰ no menu superior
+  - Clique no item para ir direto aos detalhes
+  - Botão `X` remove o favorito instantaneamente
+- **Persistência robusta**: `item_id` determinístico por URL - favoritos mantidos após reiniciar
 
 ## 🛠️ Requisitos do Sistema
 
@@ -267,6 +286,7 @@ Para suporte ou dúvidas, entre em contato:
 - Carregue de URL ou cole JSON
 - Visualize items disponíveis
 - Selecione múltiplos itens
+- Selecione versões específicas (se disponível)
 - Configure pasta de destino
 
 ### ⚙️ Novo Download
@@ -311,8 +331,9 @@ frontend/
 ### Portables Inclusos
 ```
 portables/
-├── python-64bits/              # Python 3.10.5 (renomeado!)
-└── aria2-1.37.0/              # aria2 (download engine)
+├── python-64bits/            # Python 3.10.5
+├── node-v18.16.1-win-x64/    # Node.js LTS (para build/electron)
+└── aria2-1.37.0/             # aria2 (download engine)
 ```
 
 **Nota importante:** Python foi renomeado de `Portable-Python-3.10.5_x64` para `python-64bits` para evitar problemas de compilação NSIS com nomes muito longos.
@@ -390,7 +411,8 @@ Test-Path "C:\Program Files (x86)\NSIS\makensis.exe"
 aplicacao-pessoal-json/
 ├── portables/
 │   ├── python-64bits/                (Python portátil)
-│   └──aria2-1.37.0/                     (aria2 binário)
+│   ├── node-v18.16.1-win-x64/        (Node.js portátil)
+│   └── aria2-1.37.0/                 (aria2 binário)
 ├── backend/                          (API Python/FastAPI)
 ├── engine/                           (Download manager)
 ├── frontend/                         (Vue.js app)
@@ -531,8 +553,8 @@ R: Sim, execute via Python. O instalador .EXE é apenas Windows.
 
 Desenvolvido por FURIOUSOFNIGHTGAMES 
 
-**Data de Lançamento**: Dezembro 2025  
-**Versão**: 2.7.0
+**Data de Lançamento**: Janeiro 2026
+**Versão**: 3.1
 **Status**: ✅ Produção
 
 ---

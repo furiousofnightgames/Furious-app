@@ -63,10 +63,15 @@ Oferecemos uma galeria de fontes populares. Para importar:
 3. Clique em **Adicionar** ao lado da fonte desejada
 4. Confirme a adição
 
-### Gerenciando Favoritos
+### Gerenciando Favoritos (v3.1.0 - Visual Premium)
+
 - **Adicionar aos Favoritos**: Clique na estrela (⭐) em qualquer item
 - **Acessar Favoritos**: Clique no ícone de menu (☰) no canto superior esquerdo
+  - Gaveta lateral ampliada (420px) com visual inspirado no Hydra Launcher
+  - Cada item exibe **ícone/capa do jogo** (resolução automática via Steam)
+  - Nomes limpos sem versões/DLCs/repacks
 - **Remover Favorito**: Clique no "X" ao lado do item na lista de favoritos
+- **Resolução Automática de Imagens**: Ao abrir a gaveta, imagens faltantes são buscadas automaticamente e salvas
 
 ## ⬇️ Realizando Downloads
 

@@ -1274,6 +1274,7 @@ class FavoriteCreateReq(BaseModel):
     item_id: int
     name: str
     url: str
+    image: Optional[str] = None
 
 
 def stable_item_id(url: str) -> int:
@@ -1325,6 +1326,7 @@ async def list_favorites():
             item_id=f.item_id,
             name=f.name,
             url=f.url,
+            image=f.image,
             created_at=f.created_at.isoformat() if f.created_at else None,
         )
         for f in q
@@ -1351,6 +1353,8 @@ async def create_favorite(req: FavoriteCreateReq):
     if existing:
         existing.name = req.name
         existing.url = req.url
+        if req.image:
+            existing.image = req.image
         session.add(existing)
         session.commit()
         session.refresh(existing)
@@ -1360,12 +1364,13 @@ async def create_favorite(req: FavoriteCreateReq):
             item_id=existing.item_id,
             name=existing.name,
             url=existing.url,
+            image=existing.image,
             created_at=existing.created_at.isoformat() if existing.created_at else None,
         )
         session.close()
         return out
 
-    fav = Favorite(source_id=req.source_id, item_id=req_item_id, name=req.name, url=req.url)
+    fav = Favorite(source_id=req.source_id, item_id=req_item_id, name=req.name, url=req.url, image=req.image)
     session.add(fav)
     session.commit()
     session.refresh(fav)
@@ -1376,6 +1381,7 @@ async def create_favorite(req: FavoriteCreateReq):
         item_id=fav.item_id,
         name=fav.name,
         url=fav.url,
+        image=fav.image,
         created_at=fav.created_at.isoformat() if fav.created_at else None,
     )
     session.close()

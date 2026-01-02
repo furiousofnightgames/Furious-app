@@ -55,6 +55,7 @@ Certifique-se que a estrutura de diretórios está correta:
 │   └── dist/                 # gerado pelo build
 ├── portables/                # binários portáveis empacotados
 │   ├── python-64bits/
+│   ├── node-v18.16.1-win-x64/
 │   └── aria2-1.37.0/
 ├── electron-main.js
 ├── electron-preload.js
@@ -459,6 +460,6 @@ Para problemas:
 
 ---
 
-**Versão:** 2.7.0  
-**Data:** Dezembro 2025  
+**Versão:** 3.1  
+**Data:** Janeiro 2026  
 **Status:** ✅ Pronto para Produção

@@ -37,6 +37,7 @@ class Favorite(SQLModel, table=True):
     item_id: int
     name: str
     url: str
+    image: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

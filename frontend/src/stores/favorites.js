@@ -39,10 +39,21 @@ export const useFavoritesStore = defineStore('favorites', () => {
       }
     }
 
-    s = s.replace(/\s*,\s*v\d[\w.\-]*/i, '').trim()
-    s = s.replace(/\s*\+\s*.*(dlc|bonus|emulator).*$/i, '').trim()
+    // Aggressive cleanup patterns
+    s = s.replace(/\s*[\(\[].*?(dlc|update|repack|multi|build|v\d|patch|fix|hotfix|language|soundtrack|artbook|goat|goty|edition|remaster).*?[\)\]]/gi, '')
+    s = s.replace(/\s+(v|ver|version)\.?\s*\d[\w.]*/gi, '')
+    s = s.replace(/\s+build\s*\d+/gi, '')
+    s = s.replace(/\s+update\s*\d*/gi, '')
+    s = s.replace(/,\s*v\d.*/gi, '')
+    s = s.replace(/\s+\+\s*.*$/i, '') // Remove anything after " + "
 
-    return s
+    // Hydra-style specific cleanups
+    s = s.replace(/\s+goty$/i, '')
+    s = s.replace(/\s+edition$/i, '')
+    s = s.replace(/\s+deluxe(\s+edition)?$/i, '')
+    s = s.replace(/\s+remastered$/i, '')
+
+    return s.trim()
   }
 
   function openDrawer() {
@@ -110,7 +121,8 @@ export const useFavoritesStore = defineStore('favorites', () => {
       source_id: sourceId,
       item_id: itemId,
       name: normalizeFavoriteName(item?.name || ''),
-      url: item?.url || ''
+      url: item?.url || '',
+      image: item?.icon || item?.capsule || item?.image || item?.poster || ''
     })
   }
 

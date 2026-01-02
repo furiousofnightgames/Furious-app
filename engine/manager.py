@@ -474,20 +474,27 @@ class JobManager:
                     # Size unknown or too small - discover it
                     info = await supports_range(url, verify=j.verify_ssl)
                     
-                    # CRITICAL FIX: Check for HTTP errors/exceptions immediately
+                    # CRITICAL FIX: If supports_range fails (error or bad status), fallback to serial
                     if info.get("error") or (info.get("status_code") and info.get("status_code") >= 400):
-                        raise Exception(f"Erro ao acessar URL: Status {info.get('status_code')} - {info.get('error', 'Unknown Error')}")
-                        
-                    size = info.get("size")
-                    accept_range = info.get("accept_ranges")
-                    
-                    if accept_range and size and size > 1_000_000:
-                        # segmented - use job configured k/n_conns
-                        k = j.k or 4
-                        n_conns = j.n_conns or 4
-                        await self._download_segmented_job(j, url, dest_path, k=k, n_conns=n_conns, progress_cb=progress_cb, resume=j.resume_on_start, verify=j.verify_ssl)
+                        error_msg = info.get('error', f"HTTP {info.get('status_code')}")
+                        print(f"[WARN] Falha ao verificar suporte a range: {error_msg}. Tentando download serial...")
+                        # Fallback to serial download (more robust for problematic servers)
+                        result = await download_serial(url, dest_path, progress_cb=progress_cb, resume=j.resume_on_start, verify=j.verify_ssl)
+                        if result is None:
+                            raise Exception(f"Download serial falhou: {error_msg}")
                     else:
-                        await download_serial(url, dest_path, progress_cb=progress_cb, resume=j.resume_on_start, verify=j.verify_ssl)
+                        size = info.get("size")
+                        accept_range = info.get("accept_ranges")
+                        
+                        if accept_range and size and size > 1_000_000:
+                            # segmented - use job configured k/n_conns
+                            k = j.k or 4
+                            n_conns = j.n_conns or 4
+                            await self._download_segmented_job(j, url, dest_path, k=k, n_conns=n_conns, progress_cb=progress_cb, resume=j.resume_on_start, verify=j.verify_ssl)
+                        else:
+                            result = await download_serial(url, dest_path, progress_cb=progress_cb, resume=j.resume_on_start, verify=j.verify_ssl)
+                            if result is None:
+                                raise Exception("Download serial falhou sem erro específico")
                 # check if stop was requested
                 if stop_event and stop_event.is_set():
                     j.status = "paused"

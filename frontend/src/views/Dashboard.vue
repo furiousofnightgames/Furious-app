@@ -9,7 +9,10 @@
           </div>
           <h3 class="text-sm font-semibold text-sky-700 dark:text-sky-400">Velocidade</h3>
         </div>
-        <p class="text-2xl font-bold text-sky-600 dark:text-sky-300">{{ formatSpeed(downloadStore.totalSpeed) }}</p>
+        <div class="flex flex-col">
+          <p class="text-2xl font-bold text-sky-600 dark:text-sky-300">{{ formatMbps(downloadStore.totalSpeed) }}</p>
+          <p class="text-xs font-mono text-sky-500/60">{{ formatSpeed(downloadStore.totalSpeed) }}</p>
+        </div>
       </div>
 
       <div class="p-4 bg-gradient-to-br from-violet-50 dark:from-violet-900/30 to-violet-50/50 dark:to-violet-900/10 rounded-lg border border-violet-200 dark:border-violet-500/20 hover:border-violet-300 dark:hover:border-violet-500/50 transition">
@@ -52,7 +55,13 @@
         <h2 class="text-lg font-bold text-sky-600 dark:text-sky-400">Progresso Geral</h2>
       </div>
       <div class="flex justify-between items-center mb-2">
-        <p class="text-slate-600 dark:text-slate-400">{{ downloadStore.totalProgress }}% Completo</p>
+        <p class="text-slate-600 dark:text-slate-400 font-medium">
+          {{ downloadStore.totalProgress }}% 
+          <span v-if="downloadStore.totalSpeed > 0" class="text-xs text-emerald-500 dark:text-emerald-400 ml-2 animate-pulse inline-flex items-center gap-1">
+            ⚡ {{ formatSpeed(downloadStore.totalSpeed) }}
+            <span class="opacity-80 text-[10px]">({{ formatMbps(downloadStore.totalSpeed) }})</span>
+          </span>
+        </p>
         <p class="text-sm text-slate-500 dark:text-slate-500">{{ formatBytes(totalDownloaded) }} / {{ formatBytes(totalSize) }}</p>
       </div>
       <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3">
@@ -89,7 +98,10 @@
           </div>
           <div class="flex justify-between text-xs text-slate-600 dark:text-slate-400">
             <span>{{ formatBytes(job.downloaded) }} {{ (job.size || job.total) ? '/ ' + formatBytes(job.size || job.total) : '(desconhecido)' }}</span>
-            <span>{{ formatSpeed(job.speed) }}</span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded">{{ formatSpeed(job.speed) }}</span>
+              <span class="text-[9px] text-slate-400/80 uppercase tracking-wider">{{ formatMbps(job.speed) }}</span>
+            </div>
           </div>
         </div>
         
@@ -354,7 +366,7 @@ import { useDownloadStore } from '../stores/download'
 import Card from '../components/Card.vue'
 import Button from '../components/Button.vue'
 import DashboardIcon from '../components/icons/DashboardIcons.vue'
-import { formatBytes, formatSpeed } from '../utils/format'
+import { formatBytes, formatSpeed, formatMbps } from '../utils/format'
 
 const downloadStore = useDownloadStore()
 

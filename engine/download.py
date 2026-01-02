@@ -19,8 +19,17 @@ async def supports_range(url: str, verify: bool = True) -> dict:
     Verifica se o servidor suporta downloads parciais e determina o tamanho REAL.
     Usa 'Range: bytes=0-0' para obter 'Content-Range', que é a fonte mais confiável de tamanho.
     """
+    # Browser-like headers to avoid server blocks
+    browser_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive"
+    }
+    
     try:
-        async with httpx.AsyncClient(verify=verify, timeout=httpx.Timeout(15, read=30), follow_redirects=True) as client:
+        async with httpx.AsyncClient(verify=verify, timeout=httpx.Timeout(15, read=30), follow_redirects=True, headers=browser_headers) as client:
             # Estrutura robusta: Tenta Range 0-0 primeiro (Melhor para tamanho exato)
             headers = {"Range": "bytes=0-0"}
             try:
@@ -89,7 +98,16 @@ async def download_serial(
     verify: bool = True
 ):
     temp_path = dest_path + ".part"
-    headers = {}
+    
+    # Browser-like headers to avoid server blocks
+    browser_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive"
+    }
+    
+    headers = browser_headers.copy()
     existing = 0
     mode = "wb"
 

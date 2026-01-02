@@ -7,7 +7,15 @@ O Furious App foi transformado em uma aplicação **Desktop** completa com:
 ### Tecnologias Principais
 - **Electron 27** - Framework desktop multiplataforma
 - **Python 3.10.5** - Backend robusto com FastAPI
-- **Vue.js 3** - Frontend moderno e reativo
+- **Vue.js 3 + Vite** - Frontend reativo de alta performance
+
+### 🆕 Destaques v3.1.0
+- **Biblioteca Global Premium**: Gestão unificada de itens.
+- **Pré-flight Checks**: Validação de links e magnets antes do download.
+- **Engine de Download Ultra-Robusto**: Fallback automático, headers de navegador, tratamento de erro aprimorado.
+- **Steam Integration 2.0**: Nova página de detalhes com vídeos e requirements.
+- **Favoritos Premium**: Sistema reformulado com ícones automáticos e resolução de imagens.
+- **Análise Inteligente**: Sugestão automática de fontes com melhor saúde.ativo
 - **TailwindCSS** - Estilização com design responsivo
 - **SQLite** - Banco de dados integrado
 
@@ -526,6 +534,6 @@ Para problemas:
 
 ---
 
-**Versão:** 2.7.0  
-**Data:** Dezembro 2025  
+**Versão:** 3.1  
+**Data:** Janeiro 2026  
 **Status:** ✅ Pronto para Produção

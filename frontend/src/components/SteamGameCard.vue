@@ -440,6 +440,8 @@ const fetchImage = async () => {
                 // Validar URL antes de usar
                 if (isProbablyValidImageUrl(imageUrl)) {
                     fetchedImage.value = imageUrl
+                    // ATUALIZA O ITEM ORIGINAL para que o Favorito possa usar esta imagem!
+                    props.item.image = imageUrl 
                     // Armazenar em cache
                     setImageCache(cacheKey, imageUrl)
                     return
@@ -579,10 +581,5 @@ const onCardClick = () => {
 img {
     backface-visibility: hidden;
     -webkit-font-smoothing: antialiased;
-}
-
-/* Otimizar hover sem transições pesadas */
-.group:hover {
-    /* Sem transition-all pesado */
 }
 </style>
