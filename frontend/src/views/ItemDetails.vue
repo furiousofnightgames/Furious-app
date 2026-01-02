@@ -1529,6 +1529,10 @@ const confirmDownload = async () => {
     if (result && result.job_id) {
        showDownloadDialog.value = false
        try { const ts = useToastStore(); ts.push('Download Iniciado', `O download de "${item.value.name}" começou!`) } catch (e) {}
+       
+       console.log('[ItemDetails] Job criado com sucesso, redirecionando para /downloads')
+       await nextTick()
+       router.push('/downloads')
     }
   } catch (e) {
     console.error('Erro ao iniciar download:', e)

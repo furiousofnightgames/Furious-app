@@ -1255,7 +1255,7 @@ async def list_jobs():
     for j in q:
         prog = job_manager.get_progress(j.id) or {}
         item = session.get(Item, j.item_id) if j.item_id else None
-        items.append(dict(id=j.id, item_id=j.item_id, status=j.status, progress=j.progress or prog.get('progress'), created_at=j.created_at.isoformat(), updated_at=j.updated_at.isoformat(), last_error=j.last_error, item_name=(item.name if item else None), item_url=(item.url if item else None), dest=j.dest, downloaded=prog.get('downloaded'), total=prog.get('total'), speed=prog.get('speed'), size=j.size))
+        items.append(dict(id=j.id, item_id=j.item_id, status=j.status, progress=j.progress or prog.get('progress'), created_at=j.created_at.isoformat(), updated_at=j.updated_at.isoformat(), last_error=j.last_error, item_name=(item.name if item else None), item_url=(item.url if item else None), dest=j.dest, downloaded=prog.get('downloaded'), total=prog.get('total') or j.size, speed=prog.get('speed'), size=j.size))
     session.close()
     return items
 
@@ -2467,9 +2467,18 @@ async def broadcast_progress():
                 jobs = session.exec(select(Job)).all()
                 payload = []
                 for j in jobs:
-                    prog = job_manager.get_progress(j.id)
-                    p = dict(id=j.id, status=j.status, progress=j.progress)
+                    prog = job_manager.get_progress(j.id) or {}
+                    p = dict(
+                        id=j.id, 
+                        status=j.status, 
+                        progress=j.progress, 
+                        size=j.size,  # Ensure size is sent (critical for completed jobs)
+                        total=prog.get('total') or j.size, # Fallback to size if total is missing
+                        downloaded=prog.get('downloaded'),
+                        speed=prog.get('speed')
+                    )
                     p.update(prog)
+
                     payload.append(p)
                 if payload:
                     await conn_manager.send_json({"type": "progress", "jobs": payload})

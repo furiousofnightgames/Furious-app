@@ -913,6 +913,10 @@ async function confirmDownload() {
         const ts = useToastStore()
         ts.push('Download', `Download #${result.job_id} iniciado`)
       } catch (e) {}
+      
+      console.log('[Library] Job criado com sucesso, redirecionando para /downloads')
+      await nextTick()
+      router.push('/downloads')
     }
   } catch (e) {
     const msg = e.message || 'Erro ao criar job'

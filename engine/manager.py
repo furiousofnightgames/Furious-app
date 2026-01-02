@@ -498,6 +498,18 @@ class JobManager:
                     j.dest = dest_to_save
                     print(f"[DEBUG] Salvando job.dest = {dest_to_save}")
                     
+                    # CRITICAL FIX: Update size on completion for Direct Downloads
+                    try:
+                        if os.path.isfile(dest_path):
+                            j.size = os.path.getsize(dest_path)
+                            print(f"[OK] Saved download size: {j.size} bytes")
+                    except Exception as e:
+                        print(f"[WARN] Could not update size: {e}")
+                        
+                    j.updated_at = datetime.utcnow()
+                    session.add(j)
+                    session.commit()
+                    
                     # Record download completion for source scoring
                     if it and it.source_id:
                         from backend.services.source_scoring import SourceScoringService
@@ -584,8 +596,17 @@ class JobManager:
             if os.path.exists(dest_path + ".part"):
                 os.remove(dest_path + ".part")
                 print(f"[OK] Removed partial file: {dest_path}.part")
+            
+            # Direct Download Engine uses .tmp
+            if os.path.exists(dest_path + ".tmp"):
+                os.remove(dest_path + ".tmp")
+                print(f"[OK] Removed temporary file: {dest_path}.tmp")
+
+            # Also check for .part.tmp (rare edge case)
+            if os.path.exists(dest_path + ".part.tmp"):
+                 os.remove(dest_path + ".part.tmp")
         except Exception as e:
-            print(f"[WARN] Could not remove {dest_path}.part: {e}")
+            print(f"[WARN] Could not remove temporary/partial files for {dest_path}: {e}")
         
         try:
             # Clean up .parts directory if exists
@@ -693,6 +714,7 @@ class JobManager:
         jp_list = session.exec(select(JobPart).where(JobPart.job_id == job.id)).all()
         session.close()
         
+        # PERF: Skip HEAD if size is already known (avoid 3s timeout wait)
         if not size:
             try:
                 # Try to get size without blocking - use short timeout
@@ -702,6 +724,9 @@ class JobManager:
                 print(f"Timeout getting file size, will discover during download")
             except Exception as e:
                 print(f"Could not get file size: {e}, will discover during download")
+        else:
+            if size:
+                print(f" Using cached size from item: {size/1024/1024:.2f} MB (skipping HEAD)")
 
 
         # perform segmented download using underlying engine.download functions and update DB accordingly

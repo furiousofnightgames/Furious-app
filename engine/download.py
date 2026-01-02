@@ -15,14 +15,50 @@ def log(msg: str):
 # ============================================================
 
 async def supports_range(url: str, verify: bool = True) -> dict:
-    """Verifica se o servidor suporta downloads parciais."""
+    """
+    Verifica se o servidor suporta downloads parciais e determina o tamanho REAL.
+    Usa 'Range: bytes=0-0' para obter 'Content-Range', que é a fonte mais confiável de tamanho.
+    """
     try:
-        async with httpx.AsyncClient(verify=verify, timeout=httpx.Timeout(30, read=60), follow_redirects=True) as client:
+        async with httpx.AsyncClient(verify=verify, timeout=httpx.Timeout(15, read=30), follow_redirects=True) as client:
+            # Estrutura robusta: Tenta Range 0-0 primeiro (Melhor para tamanho exato)
+            headers = {"Range": "bytes=0-0"}
+            try:
+                r = await client.get(url, headers=headers)
+                
+                # Check for Content-Range (Authoritative)
+                content_range = r.headers.get("content-range", "")
+                # Format: bytes 0-0/12345
+                if r.status_code == 206 and "bytes" in content_range and "/" in content_range:
+                    try:
+                        size = int(content_range.split("/")[-1])
+                        log(f"[INFO] Tamanho confirmado via Content-Range: {size} bytes")
+                        return {
+                            "accept_ranges": True,
+                            "size": size,
+                            "status_code": r.status_code
+                        }
+                    except:
+                        pass
+            except:
+                pass
+
+            # Fallback: HEAD request (Old methods)
             r = await client.head(url)
-            r.raise_for_status()
+            # r.raise_for_status() # Don't raise, just analyze
+            
             accept = r.headers.get("accept-ranges", "").lower()
-            size = r.headers.get("content-length")
-            size = int(size) if size else None
+            size_header = r.headers.get("content-length")
+            size = int(size_header) if size_header else None
+            
+            # Se Range funcionou no HEAD (raro, mas possivel)
+            if accept == "bytes":
+                return {
+                    "accept_ranges": True,
+                    "size": size,
+                    "status_code": r.status_code
+                }
+                
             return {
                 "accept_ranges": accept == "bytes",
                 "size": size,
@@ -30,7 +66,6 @@ async def supports_range(url: str, verify: bool = True) -> dict:
             }
     except Exception as e:
         status_code = None
-        # Tenta extrair status code se for erro HTTP
         if hasattr(e, 'response') and e.response:
             status_code = e.response.status_code
             
@@ -152,7 +187,8 @@ async def download_segmented(
     max_retries: int = 3,
     stop_event: Optional[asyncio.Event] = None,
     verify: bool = True,
-    known_size: Optional[int] = None
+    known_size: Optional[int] = None,
+    preallocate: bool = False  # PERF: Disabled by default to avoid startup delay
 ):
     log(f"HTTP UltraMax: {url}")
     log(f"Destino: {dest_path}")
@@ -161,7 +197,8 @@ async def download_segmented(
     size = known_size
     if not size:
         try:
-            async with httpx.AsyncClient(verify=verify, timeout=httpx.Timeout(30, read=60), follow_redirects=True, http2=False) as client:
+            # PERF: HTTP/2 enabled + reduced timeout for faster HEAD request
+            async with httpx.AsyncClient(verify=verify, timeout=httpx.Timeout(10, read=30), follow_redirects=True, http2=True) as client:
                 h = await client.head(url)
                 h.raise_for_status()
                 cl = h.headers.get("content-length")
@@ -181,15 +218,27 @@ async def download_segmented(
 
     temp_path = dest_path + ".tmp"
 
-    # Pré-alocar arquivo
-    with open(temp_path, "wb") as f:
-        f.seek(size - 1)
-        f.write(b"\0")
+    # PERF: Pré-alocar arquivo apenas se solicitado (evita delay de minutos no Windows)
+    if preallocate:
+        try:
+            with open(temp_path, "wb") as f:
+                f.seek(size - 1)
+                f.write(b"\0")
+            log(f" Arquivo pré-alocado: {size/1024/1024:.2f} MB")
+        except Exception as e:
+            log(f"[WARN] Pré-alocação falhou (continuando sem): {e}")
+    else:
+        # Create empty file - will grow as chunks are written
+        open(temp_path, "wb").close()
 
-    CHUNK = 32 * 1024 * 1024  # 32 MB (Balanceado para I/O e rede)
-    # Ajustado para 32 workers após testes reais mostrarem gargalo com 64
+    # PERF: Progressive chunk sizing - start small for quick feedback, grow for efficiency
+    CHUNK_INITIAL = 4 * 1024 * 1024   # 4 MB for first 10% (quick progress)
+    CHUNK_STEADY = 16 * 1024 * 1024    # 16 MB for rest (balanced I/O)
+    CHUNK_BATCH_SIZE = 4  # PERF: Grab 4 chunks per lock acquisition to reduce contention
+    
+    # Restoring full power: 32 workers
     WORKERS = min(32, n_conns * 4) 
-    log(f"Iniciando download com {WORKERS} workers simultâneos (Chunk {CHUNK/1024/1024:.0f}MB, HTTP/2={'ATIVADO' if True else 'DESATIVADO'})...")
+    log(f"Iniciando download com {WORKERS} workers simultâneos (Chunk progressivo 4-16MB, HTTP/2=ATIVADO)...")
 
     # Initialize UI with 0/total to avoid "unknown" state
     if progress_cb:
@@ -210,130 +259,205 @@ async def download_segmented(
         keepalive_expiry=300.0
     )
 
-    async def worker(wid: int):
-        nonlocal next_offset, downloaded_total, stop_flag, last_log, active_workers
-        
-        # Staggered start: evita "congelamento" inicial abrindo conexões aos poucos
-        await asyncio.sleep(wid * 0.05) 
-        
-        async with httpx.AsyncClient(
-            verify=verify,
-            timeout=httpx.Timeout(30, read=300),
-            limits=connector_limits,
-            follow_redirects=True,
-            http2=True
-        ) as client:
-            active_workers += 1
-            while True:
-                # Verificar se foi pausado/cancelado
-                if stop_event and stop_event.is_set():
-                    stop_flag = True
-                if stop_flag:
-                    break
+    # PERF: Use SINGLE shared client for all workers to avoid overhead of 32 SSL contexts
+    # pooling is efficient this way.
+    async with httpx.AsyncClient(
+        verify=verify,
+        timeout=httpx.Timeout(30, read=300),
+        limits=connector_limits,
+        follow_redirects=True,
+        http2=True 
+    ) as main_client:
 
-                async with lock:
-                    if next_offset >= size:
-                        break
-                    start = next_offset
-                    end = min(start + CHUNK - 1, size - 1)
-                    next_offset = end + 1
-                    
-                headers = {"Range": f"bytes={start}-{end}"}
-                buffer = bytearray()
-                expected_chunk_size = end - start + 1  # Tamanho exato que devemos baixar
-
-                # Tentativa de retry para robustez
-                MAX_RETRIES = 5
-                success = False
-                for attempt in range(MAX_RETRIES):
-                    try:
-                        async with client.stream("GET", url, headers=headers) as r:
-                            if r.status_code not in (200, 206):
-                                if r.status_code >= 500:
-                                     raise Exception(f"Server error {r.status_code}")
-                                
-                                stop_flag = True
-                                log(f"[ERRO] HTTP {r.status_code} no worker {wid}")
-                                return
-
-                            ctype = r.headers.get("content-type", "").lower()
-                            if "text/html" in ctype:
-                                stop_flag = True
-                                log(f"[ERRO] Link invalido! Pagina HTML detectada.")
-                                return
-
-                            # CRITICAL: Limit bytes read to prevent over-fetching
-                            bytes_read = 0
-                            async for chunk in r.aiter_bytes(chunk_size=1024*1024):
-                                bytes_to_add = min(len(chunk), expected_chunk_size - bytes_read)
-                                if bytes_to_add > 0:
-                                    buffer.extend(chunk[:bytes_to_add])
-                                    bytes_read += bytes_to_add
-                                
-                                if bytes_read >= expected_chunk_size:
-                                    break  # Stop reading if we got all we need
-                        
-                        success = True
-                        break
-
-                    except Exception as e:
-                        if attempt < MAX_RETRIES - 1:
-                            delay = (attempt + 1) * 2
-                            await asyncio.sleep(delay)
-                        else:
-                            stop_flag = True
-                            log(f"[ERRO] Worker {wid} falhou definitivamente: {e}")
-                            return
-                
-                if not success:
-                    break
-
-                # Escrevendo no disco
-                try:
-                    with open(temp_path, "r+b") as f:
-                        f.seek(start)
-                        f.write(buffer)
-                except Exception as e:
-                    log(f"[ERRO] Erro de escrita IO no worker {wid}: {e}")
-                    stop_flag = True
-                    return
-
-                async with lock:
-                    downloaded_total += len(buffer)
-                    now = time.time()
-                    if now - last_log >= 1:
-                        elapsed = now - start_time
-                        spd = downloaded_total / elapsed if elapsed > 0 else 0
-                        pct = downloaded_total / size * 100
-                        eta = (size - downloaded_total) / spd if spd > 0 else 0
-                        
-                        # Log mais rico
-                        log(f"[DL] {downloaded_total/1024/1024:.0f}/{size/1024/1024:.0f}MB "
-                            f"({pct:.1f}%) | {spd/1024/1024:.1f} MB/s | "
-                            f"Workers: {active_workers}/{WORKERS} | "
-                            f"ETA {int(eta//60)}m {int(eta%60):02d}s")
-                        
-                        last_log = now
-                        if progress_cb:
-                            await progress_cb(downloaded_total, size)
-                        
-                        if on_part_progress:
-                            await on_part_progress(0, downloaded_total, size)
+        async def worker(wid: int):
+            nonlocal next_offset, downloaded_total, stop_flag, last_log, active_workers
             
-            active_workers -= 1
+            # PERF: Quick staggered start
+            await asyncio.sleep(wid * 0.005) 
+            
+            # Use shared client
+            client = main_client
+            active_workers += 1
+            
+            # log(f"[DEBUG] Worker {wid} iniciado")
 
-    tasks = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    for r in results:
-        if isinstance(r, Exception):
-            log(f"[CRÍTICO] Exceção não tratada no worker: {r}")
+            try:
+                while True:
+                    # Verificar se foi pausado/cancelado
+                    if stop_event and stop_event.is_set():
+                        stop_flag = True
+                    if stop_flag:
+                        break
+
+                    # PERF: Batch chunk acquisition
+                    chunks_to_download = []
+                    
+                    async with lock:
+                        for _ in range(CHUNK_BATCH_SIZE):
+                            if next_offset >= size:
+                                break
+                            
+                            progress_pct = (next_offset / size) * 100 if size > 0 else 0
+                            current_chunk_size = CHUNK_INITIAL if progress_pct < 10 else CHUNK_STEADY
+                            
+                            start = next_offset
+                            end = min(start + current_chunk_size - 1, size - 1)
+                            next_offset = end + 1
+                            chunks_to_download.append((start, end))
+                    
+                    if not chunks_to_download:
+                        break
+                    
+                    for start, end in chunks_to_download:
+                        headers = {"Range": f"bytes={start}-{end}"}
+                        expected_chunk_size = end - start + 1
+                        
+                        MAX_RETRIES = 5
+                        success = False
+                        
+                        # Streaming direto para o disco para evitar "congelamento" visual e pico de memória
+                        for attempt in range(MAX_RETRIES):
+                            try:
+                                # log(f"[DEBUG] W{wid} REQ {start}-{end}")
+                                async with client.stream("GET", url, headers=headers) as r:
+                                    if r.status_code not in (200, 206):
+                                        log(f"[ERRO] HTTP {r.status_code} no worker {wid}")
+                                        if r.status_code >= 500:
+                                             raise Exception(f"Server error {r.status_code}")
+                                        stop_flag = True
+                                        return
+
+                                    # Confirm connection established
+                                    # log(f"[DEBUG] W{wid} HEADERS OK") 
+                                    
+                                    ctype = r.headers.get("content-type", "").lower()
+                                    if "text/html" in ctype:
+                                        log(f"[ERRO] Link invalido! Pagina HTML detectada.")
+                                        stop_flag = True
+                                        return
+
+                                    bytes_read = 0
+                                    
+                                    async with aiofiles.open(temp_path, "r+b") as f:
+                                        await f.seek(start)
+                                        
+                                        async for chunk in r.aiter_bytes(chunk_size=64*1024): # 64KB chunks
+                                            if not chunk:
+                                                break
+                                            
+                                            # CRITICAL: Check cancellation inside the inner loop!
+                                            if stop_event and stop_event.is_set():
+                                                stop_flag = True
+                                                break
+                                            if stop_flag:
+                                                break
+
+                                            # Write immediately
+                                            await f.write(chunk)
+                                            
+                                            len_chunk = len(chunk)
+                                            bytes_read += len_chunk
+                                            
+                                            # Update stats safely
+                                            async with lock:
+                                                downloaded_total += len_chunk
+                                                now = time.time()
+                                                # Log apenas a cada 1 segundo para não floodar
+                                                if now - last_log >= 1:
+                                                    elapsed = now - start_time
+                                                    spd = downloaded_total / elapsed if elapsed > 0 else 0
+                                                    pct = downloaded_total / size * 100
+                                                    eta = (size - downloaded_total) / spd if spd > 0 else 0
+                                                    log(f"[DL] {downloaded_total/1024/1024:.0f}/{size/1024/1024:.0f}MB "
+                                                        f"({pct:.1f}%) | {spd/1024/1024:.1f} MB/s | "
+                                                        f"Workers: {active_workers}/{WORKERS} | "
+                                                        f"ETA {int(eta//60)}m {int(eta%60):02d}s")
+                                                    last_log = now
+                                                    if progress_cb:
+                                                        await progress_cb(downloaded_total, size)
+                                                    if on_part_progress:
+                                                        await on_part_progress(0, downloaded_total, size)
+
+                                            if bytes_read >= expected_chunk_size:
+                                                break
+                                            
+                                            if stop_flag:
+                                                break
+                                
+                                success = True
+                                break
+                            except Exception as e:
+                                log(f"[DEBUG] W{wid} Error: {e}")
+                                if attempt < MAX_RETRIES - 1:
+                                    await asyncio.sleep(1)
+                                else:
+                                    stop_flag = True
+                                    log(f"[ERRO] Worker {wid} falhou: {e}")
+                                    return
+                        
+                        if not success:
+                            break
+                        
+                        if stop_flag:
+                             break
+
+            finally:
+                active_workers -= 1
+                log(f"[DEBUG] Worker {wid} encerrado")
+
+        tasks = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
+        
+        if stop_event:
+            # Create a wrapper for gather to wait on it
+            # FIXED: gather returns a Future, do not wrap in create_task
+            gather_task = asyncio.gather(*tasks, return_exceptions=True)
+            stop_waiter = asyncio.create_task(stop_event.wait())
+            
+            # Race: Either all tasks finish OR stop_event is triggered
+            done, _ = await asyncio.wait(
+                [gather_task, stop_waiter], 
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            if stop_waiter in done:
+                log("[DEBUG] Cancelamento FORÇADO detectado. Parando workers...")
+                stop_flag = True # Flag global
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                
+                # Wait for tasks to handle cancellation (cleanup finally blocks)
+                try:
+                    await gather_task
+                except:
+                    pass
+            else:
+                # Tasks finished normally, cancel the waiter
+                stop_waiter.cancel()
+                try:
+                    await stop_waiter
+                except asyncio.CancelledError:
+                    pass
+            
+            # Get results from the gather task
+            results = await gather_task
+        else:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for r in results:
+            if isinstance(r, Exception) and not isinstance(r, asyncio.CancelledError):
+                log(f"[CRÍTICO] Exceção não tratada no worker: {r}")
 
     # Verificação de integridade CRÍTICA
     if downloaded_total != size:
+        was_cancelled = stop_flag or (stop_event and stop_event.is_set())
+        
+        if was_cancelled:
+             log(f"[AVISO] Download interrompido pelo usuário. {downloaded_total}/{size} bytes.")
+             # Não raise Exception se foi cancelado intencionalmente
+             return
+
         error_msg = f"Download incompleto! Baixado: {downloaded_total}, Esperado: {size}"
-        if stop_flag:
-            error_msg += " (Interrompido por erro nos workers)"
         log(f"[ERRO] {error_msg}")
         
         # Limpar arquivo temporário se falhou

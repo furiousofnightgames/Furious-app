@@ -89,15 +89,34 @@ def main():
         if env.get("RUN_RELOAD") == "1":
             args.insert(4, "--reload")
 
-        subprocess.run(args, env=env)
+        # Executa o uvicorn com Popen para ter controle do processo
+        process = subprocess.Popen(args, env=env)
+        
+        # Aguarda o processo terminar
+        process.wait()
 
     except KeyboardInterrupt:
-        print("\n\n👋 Servidor encerrado!")
+        print("\n\n👋 Interrupção recebida! Encerrando...")
     except Exception as e:
         print(f"\n❌ Erro ao iniciar servidor: {e}")
         print("\n💡 Certifique-se de que o uvicorn está instalado:")
         print("   pip install uvicorn")
         sys.exit(1)
+    finally:
+        # Garante que o processo filho seja morto
+        if 'process' in locals() and process:
+            try:
+                if process.poll() is None:
+                    print("🔪 Matando processos órfãos...")
+                    process.terminate()
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                    print("✅ Processos limpos.")
+            except Exception:
+                pass
+        print("👋 Servidor encerrado!")
 
 if __name__ == "__main__":
     main()
