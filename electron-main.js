@@ -401,13 +401,28 @@ ipcMain.handle('get-backend-url', () => BACKEND_URL);
 ipcMain.handle('is-dev', () => isDev);
 
 const { dialog } = require('electron');
-ipcMain.handle('select-folder', async () => {
+ipcMain.handle('select-folder', async (event, startPath) => {
   if (!mainWindow) return null;
+
+  let defaultPath = undefined;
+  try {
+    defaultPath = startPath || app.getPath('downloads');
+  } catch (e) { }
+
   const result = await dialog.showOpenDialog(mainWindow, {
+    defaultPath: defaultPath,
     properties: ['openDirectory', 'createDirectory', 'promptToCreate']
   });
   if (result.canceled || result.filePaths.length === 0) {
     return null;
   }
   return result.filePaths[0];
+});
+
+ipcMain.handle('get-default-downloads-path', () => {
+  try {
+    return app.getPath('downloads');
+  } catch (e) {
+    return null;
+  }
 });

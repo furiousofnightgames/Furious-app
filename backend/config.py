@@ -5,24 +5,25 @@ ARIA2C_PATH = os.environ.get("ARIA2C_PATH")
 
 _app_data_dir = os.environ.get("APP_DATA_DIR")
 
+import pathlib
+
 # Default download dir: prefer the user's Downloads folder when available
 _env_dl = os.environ.get("DOWNLOADS_DIR")
 if _env_dl:
-	DOWNLOADS_DIR = _env_dl
+	DOWNLOADS_DIR = os.path.abspath(_env_dl)
 else:
-	home = os.path.expanduser("~") or os.getcwd()
-	user_dl = os.path.join(home, "Downloads")
-	if os.path.exists(user_dl):
-		DOWNLOADS_DIR = user_dl
-	else:
-		if _app_data_dir:
-			try:
-				os.makedirs(_app_data_dir, exist_ok=True)
-			except Exception:
-				pass
-			DOWNLOADS_DIR = os.path.join(_app_data_dir, "downloads")
+	# Robust detection using pathlib
+	try:
+		home = pathlib.Path.home()
+		user_dl = home / "Downloads"
+		if user_dl.exists():
+			DOWNLOADS_DIR = str(user_dl.absolute())
 		else:
-			DOWNLOADS_DIR = os.path.join(os.getcwd(), "downloads")
+			DOWNLOADS_DIR = str(home.absolute())
+	except Exception:
+		# Absolute fallback to generic profile if detection fails completely
+		DOWNLOADS_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
+
 
 # other defaults
 DEFAULT_N_CONNS = int(os.environ.get("DEFAULT_N_CONNS", "4"))

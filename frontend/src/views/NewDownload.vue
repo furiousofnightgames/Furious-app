@@ -59,7 +59,7 @@
           <div class="flex gap-2">
             <div class="flex-1 p-3 bg-gray-900/70 border border-cyan-500/20 rounded-lg hover:border-cyan-500/40 transition-all">
               <p class="text-sm text-cyan-300 truncate font-mono">
-                {{ downloadForm.destination || 'downloads' }}
+                {{ downloadForm.destination || 'Detectando pasta...' }}
               </p>
             </div>
             <Button type="button" @click="browseFolder" variant="outline" size="md" :disabled="browseLoading" class="flex items-center gap-1 whitespace-nowrap btn-translucent">
@@ -220,7 +220,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDownloadStore } from '../stores/download'
 import { useToastStore } from '../stores/toast'
@@ -237,12 +237,45 @@ const downloadStore = useDownloadStore()
 const downloadForm = ref({
   url: '',
   name: '',
-  destination: 'downloads',
+  destination: '',
   verify_ssl: true
 })
 const showManualFolderModal = ref(false)
 const manualFolderPath = ref('')
 const browseLoading = ref(false)
+import { watch } from 'vue'
+
+// Safety: Watch for "phantom" default values and clear them
+watch(() => downloadForm.value.destination, (newVal) => {
+  if (typeof newVal === 'string' && newVal.toLowerCase().trim() === 'downloads') {
+    console.warn('Blocked invalid relative path "downloads"')
+    downloadForm.value.destination = ''
+  }
+})
+
+onMounted(async () => {
+  try {
+    if (window.electronAPI?.getDefaultDownloadsPath) {
+      console.log('Detecting system downloads path (Electron)...')
+      const systemDownloads = await window.electronAPI.getDefaultDownloadsPath()
+      if (systemDownloads) {
+        console.log('System downloads path detected:', systemDownloads)
+        downloadForm.value.destination = systemDownloads
+        return
+      }
+    }
+    
+    // Fallback: try backend API
+    console.log('Detecting system downloads path (API)...')
+    const resp = await api.get('/api/system/default-path')
+    if (resp.data && resp.data.path) {
+      console.log('System downloads path detected via API:', resp.data.path)
+      downloadForm.value.destination = resp.data.path
+    }
+  } catch (e) {
+    console.error('Failed to get system downloads path', e)
+  }
+})
 
 const preflightLoading = ref(false)
 const preflightResult = ref(null)
@@ -301,7 +334,9 @@ async function browseFolder() {
   browseLoading.value = true
   try {
     if (window.electronAPI?.selectFolder) {
-      const folder = await window.electronAPI.selectFolder()
+      // Pass the current destination as the starting path for the dialog
+      const currentPath = downloadForm.value.destination || ''
+      const folder = await window.electronAPI.selectFolder(currentPath)
       if (folder) downloadForm.value.destination = folder
       browseLoading.value = false
       return
@@ -333,6 +368,12 @@ async function handleDownload() {
     try { const ts = useToastStore(); ts.push('Erro', 'Por favor, insira uma URL') } catch (e) {}
     return
   }
+  
+  // Ensure destination is set
+  if (!downloadForm.value.destination) {
+    try { const ts = useToastStore(); ts.push('Atenção', 'Por favor, selecione uma pasta de destino.') } catch (e) {}
+    return
+  }
 
   try {
     // Parse URL para validação básica
@@ -345,7 +386,7 @@ async function handleDownload() {
     const config = {
       url: downloadForm.value.url.trim(),
       name: downloadForm.value.name || downloadForm.value.url.split('/').pop(),
-      destination: downloadForm.value.destination || 'downloads',
+      destination: downloadForm.value.destination,
       verify_ssl: downloadForm.value.verify_ssl !== false
     }
 

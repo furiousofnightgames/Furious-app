@@ -423,6 +423,23 @@ app.add_middleware(
 app.get("/api/library")(library_index)
 
 
+@app.get("/api/system/default-path")
+def get_system_default_path():
+    """
+    Retorna o caminho padrão de Downloads do sistema.
+    Útil como fallback se o Electron IPC falhar.
+    """
+    try:
+        home = pathlib.Path.home()
+        downloads = home / "Downloads"
+        if not downloads.exists():
+            downloads = home  # Fallback to home if no Downloads folder
+        return {"path": str(downloads.absolute())}
+    except Exception as e:
+        return {"path": "", "error": str(e)}
+
+
+
 class LoadJsonRequest(BaseModel):
     url: str
 
@@ -1227,7 +1244,18 @@ async def create_job(req: CreateJobReq):
         session.refresh(item)
 
     #  Use 'destination' from frontend (modal choice), fallback to 'dest' if provided
-    download_dest = req.destination or req.dest or backend_config.DOWNLOADS_DIR
+    #  CRITICAL FIX: Ignore relative paths (like "downloads") to prevent writing to app dir
+    raw_dest = req.destination or req.dest
+    download_dest = None
+    
+    if raw_dest:
+        if os.path.isabs(raw_dest):
+            download_dest = raw_dest
+        else:
+            print(f" [WARN] Relative path ignored: {raw_dest}")
+            
+    if not download_dest:
+        download_dest = backend_config.DOWNLOADS_DIR
     print(f" Destination recebido: destination={req.destination}, dest={req.dest}")
     print(f" Usando: {download_dest}")
     
