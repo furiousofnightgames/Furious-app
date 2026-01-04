@@ -83,31 +83,57 @@ def _normalize_library_name(name: str) -> str:
     s = re.sub(r"^#+", "", s)
     s = re.sub(r"\[[^\]]+\]", " ", s)
     s = re.sub(r"\([^\)]+\)", " ", s)
-    s = re.sub(r"\b\d+(?:\.\d+){1,}\b", " ", s)
     s = re.sub(r"\b(v|ver|version)\s*\d+(?:\.\d+)*\b", " ", s)
-    s = re.sub(r"\b(build|b)\s*\d{3,}\b", " ", s)
+    s = re.sub(r"\b(build|b)\s*\d+(?:\.\d+)*\b", " ", s)
     s = re.sub(r"\b(update|patch|hotfix)\s*\d+(?:\.\d+)*\b", " ", s)
-    s = re.sub(r"\b(release|final|proper|complete|deluxe|ultimate|remaster(?:ed)?|definitive)\b", " ", s)
+    s = re.sub(r"\b\d+(?:\.\d+){1,}\b", " ", s)
+    s = re.sub(r"\b(release|final|proper|complete|deluxe|ultimate|remaster(?:ed)?|definitive|bundle|redux)\b", " ", s)
     s = re.sub(r"\b(multi\s*\d+|multi\d+)\b", " ", s)
+    s = re.sub(r"\bupdate\s+from\b.*", " ", s) # Clean "Update From v1 to v2" entirely
     s = re.sub(r"\b(selective\s*download|repack)\b", " ", s)
     s = re.sub(r"\b(repack|fitgirl|dodi|elamigos|gog|steamrip|codex|plaza|skidrow|reloaded|goldberg|tenoke|xatab)\b", " ", s)
     # Platform/compatibility noise often appended to titles
     s = re.sub(r"\bwindows\s*(?:xp|vista|7|8|8\.1|10|11)(?:\s*-\s*(?:xp|vista|7|8|8\.1|10|11))*\b", " ", s)
     s = re.sub(r"\bwin\s*(?:xp|7|8|8\.1|10|11)\b", " ", s)
     s = re.sub(r"\b(?:compatible|compatibility)\b", " ", s)
-    s = re.sub(r"\s*(?:\+|\-|–|:|\|)\s*[^\n]*\b(dlc|dlcs|ost|soundtrack|bonus|pack|collection|edition)\b[^\n]*", " ", s)
+    s = re.sub(r"\s*(?:\+|\-|–|:|\|)\s*[^\n]*\b(dlc|dlcs|ost|soundtrack|bonus|pack|collection|edition|bundle)\b[^\n]*", " ", s)
     # Mod-related descriptors at the end shouldn't split the same base game into separate groups
     # (kept conservative to avoid breaking titles like "garry's mod" which won't match as a suffix segment)
     s = re.sub(r"\s*(?:\+|\-|–|:|\|)\s*[^\n]*\b(modpack|mod\s*pack|mods|mod|retexture(?:d)?|retextured|texture(?:d)?|graphics|redux|overhaul|remastered\s*mod)\b[^\n]*", " ", s)
 
-    # Specific normalization: GTA V variants (Legacy/Enhanced) should be grouped together.
-    # Keep this scoped to GTA V so we don't accidentally merge unrelated titles like "Legacy of Kain".
+    # Specific normalization: GTA variants should be grouped together
+    # This handles Legacy/Enhanced/Definitive/Nextgen editions
     try:
+        # GTA V specific
         if re.search(r"\b(grand\s+theft\s+auto\s+v|gta\s*5|gta\s*v)\b", s):
             s = re.sub(r"\bgta\s*5\b", "grand theft auto v", s)
             s = re.sub(r"\bgta\s*v\b", "grand theft auto v", s)
-            s = re.sub(r"\b(legacy|enhanced)\b", " ", s)
+            s = re.sub(r"\b(legacy|enhanced|online)\b", " ", s)
             s = re.sub(r"\bpremium\b", " ", s)
+            s = re.sub(r"grand theft auto v[\W_]+grand theft auto v", "grand theft auto v", s)
+        
+        # GTA IV specific
+        elif re.search(r"\b(grand\s+theft\s+auto\s+iv|gta\s*4|gta\s*iv)\b", s):
+            s = re.sub(r"\bgta\s*4\b", "grand theft auto iv", s)
+            s = re.sub(r"\bgta\s*iv\b", "grand theft auto iv", s)
+        
+        # GTA San Andreas specific
+        elif re.search(r"\b(grand\s+theft\s+auto.*san\s+andreas|gta.*san\s+andreas)\b", s):
+            s = re.sub(r"\bgta\b", "grand theft auto", s)
+            s = re.sub(r"\bnextgen\b", " ", s)
+            s = re.sub(r"\b(definitive|remastered|edition)\b", " ", s)
+        
+        # GTA Vice City specific  
+        elif re.search(r"\b(grand\s+theft\s+auto.*vice\s+city|gta.*vice\s+city)\b", s):
+            s = re.sub(r"\bgta\b", "grand theft auto", s)
+            s = re.sub(r"\bnextgen\b", " ", s)
+            s = re.sub(r"\b(definitive|remastered|edition)\b", " ", s)
+        
+        # GTA III specific
+        elif re.search(r"\b(grand\s+theft\s+auto\s+iii|gta\s*3|gta\s*iii)\b", s):
+            s = re.sub(r"\bgta\s*3\b", "grand theft auto iii", s)
+            s = re.sub(r"\bgta\s*iii\b", "grand theft auto iii", s)
+            s = re.sub(r"\b(anniversary|hd|edition)\b", " ", s)
     except Exception:
         pass
 
@@ -271,6 +297,91 @@ async def _build_library_payload() -> Dict[str, Any]:
                 groups[key] = {"key": key, "display_name": it.get('name') or key, "versions": [it]}
             else:
                 g["versions"].append(it)
+
+    #  MERGE PASS: Unify "Name Only" groups into "Steam ID" groups
+    # This fixes split cards where some items have AppID and others don't (e.g. GTA V)
+    
+    # 1. Map Normalized Name -> Steam Group Key
+    name_to_steam_key = {}
+    for key, g in groups.items():
+        if key.startswith("steam:"):
+            # Find the most frequent name or just usage the first valid one
+            # Use _normalize_library_name on the group's versions
+            candidates = {}
+            for v in g["versions"]:
+                n = _normalize_library_name(str(v.get("name") or ""))
+                if n:
+                    candidates[n] = candidates.get(n, 0) + 1
+            
+            if candidates:
+                # Pick most common name
+                best_name = max(candidates.items(), key=lambda x: x[1])[0]
+                name_to_steam_key[best_name] = key
+
+
+    # 2. Merge Name Groups into Steam Groups
+    keys_to_remove = []
+    for key, g in groups.items():
+        if not key.startswith("steam:") and not key.startswith("url:"):
+            # This is likely a Name group (key is the normalized name)
+            target_steam_key = name_to_steam_key.get(key)
+            if target_steam_key and target_steam_key in groups:
+                 # MERGE!
+                 target_group = groups[target_steam_key]
+                 target_group["versions"].extend(g["versions"])
+                 keys_to_remove.append(key)
+    
+    for k in keys_to_remove:
+        del groups[k]
+    
+    # DEBUG: Show all groups before second merge
+    print(f"\n[DEBUG] Grupos antes do segundo merge: {len(groups)}")
+    gta_groups = {k: g for k, g in groups.items() if 'grand theft auto' in g.get('display_name', '').lower()}
+    if gta_groups:
+        print("[DEBUG] Grupos GTA encontrados:")
+        for key, g in gta_groups.items():
+            print(f"  - {key}: '{g.get('display_name')}' ({len(g.get('versions', []))} versões)")
+    
+    # 3. SECOND MERGE PASS: Consolidate Steam groups with identical normalized names
+    # This handles cases like GTA San Andreas (AppID 12120) + GTA San Andreas Definitive (AppID 1547000)
+    # Both normalize to "grand theft auto san andreas" but have different AppIDs
+    
+    # Build reverse map: normalized_name -> list of steam keys
+    normalized_to_steam_keys: Dict[str, List[str]] = {}
+    for key, g in groups.items():
+        if key.startswith("steam:"):
+            candidates = {}
+            for v in g["versions"]:
+                n = _normalize_library_name(str(v.get("name") or ""))
+                if n:
+                    candidates[n] = candidates.get(n, 0) + 1
+            
+            if candidates:
+                best_name = max(candidates.items(), key=lambda x: x[1])[0]
+                if best_name not in normalized_to_steam_keys:
+                    normalized_to_steam_keys[best_name] = []
+                normalized_to_steam_keys[best_name].append(key)
+    
+    # Merge duplicates: keep the first, merge others into it
+    keys_to_remove_2 = []
+    for norm_name, steam_keys in normalized_to_steam_keys.items():
+        if len(steam_keys) > 1:
+            print(f"[MERGE] Consolidando '{norm_name}': {len(steam_keys)} grupos Steam -> 1 grupo")
+            # Keep first, merge rest
+            primary_key = steam_keys[0]
+            primary_group = groups[primary_key]
+            
+            for secondary_key in steam_keys[1:]:
+                secondary_group = groups[secondary_key]
+                print(f"  - Mesclando {secondary_key} ({len(secondary_group['versions'])} versões) em {primary_key}")
+                primary_group["versions"].extend(secondary_group["versions"])
+                keys_to_remove_2.append(secondary_key)
+    
+    for k in keys_to_remove_2:
+        del groups[k]
+    
+    if keys_to_remove_2:
+        print(f"[MERGE] Total de grupos mesclados: {len(keys_to_remove_2)}")
 
     out_groups: List[Dict[str, Any]] = []
     for key, g in groups.items():

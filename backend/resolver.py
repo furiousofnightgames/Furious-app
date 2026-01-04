@@ -60,6 +60,16 @@ def _upsert_db_alias(key: Optional[str], app_id: Optional[int]) -> None:
         k = str(key).strip().lower()
         if not _is_safe_cache_key(k):
             return
+        
+        # CRITICAL: Validate that the AppID actually matches the key before caching
+        # This prevents pollution like "GTA II" -> 3240220 (which is GTA V)
+        if not _is_appid_match_plausible(k, int(app_id)):
+            try:
+                print(f"[Resolver] BLOCKED bad alias: '{k}' -> {app_id} (plausibility check failed)")
+            except:
+                pass
+            return
+        
         session = get_session()
         try:
             existing = session.exec(select(ResolverAlias).where(ResolverAlias.key == k)).first()
@@ -244,11 +254,21 @@ def _is_name_match_plausible(query: str, candidate_name: str) -> bool:
 # ============================================================================
 
 AUTOMATIC_RULES = {
-    # Formato: "entrada_normalizada" -> "nome_oficial_steam"
+    # GTA Series - Specific mappings to prevent confusion
     "gta v": "Grand Theft Auto V",
     "gta 5": "Grand Theft Auto V",
     "gta vi": "Grand Theft Auto VI",
     "gta 6": "Grand Theft Auto VI",
+    "gta iv": "Grand Theft Auto IV",
+    "gta 4": "Grand Theft Auto IV",
+    "gta iii": "Grand Theft Auto III",
+    "gta 3": "Grand Theft Auto III",
+    "gta vice city": "Grand Theft Auto Vice City",
+    "gta san andreas": "Grand Theft Auto San Andreas",
+    "gta ii": "Grand Theft Auto 2",
+    "gta 2": "Grand Theft Auto 2",
+    
+    # Other games
     "lords of the fallen 2023": "Lords of the Fallen",
     "the lords of the fallen 2023": "Lords of the Fallen",
     "blood refreshed supply": "Blood: Fresh Supply",

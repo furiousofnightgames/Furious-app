@@ -309,9 +309,10 @@ class SteamClient:
         
         print(f"[SteamService Debug] '{query}' -> Melhor match: '{self._app_map.get(best_id)}' (Score: {best_ratio:.2f})")
         
-        # Aceitar matches acima de 0.85 (fuzzy rigoroso para evitar falso positivo)
-        # Se for menor, melhor falhar e tentar Fallback (SteamGridDB) ou Split Query
-        if best_ratio > 0.88:
+        # Aceitar matches acima de 0.92 (fuzzy MUITO rigoroso para evitar falso positivo)
+        # Preferimos falhar e usar fallback (SteamGridDB) ou agrupar por nome
+        # do que pegar o jogo errado
+        if best_ratio > 0.92:
             return best_id
             
         return None
@@ -379,6 +380,9 @@ class SteamClient:
             "emulator", "emulators", "switch", "yuzu", "ryujinx", "citra", "cemu", "build", "update"
         ]
         
+        # Mod-related tags
+        mod_tags = ["redux", "modpack", "modded", "mods", "mod", "graphics", "retextured", "retexture", "overhaul", "texture", "vanilla", "downgrader"]
+        
         # General tags to remove (but NOT the number before them)
         # Removed "game" from this list as it kills "Game Tycoon" -> "Tycoon"
         general_tags = [
@@ -389,7 +393,7 @@ class SteamClient:
             "digital", "deluxe", "ultimate", "gold", "silver", "platinum", "premium",
             "definitive", "director's", "directors", "cut", "expanded", "extended", "enhanced",
             "season", "pass"
-        ]
+        ] + mod_tags
         
         # Remove "Number + Quantity Tag" (e.g. "5 DLCs")
         q_pattern = "|".join(quantity_tags)
@@ -485,11 +489,14 @@ class SteamClient:
             api_id = await do_api_search(api_term)
             
             # Retry API com menos palavras
+            # Retry API com menos palavras
             if not api_id and " " in api_term:
                 words = api_term.split()
-                if len(words) > 1:
-                    short_q = " ".join(words[:2])
-                    print(f"[SteamService] [API] Retry curto: '{short_q}'")
+                # Só reduz se tivermos mais de 2 palavras. "Grand Theft" (2) é muito genérico.
+                # "Grand Theft Auto" (3) é ok.
+                if len(words) > 2:
+                    short_q = " ".join(words[:-1])
+                    print(f"[SteamService] [API] Retry curto (Smart): '{short_q}'")
                     await asyncio.sleep(0.2)
                     api_id = await do_api_search(short_q)
             
