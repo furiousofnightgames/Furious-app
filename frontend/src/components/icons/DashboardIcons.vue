@@ -3,7 +3,7 @@
   <svg v-if="type === 'speed'" class="w-full h-full" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="speedGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style="stop-color: #06b6d4; stop-opacity: 1" />
+        <stop offset="0%" style="stop-color: #0ea5e9; stop-opacity: 1" />
         <stop offset="100%" style="stop-color: #ec4899; stop-opacity: 1" />
       </linearGradient>
       <filter id="speedGlow" x="-50%" y="-50%" width="200%" height="200%">
@@ -35,7 +35,7 @@
   <svg v-else-if="type === 'downloads'" class="w-full h-full" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="downloadsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style="stop-color: #06b6d4; stop-opacity: 1" />
+        <stop offset="0%" style="stop-color: #0ea5e9; stop-opacity: 1" />
         <stop offset="100%" style="stop-color: #0ea5e9; stop-opacity: 1" />
       </linearGradient>
     </defs>
@@ -68,7 +68,7 @@
   <svg v-else-if="type === 'active'" class="w-full h-full" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="activeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style="stop-color: #06b6d4; stop-opacity: 1" />
+        <stop offset="0%" style="stop-color: #0ea5e9; stop-opacity: 1" />
         <stop offset="50%" style="stop-color: #8b5cf6; stop-opacity: 1" />
         <stop offset="100%" style="stop-color: #ec4899; stop-opacity: 1" />
       </linearGradient>
@@ -129,7 +129,7 @@
     <defs>
       <linearGradient id="runGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" style="stop-color: #10b981; stop-opacity: 1" />
-        <stop offset="100%" style="stop-color: #06b6d4; stop-opacity: 1" />
+        <stop offset="100%" style="stop-color: #0ea5e9; stop-opacity: 1" />
       </linearGradient>
     </defs>
     <!-- Background circle -->
@@ -156,7 +156,7 @@
     <defs>
       <linearGradient id="fileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" style="stop-color: #3b82f6; stop-opacity: 1" />
-        <stop offset="100%" style="stop-color: #06b6d4; stop-opacity: 1" />
+        <stop offset="100%" style="stop-color: #0ea5e9; stop-opacity: 1" />
       </linearGradient>
     </defs>
     <!-- File -->

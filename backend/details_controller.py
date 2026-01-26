@@ -15,7 +15,7 @@ class GameDetailsController:
     Integra múltiplas fontes com fallback robusto
     """
     
-    async def get_game_details(self, app_id: Optional[int] = None, game_name: Optional[str] = None) -> Dict[str, Any]:
+    async def get_game_details(self, app_id: Optional[int] = None, game_name: Optional[str] = None, priority: bool = False) -> Dict[str, Any]:
         """
         Busca detalhes completos do jogo
         
@@ -30,26 +30,48 @@ class GameDetailsController:
         requested_name = game_name
         resolved_name = game_name
 
+        # Se veio AppID mas sem nome, tenta recuperar nome do Cache/DB (Necessário para IDs Sintéticos)
+        if app_id and not game_name:
+            from backend.models.models import GameMetadata
+            from backend.db import get_session
+            session = get_session()
+            try:
+                meta = session.get(GameMetadata, app_id)
+                if meta and meta.name:
+                    game_name = meta.name
+                    resolved_name = meta.name
+                    print(f"[DetailsController] Nome recuperado do banco para ID {app_id}: '{game_name}'")
+            finally:
+                session.close()
+
         # Se não tem app_id, tenta resolver pelo nome
         if not app_id and game_name:
             candidates = self._build_name_candidates(game_name)
             print(f"[DetailsController] Resolvendo AppID para '{game_name}'...")
             for candidate in candidates:
-                app_id = await self._resolve_app_id(candidate)
+                app_id = await self._resolve_app_id(candidate, priority=priority)
                 if app_id:
                     resolved_name = candidate
                     break
         
         # Se conseguiu app_id, buscar na Steam
-        if app_id:
+        # CRITICAL FIX: IDs Sintéticos (> 500M) não existem no Steam
+        # Se conseguiu app_id, buscar na Steam
+        # CRITICAL FIX: IDs Sintéticos (> 500M) não existem no Steam
+        if app_id and int(app_id) < 500_000_000:
+            import asyncio
             print(f"[DetailsController] Buscando detalhes da Steam para AppID {app_id}...")
-            steam_details = await steam_api_client.get_appdetails(app_id)
+            
+            # Parallel Execution: Fetch Steam Data + Resolve Images concurrently
+            # This saves ~1-2 seconds on the details screen load
+            steam_task = steam_api_client.get_appdetails(app_id)
+            image_task = resolve_game_images(resolved_name or str(app_id), priority=priority) # Optimistic resolve
+            
+            results = await asyncio.gather(steam_task, image_task)
+            steam_details = results[0]
+            image_data = results[1]
             
             if steam_details.get("found"):
-                # Enriquecer com imagens de alta qualidade (resolver)
-                print(f"[DetailsController] Resolvendo imagens de alta qualidade...")
-                image_data = await resolve_game_images(resolved_name or steam_details.get("name", ""))
-                
                 # Mesclar dados
                 result = self._merge_details(steam_details, image_data)
                 return result
@@ -59,8 +81,8 @@ class GameDetailsController:
         if game_name:
             candidates = self._build_name_candidates(game_name)
             resolved_name = resolved_name or game_name
-            print(f"[DetailsController] Steam falhou/indisponível, tentando SteamGridDB para '{resolved_name}'...")
-            return await self._get_from_steamgriddb(candidates, app_id)
+            print(f"[DetailsController] Steam indisponível/placeholder, tentando SteamGridDB para '{resolved_name}' (AppID: {app_id})...")
+            return await self._get_from_steamgriddb(candidates, app_id, priority=priority)
         
         return self._error_response("app_id_not_found", "Não foi possível resolver o AppID")
     
@@ -99,16 +121,16 @@ class GameDetailsController:
                 uniq.append(s)
         return uniq
 
-    async def _resolve_app_id(self, game_name: str) -> Optional[int]:
+    async def _resolve_app_id(self, game_name: str, priority: bool = False) -> Optional[int]:
         """Resolve AppID a partir do nome do jogo"""
         try:
-            app_id = await steam_client.search_monitor(game_name)
+            app_id = await steam_client.search_monitor(game_name, priority=priority)
             return app_id
         except Exception as e:
             print(f"[DetailsController] Erro ao resolver AppID: {e}")
             return None
     
-    async def _get_from_steamgriddb(self, game_names: list[str], app_id: Optional[int] = None) -> Dict[str, Any]:
+    async def _get_from_steamgriddb(self, game_names: list[str], app_id: Optional[int] = None, priority: bool = False) -> Dict[str, Any]:
         """Fallback para SteamGridDB quando Steam não tem dados"""
         try:
             if steam_client.sgdb:

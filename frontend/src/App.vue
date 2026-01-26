@@ -1,8 +1,11 @@
 <template>
-  <div class="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
+  <div class="min-h-screen flex flex-col bg-transparent" :style="isElectron ? 'padding-top: 32px;' : ''">
+    <!-- Electron Title Bar (only in Electron) -->
+    <TitleBar />
+    
     <!-- Navigation -->
-    <nav class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-subtle sticky top-0 z-40" style="will-change: auto;">
-      <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
+    <nav class="glass border-b border-slate-200/10 shadow-subtle sticky top-0 z-40" style="will-change: auto;">
+      <div class="max-w-[1600px] mx-auto px-3 sm:px-6 py-3 sm:py-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -26,7 +29,7 @@
                   <circle cx="12" cy="12" r="10" stroke="url(#logoGrad)" stroke-width="0.5" fill="none"/>
                 </svg>
                 </div>
-                <h1 class="text-base sm:text-2xl font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest truncate font-display">fURIOUS APP</h1>
+                <h1 class="text-base sm:text-2xl font-bold font-display gradient-text uppercase tracking-widest truncate">fURIOUS APP</h1>
               </div>
               <div class="flex items-center gap-2 flex-shrink-0 sm:hidden">
                 <div :class="['w-2 h-2 rounded-full transition-all', isConnected ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse' : 'bg-rose-500 shadow-lg shadow-rose-500/50 animate-pulse']" />
@@ -35,16 +38,16 @@
 
             <div class="flex items-center gap-3 sm:gap-6">
               <div class="flex-1 overflow-x-auto sm:overflow-visible">
-                <div class="flex items-center gap-2 md:gap-6 w-max sm:w-auto">
+                <div class="flex items-center gap-1 md:gap-2 w-max sm:w-auto">
                   <router-link
                     v-for="link in navLinks"
                     :key="link.path"
                     :to="link.path"
                     :class="[
-                      'shrink-0 whitespace-nowrap px-3 sm:px-4 md:px-5 py-2 rounded-lg font-semibold transition-all duration-200 text-sm md:text-base flex items-center gap-2',
+                      'shrink-0 whitespace-nowrap px-2 md:px-3 py-2 rounded-lg font-semibold transition-all duration-200 text-xs md:text-sm flex items-center gap-1.5',
                       isActiveLink(link.path)
-                        ? 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400 border border-sky-300 dark:border-sky-700/50 shadow-soft' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/20'
+                        ? 'border-neon text-white bg-slate-800/50' 
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
                     ]"
                   >
             <!-- Dashboard Icon -->
@@ -104,14 +107,17 @@
               <circle cx="12" cy="12" r="4" stroke="url(#newGrad)" stroke-width="1" fill="none" opacity="0.6"/>
             </svg>
             
-            {{ link.label }}
+            <span class="hidden md:inline">{{ link.label }}</span>
                   </router-link>
                 </div>
               </div>
 
+              <!-- Theme Selector -->
+              <ThemeSelector />
+
               <div class="hidden sm:flex items-center gap-2 flex-shrink-0">
                 <div :class="['w-2 h-2 md:w-3 md:h-3 rounded-full transition-all', isConnected ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse' : 'bg-rose-500 shadow-lg shadow-rose-500/50 animate-pulse']" />
-                <span class="text-xs text-slate-600 dark:text-slate-400">{{ isConnected ? 'Online' : 'Offline' }}</span>
+                <span class="text-xs text-slate-400">{{ isConnected ? 'Online' : 'Offline' }}</span>
               </div>
             </div>
           </div>
@@ -119,8 +125,8 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="flex-1 overflow-auto p-4 md:p-6">
-      <div class="max-w-7xl mx-auto">
+    <main class="flex-1 overflow-auto p-4 md:p-6 pb-20">
+      <div class="max-w-[1600px] mx-auto">
         <router-view v-slot="{ Component }">
           <keep-alive :include="['Sources']">
             <component :is="Component" :key="route.name === 'ItemDetails' ? route.fullPath : route.path" />
@@ -145,6 +151,8 @@ import { useFavoritesStore } from './stores/favorites'
 import Toast from './components/Toast.vue'
 import HamburgerButton from './components/HamburgerButton.vue'
 import FavoritesDrawer from './components/FavoritesDrawer.vue'
+import ThemeSelector from './components/ThemeSelector.vue'
+import TitleBar from './components/TitleBar.vue'
 
 const route = useRoute()
 const downloadStore = useDownloadStore()
@@ -161,6 +169,7 @@ const navLinks = [
 ]
 
 const isConnected = computed(() => downloadStore.isConnected)
+const isElectron = computed(() => !!window.electronAPI)
 
 function isActiveLink(path) {
   return route.path === path || (path === '/' && route.path === '')

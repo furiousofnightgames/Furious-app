@@ -1,78 +1,120 @@
 <template>
-  <div ref="rootEl" :class="rootClass" @click="onCardClick" style="will-change: border-color;">
-    <!-- Image Area - Dimensões explícitas para compatibilidade PyQt5 -->
-    <div class="relative overflow-hidden bg-gray-800 w-full" style="height: 180px; min-height: 180px; will-change: auto;">
-      <div v-if="isLibrary && (versionsCount || 0) > 1" class="absolute top-3 left-3 z-30 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-950/80 border border-cyan-300/70 text-cyan-100 shadow-lg shadow-black/40 backdrop-blur-md">
-        {{ versionsCount }} versões
+  <div 
+    ref="rootEl" 
+    :class="[
+      'group relative bg-slate-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_8px_32px_-12px_rgba(0,0,0,0.6)] transition-all duration-500 ease-out flex flex-col h-full',
+      isLibrary ? '' : 'hover:-translate-y-2 hover:shadow-[0_24px_50px_-12px_rgba(0,0,0,0.7)] hover:border-cyan-500/40 hover:bg-slate-900',
+      !isLibrary && props.enableNavigation ? 'cursor-pointer' : ''
+    ]"
+    @click="onCardClick"
+  >
+    <!-- Card Inner Glow Overlay -->
+    <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
+
+    <!-- Image Area - Fixed for PyQt5 -->
+    <div class="relative overflow-hidden bg-slate-950/60 w-full h-auto aspect-[460/215] shrink-0">
+      <div class="absolute inset-0 bg-slate-950/40"></div>
+
+      <!-- Version Badge -->
+      <div v-if="isLibrary && (versionsCount || 0) > 1" class="absolute top-3 left-3 z-30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 shadow-[0_0_20px_-5px_#0ea5e9] backdrop-blur-md">
+        {{ versionsCount }} Versões
       </div>
-      <div class="absolute top-2 right-2 z-30">
-        <FavoriteToggleButton v-if="showFavorite" :item="item" />
-      </div>
+      
+      <!-- Blurred Background Fill -->
       <img 
         v-if="displayImage" 
         :src="displayImage" 
-        class="w-full h-full object-contain object-center"
+        class="absolute inset-0 w-full h-full object-cover blur-2xl opacity-30 scale-110 pointer-events-none"
+        aria-hidden="true"
+      />
+
+      <!-- Favorite Toggle -->
+      <div class="absolute top-3 right-3 z-30">
+        <FavoriteToggleButton v-if="showFavorite" :item="item" />
+      </div>
+
+      <!-- Main Game Image -->
+      <img 
+        v-if="displayImage" 
+        :src="displayImage" 
+        class="relative w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 ease-out z-10"
         @error="handleImageError"
         @load="handleImageLoad"
         loading="lazy"
-        style="will-change: auto;"
+        draggable="false"
       />
-      <!-- Placeholder Simples e Leve -->
-      <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 p-4">
-        <!-- Ícone simples -->
-        <svg viewBox="0 0 24 24" fill="none" class="w-12 h-12 mb-2 text-cyan-500 opacity-60" stroke="currentColor" stroke-width="1.5">
-          <path d="M4 12a8 8 0 018-8v8H4z" fill="currentColor" opacity="0.3"/>
-          <path d="M12 4a8 8 0 110 16 8 8 0 010-16z" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        
-        <!-- Texto simples -->
-        <p class="text-xs text-gray-400 text-center line-clamp-2 mt-2">{{ item.name }}</p>
-      </div>
-      
-      <!-- Loading Overlay -->
-      <div v-if="loading" class="absolute inset-0 bg-black/30 flex items-center justify-center z-20">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400" style="animation: spin 1s linear infinite;"></div>
-      </div>
-      
-      <div v-if="effectiveShowHoverOverlay" class="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-0 group-hover:opacity-80" style="pointer-events: none;"></div>
 
-      <div v-if="effectiveShowQuickActions" class="absolute bottom-0 left-0 right-0 p-4 space-y-2 group-hover:block hidden" style="pointer-events: auto;">
+      <!-- Premium Placeholder -->
+      <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+        <div class="relative">
+          <div class="absolute inset-0 bg-cyan-400 blur-xl opacity-20 animate-pulse"></div>
+          <svg viewBox="0 0 24 24" fill="none" class="relative w-12 h-12 text-cyan-500/40" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 12a8 8 0 018-8v8H4z" fill="currentColor" opacity="0.3"/>
+            <path d="M12 4a8 8 0 110 16 8 8 0 010-16z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center mt-4 line-clamp-1 opacity-50">{{ item.name }}</p>
+      </div>
+      
+      <!-- Gradient Fade Over Image -->
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-90"></div>
+      
+      <!-- Loading Spinner -->
+      <div v-if="loading" class="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-20">
+        <div class="relative w-10 h-10">
+          <div class="absolute inset-0 border-2 border-cyan-500/10 rounded-full"></div>
+          <div class="absolute inset-0 border-2 border-cyan-400 rounded-full border-t-transparent animate-spin"></div>
+        </div>
+      </div>
+      
+      <!-- Quick Actions Overlay (Non-Library) -->
+      <div v-if="effectiveShowQuickActions" class="absolute bottom-0 left-0 right-0 p-4 space-y-2 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-out z-40 hidden md:block">
          <button 
             @click.stop="goToDetails"
-            class="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded font-bold shadow-lg shadow-purple-600/50 flex items-center justify-center gap-2"
+            class="w-full py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-xl font-black text-[11px] uppercase tracking-wider border border-white/10 shadow-xl transition-all"
         >
-            <span>ℹ️</span> Ver Detalhes
+            Ver Detalhes
         </button>
          <button 
             @click.stop="$emit('download', item)"
-            class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-bold shadow-lg shadow-cyan-600/50 flex items-center justify-center gap-2"
+            class="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl font-black text-[11px] uppercase tracking-wider shadow-[0_8px_30px_-5px_rgba(6,182,212,0.5)] transition-all active:scale-95"
         >
-            <span>⬇️</span> Baixar Agora
+            Baixar Agora
         </button>
       </div>
     </div>
 
-    <!-- Content -->
-    <div class="p-4 flex-1 flex flex-col relative bg-gray-900">
+    <!-- Content Area -->
+    <div class="p-5 flex-1 flex flex-col relative bg-slate-900/50">
         <!-- Title -->
-        <h3 class="font-bold text-gray-100 mb-2 leading-tight line-clamp-3" :title="item.name">{{ item.name }}</h3>
+        <h3 class="font-black text-white mb-4 leading-tight line-clamp-2 text-base sm:text-[17px] tracking-tight group-hover:text-cyan-400 transition-colors" :title="item.name">
+          {{ item.name }}
+        </h3>
         
-        <!-- Metadata -->
-        <div class="flex flex-wrap gap-2 text-xs text-gray-400 mb-3 mt-auto">
-             <span class="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700">{{ formatBytes(item.size) }}</span>
+        <!-- Metadata Badges -->
+        <div class="flex flex-wrap gap-2 text-[11px] font-mono font-bold mb-4 mt-auto">
+             <span class="bg-white/10 px-2.5 py-1 rounded-md border border-white/10 text-slate-300 uppercase shadow-inner">
+               {{ formatBytes(item.size) }}
+             </span>
              <span v-if="item.uploadDate" 
-                class="px-1.5 py-0.5 rounded border"
-                :class="isRecent ? 'bg-green-900/30 text-green-400 border-green-500/30 font-medium' : 'bg-gray-800 text-gray-400 border-gray-700'"
+                class="px-2.5 py-1 rounded-md border uppercase shadow-inner"
+                :class="isRecent ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-white/10 text-slate-400 border-white/10'"
              >
                 {{ formatRelativeDate(item.uploadDate) }}
              </span>
-             <span v-if="item.category" class="bg-purple-900/30 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">{{ item.category }}</span>
+             <span v-if="item.category" class="bg-purple-500/20 text-purple-300 px-2.5 py-1 rounded-md border border-purple-500/40 uppercase shadow-inner">
+               {{ translateGenre(item.category) }}
+             </span>
+             <span v-if="item.source" class="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-md border border-amber-500/40 uppercase shadow-inner font-bold tracking-wider">
+               {{ item.source }}
+             </span>
         </div>
 
-        <div v-if="isLibrary" class="pt-3 mt-1 border-t border-gray-800/80 grid grid-cols-2 gap-2">
+        <!-- Library Controls -->
+        <div v-if="isLibrary" class="pt-4 border-t border-white/10 grid grid-cols-2 gap-3">
           <button
             type="button"
-            class="px-4 py-2 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-500 transition-all flex items-center justify-center gap-2 btn-translucent"
+            class="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-slate-300 font-black text-[10px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all text-center shadow-lg"
             @click.prevent.stop="$emit('details', item)"
           >
             Detalhes
@@ -81,16 +123,16 @@
           <button
             v-if="(versionsCount || 0) > 1"
             type="button"
-            class="px-4 py-2 rounded-lg font-semibold bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transform hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 flex items-center justify-center"
+            class="px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_-5px_rgba(6,182,212,0.4)] hover:shadow-cyan-400/50 hover:scale-[1.03] active:scale-95 transition-all text-center"
             @click.prevent.stop="$emit('versions', item)"
           >
-            Escolher versão
+            Escolher
           </button>
 
           <button
             v-else
             type="button"
-            class="px-4 py-2 rounded-lg font-semibold bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 text-white shadow-lg shadow-green-500/20 hover:shadow-green-500/40 transform hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 flex items-center justify-center"
+            class="px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] hover:shadow-emerald-400/50 hover:scale-[1.03] active:scale-95 transition-all text-center"
             @click.prevent.stop="$emit('download', item)"
           >
             Baixar
@@ -103,7 +145,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { formatBytes as fmtBytes, formatRelativeDate as fmtDate } from '../utils/format'
+import { formatBytes as fmtBytes, formatRelativeDate as fmtDate, translateGenre } from '../utils/format'
 import api from '../services/api'
 import FavoriteToggleButton from './FavoriteToggleButton.vue'
 
@@ -165,7 +207,7 @@ const props = defineProps({
   versionsCount: { type: Number, default: 1 }
 })
 
-const emit = defineEmits(['download', 'details', 'versions'])
+const emit = defineEmits(['download', 'details', 'versions', 'resolved'])
 
 const rootEl = ref(null)
 const isVisible = ref(false)
@@ -190,13 +232,6 @@ const effectiveShowQuickActions = computed(() => {
 const effectiveShowHoverOverlay = computed(() => {
     if (isLibrary.value) return false
     return props.showHoverOverlay
-})
-
-const rootClass = computed(() => {
-    const base = 'group relative bg-gray-900 border border-gray-700 rounded-xl overflow-hidden shadow-lg h-full flex flex-col'
-    const hover = (!isLibrary.value && (props.showHoverOverlay || props.showQuickActions)) ? ' hover:border-cyan-500' : ''
-    const cursor = (!isLibrary.value && props.enableNavigation) ? ' cursor-pointer' : ''
-    return base + hover + cursor
 })
 
 // Cache de imagens em localStorage para persistência
@@ -427,13 +462,15 @@ const fetchImage = async () => {
         params.append('game_name', props.item.name)
 
         const res = await __resolverThrottle.run(() => api.post(`/api/resolver?${params.toString()}`))
-        
         if (res.data && res.data.found) {
             // Armazena o appId para uso posterior (detalhes do jogo)
             if (res.data.appId) {
                 props.item.appId = res.data.appId
             }
             
+            // EMIT RESOLVED: Notify parent that we found something (helps enrichment queue)
+            emit('resolved', res.data)
+
             // Prioridade: header > capsule > hero > grid
             const imageUrl = res.data.header || res.data.capsule || res.data.hero || res.data.grid
             if (imageUrl) {
@@ -492,8 +529,16 @@ onMounted(() => {
                     if (vis) {
                         scheduleFetchImage()
                     }
-                }, { root: null, rootMargin: '200px 0px', threshold: 0.01 })
+                }, { root: null, rootMargin: '600px 0px', threshold: 0.01 }) // Aumentado para 600px para carregar antes do scroll
                 io.observe(rootEl.value)
+                
+                // FORCE RETRY: Captura imagens que falharam no mount inicial devido ao estresse de renderização.
+                setTimeout(() => {
+                    if (!fetchedImage.value && isVisible.value) {
+                         scheduleFetchImage()
+                    }
+                }, 3000)
+
                 return
             }
         } catch (e) {}
@@ -559,27 +604,31 @@ const onCardClick = () => {
     to { transform: rotate(360deg); }
 }
 
-/* Desabilitar transições pesadas durante scroll */
+/* Scrollbar Premium */
 ::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.01);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(6, 182, 212, 0.3);
-    border-radius: 4px;
+    background: rgba(6, 182, 212, 0.2);
+    border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(6, 182, 212, 0.5);
+    background: rgba(6, 182, 212, 0.4);
 }
 
 /* Otimizar renderização de imagens */
 img {
     backface-visibility: hidden;
     -webkit-font-smoothing: antialiased;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
 </style>

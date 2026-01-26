@@ -100,7 +100,33 @@ export function formatRelativeDate(dateStr) {
   if (!dateStr) return ''
   try {
     const date = new Date(dateStr)
-    return formatDistanceToNow(date, { addSuffix: true, locale: ptBR })
+    if (isNaN(date)) return ''
+
+    // Custom compact formatter
+    const now = new Date()
+    const diffInSeconds = Math.floor((now - date) / 1000)
+
+    if (diffInSeconds < 60) return 'Agora'
+
+    const minutes = Math.floor(diffInSeconds / 60)
+    if (minutes < 60) return `${minutes}m`
+
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h`
+
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days}d`
+
+    const weeks = Math.floor(days / 7)
+    // Fix: Show weeks up to 29 days to avoid "0 months"
+    if (days < 30) return `${weeks} sem`
+
+    const months = Math.floor(days / 30)
+    // Fix: Proper portuguese pluralization
+    if (months < 12) return `${months} ${months > 1 ? 'meses' : 'mês'}`
+
+    const years = Math.floor(days / 365)
+    return `${years} ${years > 1 ? 'anos' : 'ano'}`
   } catch (e) {
     return ''
   }
@@ -109,8 +135,95 @@ export function formatRelativeDate(dateStr) {
 export function formatDate(dateStr) {
   if (!dateStr) return ''
   try {
-    return format(new Date(dateStr), 'dd/MM/yyyy', { locale: ptBR })
+    const date = new Date(dateStr)
+    if (isNaN(date)) return ''
+    return format(date, 'dd/MM/yyyy HH:mm', { locale: ptBR })
   } catch (e) {
     return ''
   }
+}
+
+/**
+ * Traduz gêneros da Steam para Português Brasileiro.
+ * Centraliza o mapeamento para evitar duplicidade.
+ */
+export function translateGenre(genre) {
+  if (!genre) return 'Geral'
+
+  const mapping = {
+    'Action': 'Ação',
+    'Adventure': 'Aventura',
+    'Casual': 'Casual',
+    'Indie': 'Indie',
+    'Massively Multiplayer': 'MMO / Multijogador',
+    'Racing': 'Corrida',
+    'RPG': 'RPG',
+    'Simulation': 'Simulação',
+    'Sports': 'Esportes',
+    'Strategy': 'Estratégia',
+    'Violent': 'Violento',
+    'Gore': 'Gore',
+    'Sexual Content': 'Conteúdo Sexual',
+    'Nudity': 'Nudez',
+    'Early Access': 'Acesso Antecipado',
+    'Free to Play': 'Gratuito para Jogar',
+    'Short': 'Curto',
+    'Design & Illustration': 'Design e Ilustração',
+    'Education': 'Educação',
+    'Software Training': 'Treinamento de Software',
+    'Utilities': 'Utilitários',
+    'Video Production': 'Produção de Vídeo',
+    'Web Publishing': 'Publicação Web',
+    'Game Development': 'Desenvolvimento de Jogos',
+    'Audio Production': 'Produção de Áudio',
+    'Photo Editing': 'Edição de Fotos',
+    'Accounting': 'Contabilidade',
+    'Animation & Modeling': 'Animação e Modelagem',
+    'Action-Adventure': 'Ação e Aventura',
+    'Classic': 'Clássico',
+    'Tactical': 'Tático',
+    'Survival': 'Sobrevivência',
+    'Open World': 'Mundo Aberto',
+    'Sandbox': 'Sandbox',
+    'Shooter': 'Tiro',
+    'Platformer': 'Plataforma',
+    'Puzzle': 'Quebra-cabeça',
+    'Stealth': 'Furtividade',
+    'Horror': 'Terror',
+    'Psychological Horror': 'Terror Psicológico',
+    'Story Rich': 'Rico em História',
+    'Multiplayer': 'Multijogador',
+    'Singleplayer': 'Um Jogador',
+    'Co-op': 'Cooperativo',
+    'Space': 'Espaço',
+    'Driving': 'Direção',
+    'Fighting': 'Luta',
+    'Anime': 'Anime',
+    'Metroidvania': 'Metroidvania',
+    'Soulslike': 'Soulslike',
+    'Cute': 'Fofo',
+    'Cyberpunk': 'Cyberpunk',
+    'Sci-fi': 'Ficção Científica',
+    'Fantasy': 'Fantasia',
+    'Zombies': 'Zumbis',
+    'Aliens': 'Aliens',
+    'Atmospheric': 'Atmosférico',
+    'Detective': 'Detetive',
+    'Gothic': 'Gótico',
+    'Medieval': 'Medieval',
+    'Minimalist': 'Minimalista',
+    'Mystery': 'Mistério',
+    'Relaxing': 'Relaxante',
+    'Turn-Based': 'Em Turnos',
+    'Rogue-like': 'Rogue-like',
+    'Rogue-lite': 'Rogue-lite',
+    'Bullet Hell': 'Bullet Hell',
+    'Custom Games': 'Jogos Customizados'
+  }
+
+  // Se o gênero estiver no mapeamento, retorna a tradução
+  if (mapping[genre]) return mapping[genre]
+
+  // Se não estiver, tenta uma tradução parcial ou retorna o original capitalizado
+  return genre
 }

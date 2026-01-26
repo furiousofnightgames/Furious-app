@@ -195,10 +195,12 @@ class JobManager:
         # set status running
         j.status = "running"
         j.last_error = None
-        j.updated_at = datetime.utcnow()
+        j.updated_at = datetime.now()
+        if not j.started_at:
+            j.started_at = datetime.now()
         session.add(j)
         session.commit()
-        print(f"Job status updated to 'running'")
+        print(f"Job status updated to 'running' (Started at: {j.started_at})")
         
         # get item
         it = session.get(Item, j.item_id)
@@ -253,12 +255,20 @@ class JobManager:
             if is_custom_name:
                 # Criar pasta com nome customizado, arquivo original dentro
                 custom_folder = sanitize_filename(it.name) or f"download_{job_id}"
-                dest_path = os.path.join(dest, custom_folder, original_filename)
-                dest_to_save = os.path.join(dest, custom_folder)  # Save the folder for deletion
+                
+                # CRITICAL FIX: Se o nome customizado já for igual ao original (ex: apenas diff de symbols)
+                # Não criar pasta redundante A/A
+                if custom_folder.lower() == sanitize_filename(original_filename).lower():
+                    dest_path = os.path.join(dest, original_filename)
+                    dest_to_save = dest_path
+                else:
+                    dest_path = os.path.join(dest, custom_folder, original_filename)
+                    dest_to_save = os.path.join(dest, custom_folder)  # Save the folder for deletion
+                
                 # Criar pasta de forma assíncrona (não bloqueia início)
                 try:
                     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                    print(f" Pasta customizada criada: {custom_folder}/")
+                    print(f" Pasta de download preparada: {os.path.dirname(dest_path)}")
                 except Exception as e:
                     print(f"Aviso ao criar pasta: {e}")
             else:
@@ -287,7 +297,7 @@ class JobManager:
         stop_event = asyncio.Event()
         self._stop_tokens[job_id] = stop_event
 
-        async def progress_cb(downloaded, total, peers=0, seeders=0, speed=None, phase=None, phase_label=None, phase_progress=None):
+        async def progress_cb(downloaded, total, peers=0, seeders=0, speed=None, phase=None, phase_label=None, phase_progress=None, real_path=None):
             import time as time_module
             p = (downloaded / total * 100) if total and total > 0 else None
             now_ts = time_module.time()
@@ -315,7 +325,49 @@ class JobManager:
                 info["phase_progress"] = phase_progress
             self._in_memory_progress[job_id] = info
             # update DB periodically (less frequently to minimize writes)
-            await asyncio.to_thread(self._update_job_db, job_id, p)
+            await asyncio.to_thread(self._update_job_db, job_id, p, downloaded=downloaded, total=total)
+
+            # CRITICAL FIX: Hot-update job destination if aria2 discovered the REAL path (Online-Fix fix)
+            if real_path and j.dest != real_path:
+                try:
+                    # Hot-updating job destination to discovered path
+                    j.dest = real_path
+                    session.add(j)
+                    session.commit()
+                    session.expire(j) # Force refresh for next use
+                except Exception as e:
+                    print(f"WARN: Could not update real path in DB: {e}")
+
+            # Backend-side emergency stop if size explodes (e.g. metadata resolved)
+            # Check every ~5 seconds or if total size significantly increases
+            last_disk_check = info.get("last_disk_check", 0)
+            if total > 0 and (now_ts - last_disk_check > 5.0 or total > info.get("last_checked_total", 0) * 1.1):
+                info["last_disk_check"] = now_ts
+                info["last_checked_total"] = total
+                try:
+                    import shutil
+                    from pathlib import Path
+                    # Use dest or fallback to downloads dir
+                    check_p = dest or str(Path.home() / "Downloads")
+                    if os.path.exists(check_p):
+                        _, _, free = shutil.disk_usage(check_p)
+                        # Threshold: Total size + 10% safety margin (for repacks, frontend handles the 2.5x estimate)
+                        if free < total * 1.1:
+                            print(f"[BLOQUEIO-BACKEND] Job {job_id} pausado por falta de espaço: Total={total}, Free={free}")
+                            try:
+                                # Usar a própria sessão do loop se possível para evitar conflitos
+                                j.status_reason = "insufficient_space"
+                                j.size = total
+                                j.free_space_at_pause = free
+                                session.add(j)
+                                session.commit()
+                                print(f"[OK] Job {job_id} bloqueado com sucesso (Salvo: Free={free})")
+                            except Exception as db_err:
+                                print(f"[DiskCheck-DB-Error] Ocorreu um erro ao salvar o bloqueio: {db_err}")
+                            
+                            stop_event.set() # This will cause aria2_wrapper to stop and return 'paused'
+                except Exception as e:
+                    print(f"[DiskCheck-Error] {e}")
 
         try:
             if url.startswith("magnet:"):
@@ -337,7 +389,7 @@ class JobManager:
                     )
                     j.status = "failed"
                     j.last_error = msg
-                    j.updated_at = datetime.utcnow()
+                    j.updated_at = datetime.now()
                     session.add(j)
                     session.commit()
                     session.close()
@@ -371,7 +423,7 @@ class JobManager:
                     if download_status == "paused":
                         # Job was paused
                         j.status = "paused"
-                        j.updated_at = datetime.utcnow()
+                        j.updated_at = datetime.now()
                         session.add(j)
                         session.commit()
                         print(f"Download paused, will resume later")
@@ -410,17 +462,24 @@ class JobManager:
                                 print(f"   Could not find partial download folder: {e}")
                         
                         j.dest = actual_dest
-                        j.updated_at = datetime.utcnow()
+                        j.updated_at = datetime.now()
                         session.add(j)
                         session.commit()
                         print(f"Download was canceled, keeping status as canceled (DB status: {j.status})")
                         print(f"   Saved real dest for cleanup: {j.dest}")
                     else:
+                        # REFRESH JOB OBJECT TO AVOID OVERWRITING SIZE/PROGRESS UPDATED BY CALLBACK
+                        try:
+                            session.expire_all()
+                            j = session.get(Job, job_id)
+                        except: pass
+
                         # Download completed successfully
                         j.status = "completed"
                         j.progress = 100.0
                         j.dest = final_path if final_path else dest_path
-                        dest_to_save = final_path if final_path else dest_path
+                        dest_to_save = j.dest
+                        j.completed_at = datetime.now()
                         
                         # Record download completion for source scoring
                         if it and it.source_id:
@@ -430,7 +489,7 @@ class JobManager:
                         
                         # Calculate and save actual file size
                         try:
-                            actual_path = final_path if final_path else dest_path
+                            actual_path = dest_to_save
                             if os.path.isfile(actual_path):
                                 j.size = os.path.getsize(actual_path)
                             elif os.path.isdir(actual_path):
@@ -440,17 +499,17 @@ class JobManager:
                                     for file in files:
                                         total_size += os.path.getsize(os.path.join(root, file))
                                 j.size = total_size
-                            print(f"[OK] Saved download size: {j.size} bytes ({j.size / 1024 / 1024 / 1024:.2f} GB)" if j.size else "[OK] Download completed (size unknown)")
+                            print(f"[OK-MAGNET] Saved download size: {j.size} bytes" if j.size else "[OK] Download completed (size unknown)")
                         except Exception as e:
-                            print(f"[WARN] Could not calculate size: {e}")
+                            print(f"[WARN] Could not calculate magnet size: {e}")
                         
-                        j.updated_at = datetime.utcnow()
+                        j.updated_at = datetime.now()
                         session.add(j)
                         session.commit()
                 except Exception as e:
                     j.status = "failed"
                     j.last_error = str(e)
-                    j.updated_at = datetime.utcnow()
+                    j.updated_at = datetime.now()
                     session.add(j)
                     session.commit()
                     raise
@@ -500,46 +559,44 @@ class JobManager:
                     j.status = "paused"
                     print(f"[PAUSE] Job #{job_id} pausado pelo usuário")
                 else:
-                    j.status = "completed"
-                    # Save the path (folder if custom name, file path otherwise) for deletion
-                    j.dest = dest_to_save
-                    print(f"[DEBUG] Salvando job.dest = {dest_to_save}")
-                    
-                    # CRITICAL FIX: Update size on completion for Direct Downloads
+                    # REFRESH JOB OBJECT TO AVOID OVERWRITING SIZE/PROGRESS UPDATED BY CALLBACK
                     try:
-                        if os.path.isfile(dest_path):
-                            j.size = os.path.getsize(dest_path)
-                            print(f"[OK] Saved download size: {j.size} bytes")
+                        session.expire_all()
+                        j = session.get(Job, job_id)
+                        if not j:
+                             print(f"ERROR: Job #{job_id} not found for final update")
+                             return
+                    except Exception as ref_err:
+                        print(f"WARN: Could not refresh job object: {ref_err}")
+
+                    j.status = "completed"
+                    j.dest = dest_to_save
+                    print(f"[DEBUG] Finalizing job.dest = {dest_to_save}")
+                    
+                    # Update size on completion
+                    try:
+                        if os.path.exists(dest_path):
+                            if os.path.isfile(dest_path):
+                                j.size = os.path.getsize(dest_path)
+                            elif os.path.isdir(dest_path):
+                                total_size = 0
+                                for root, dirs, files in os.walk(dest_path):
+                                    for file in files:
+                                        total_size += os.path.getsize(os.path.join(root, file))
+                                j.size = total_size
+                            print(f"[OK] Saved final download size: {j.size} bytes")
                     except Exception as e:
-                        print(f"[WARN] Could not update size: {e}")
+                        print(f"[WARN] Could not update final size: {e}")
                         
-                    j.updated_at = datetime.utcnow()
+                    j.updated_at = datetime.now()
+                    j.completed_at = datetime.now()
+                    j.progress = 100.0
                     session.add(j)
                     session.commit()
-                    
-                    # Record download completion for source scoring
-                    if it and it.source_id:
-                        from backend.services.source_scoring import SourceScoringService
-                        SourceScoringService.record_download_completion(session, job_id, success=True)
-                        print(f"[RM2] Download completion recorded for source #{it.source_id}")
-                    
-                    # Calculate and save actual file size
-                    try:
-                        if os.path.isfile(dest_to_save):
-                            j.size = os.path.getsize(dest_to_save)
-                        elif os.path.isdir(dest_to_save):
-                            # Sum all files in directory
-                            total_size = 0
-                            for root, dirs, files in os.walk(dest_to_save):
-                                for file in files:
-                                    total_size += os.path.getsize(os.path.join(root, file))
-                            j.size = total_size
-                        print(f"[OK] Saved download size: {j.size} bytes ({j.size / 1024 / 1024 / 1024:.2f} GB)")
-                    except Exception as e:
-                        print(f"[WARN] Could not calculate size: {e}")
                 
                 j.progress = 100.0
-                j.updated_at = datetime.utcnow()
+                j.updated_at = datetime.now()
+                j.completed_at = datetime.now()
                 session.add(j)
                 session.commit()
         except Exception as e:
@@ -552,10 +609,14 @@ class JobManager:
                 j.last_error = self._format_job_error(e, tb=tb, url=url, dest_to_save=dest_to_save)
             except Exception:
                 pass
+            # REFRESH JOB OBJECT FOR FAILURE
+            try:
+                session.refresh(j)
+            except: pass
             j.status = "failed"
             # Save the path for deletion purposes
             j.dest = dest_to_save
-            j.updated_at = datetime.utcnow()
+            j.updated_at = datetime.now()
             session.add(j)
             session.commit()
             try:
@@ -634,9 +695,17 @@ class JobManager:
             except Exception as e:
                 print(f"[WARN] Could not remove {dest_path}{suffix}: {e}")
         
-        # For torrents: if dest_path is a folder, remove .aria2 and .aria2c files inside it too
+        # For torrents: if dest_path is a folder, remove .aria2 and .aria2c files inside it AND next to it
         try:
             if os.path.isdir(dest_path):
+                # Next to it
+                for suffix in ['.aria2', '.aria2c']:
+                    side_file = dest_path + suffix
+                    if os.path.exists(side_file):
+                        os.remove(side_file)
+                        print(f"[OK] Removed side metadata: {side_file}")
+
+                # Inside it
                 for filename in os.listdir(dest_path):
                     if filename.endswith(('.aria2', '.aria2c')):
                         meta_path = os.path.join(dest_path, filename)
@@ -648,20 +717,23 @@ class JobManager:
         except Exception as e:
             print(f"[WARN] Error checking folder for metadata: {e}")
         
-        # Also clean up .torrent files from parent directory (for torrents downloaded with aria2)
+        # Deep clean: Search parent directory for any .aria2 or .torrent files containing the base name
         try:
             parent_dir = os.path.dirname(dest_path)
+            base_name = os.path.basename(dest_path)
             if os.path.isdir(parent_dir):
                 for filename in os.listdir(parent_dir):
-                    if filename.endswith('.torrent'):
-                        torrent_path = os.path.join(parent_dir, filename)
+                    # Match exact .aria2/.torrent files or those prefixed with our base_name
+                    # Also match files containing the job_id as a fallback
+                    if filename.endswith(('.aria2', '.aria2c', '.torrent')) and (base_name in filename or str(job_id) in filename):
+                        meta_path = os.path.join(parent_dir, filename)
                         try:
-                            os.remove(torrent_path)
-                            print(f"[OK] Removed torrent metadata: {torrent_path}")
-                        except Exception as e:
-                            print(f"[WARN] Could not remove {torrent_path}: {e}")
+                            if os.path.exists(meta_path):
+                                os.remove(meta_path)
+                                print(f"[OK] Removed orphan metadata in parent: {meta_path}")
+                        except: pass
         except Exception as e:
-            print(f"[WARN] Error cleaning parent directory for torrent files: {e}")
+            print(f"[WARN] Error in deep metadata cleanup: {e}")
 
     async def _download_segmented_job(self, job: Job, url: str, dest_path: str, k: int, n_conns: int, progress_cb: Optional[Callable], resume: bool = True, verify: bool = True):
         session = get_session()
@@ -786,14 +858,18 @@ class JobManager:
         session.close()
         print(f" All JobParts marked as completed")
 
-    def _update_job_db(self, job_id, progress):
+    def _update_job_db(self, job_id, progress, downloaded=None, total=None):
         session = get_session()
         j = session.get(Job, job_id)
         if not j:
             return
         if progress is not None:
             j.progress = progress
-        j.updated_at = datetime.utcnow()
+        if downloaded is not None:
+            j.downloaded = downloaded
+        if total is not None and total > 0:
+            j.size = total
+        j.updated_at = datetime.now()
         session.add(j)
         session.commit()
         try:

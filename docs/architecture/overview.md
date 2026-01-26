@@ -59,12 +59,24 @@ graph TD
   - Download de metadados (imagens, descrições)
   - Cache local de imagens
 
-### 6. Serviço de Análise (New!)
+### 6. Serviço de Análise (Source Intelligence)
 - **Responsabilidade**: Comparar saúde de torrents antes do download.
 - **Funcionalidades**:
   - **Live Probe**: Consulta UDP a até 40 rastreadores em tempo real.
   - **Heurística**: Normalização de nomes para encontrar equivalentes.
-  - **Sanidade**: Filtro automático de dados falsos (seeds > 500k).
+
+### 7. Integrity Service (Novo!)
+- **Responsabilidade**: Auditoria física pós-download.
+- **Lógica**: "O Disco é a Verdade".
+  - **Auto-Sync**: Atualiza DB com tamanho real do disco.
+  - **Card-Scan**: Valida se Setup + Bins estão presentes.
+
+### 8. Buffered Persistence Layer (Novo!)
+- **Responsabilidade**: Proteger performance do SQLite.
+- **Lógica**: Gravação em Lote (Batch Write).
+  - Acumula metadados em RAM.
+  - "Flush" para disco a cada 5 segundos.
+  - Garante UI fluida (60fps) durante scans massivos.
 
 ## Fluxo de Dados
 

@@ -57,7 +57,7 @@
           <!-- Título e informações básicas -->
           <div class="mb-8">
             <!-- Alerta de Fonte Alternativa (SteamGridDB) -->
-            <div v-if="item?.gameDetails?.source === 'steamgriddb'" class="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-4 animate-in">
+            <div v-if="item?.gameDetails?.source === 'steamgriddb' && !item?.gameDetails?.not_found_on_store" class="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-4 animate-in">
               <div class="p-2 bg-amber-500/20 rounded-full text-amber-500 shrink-0">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -67,6 +67,21 @@
                 <h3 class="font-semibold text-amber-200">Informações Limitadas</h3>
                 <p class="text-amber-200/70 text-sm mt-1">
                   Este jogo não foi encontrado na loja oficial da Steam. As imagens foram obtidas via <strong>SteamGridDB</strong>, mas detalhes como descrição, vídeos e requisitos podem não estar disponíveis.
+                </p>
+              </div>
+            </div>
+
+            <!-- Alerta de Jogo Não Encontrado (Placeholder) -->
+            <div v-if="item?.gameDetails?.not_found_on_store" class="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg flex items-start gap-4 animate-in">
+              <div class="p-2 bg-rose-500/20 rounded-full text-rose-500 shrink-0">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="font-semibold text-rose-200">Dados Não Encontrados</h3>
+                <p class="text-rose-200/70 text-sm mt-1">
+                  Não foram encontrados dados técnicos ou artes para este jogo na Steam ou no acervo da comunidade. Usando um identificador genérico para organização.
                 </p>
               </div>
             </div>
@@ -101,17 +116,7 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 pb-8 border-b border-slate-700">
             <!-- Informações da esquerda -->
             <div class="space-y-4">
-              <div v-if="item?.source" class="flex items-start gap-3">
-                <div class="w-6 h-6 text-cyan-400 flex-shrink-0 mt-1">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.658 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="text-slate-400 text-sm">Fonte</p>
-                  <p class="text-white font-medium">{{ item.source }}</p>
-                </div>
-              </div>
+              <!-- Source removed as per user request (redundant) -->
 
               <div v-if="item?.magnet" class="flex items-start gap-3">
                 <div class="w-6 h-6 text-purple-400 flex-shrink-0 mt-1">
@@ -295,6 +300,7 @@
                       :src="getScreenshotUrl(screenshot)" 
                       :alt="`Screenshot ${idx + 1}`"
                       class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      @click="openScreenshot(idx)"
                     />
                   </div>
                 </div>
@@ -583,124 +589,88 @@
           </button>
         </div>
 
+        <!-- Modal de Galeria de Screenshots (Preview Premium) -->
+        <div v-if="showScreenshotModal && item?.gameDetails?.screenshots" class="fixed inset-0 z-50 flex items-center justify-center bg-black/95" @click.self="closeScreenshot">
+          
+          <!-- Botão Anterior (Overlay) -->
+          <button 
+            v-if="currentScreenshotIdx > 0"
+            @click.stop="prevScreenshot"
+            class="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition backdrop-blur-md group"
+          >
+            <svg class="w-8 h-8 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          <div 
+            class="relative w-full max-w-4xl mx-4 overflow-hidden rounded-xl bg-black transition-all duration-300 flex items-center justify-center group/img"
+            style="box-shadow: 0 0 60px rgba(6, 182, 212, 0.6), 0 0 30px rgba(6, 182, 212, 0.4), 0 25px 50px -12px rgba(0, 0, 0, 0.9); border: 2px solid rgba(6, 182, 212, 0.5);"
+          >
+            <!-- Botão Fechar (X) -->
+            <button
+              class="absolute top-4 right-4 text-white/70 hover:text-white z-20 bg-black/50 hover:bg-black/80 rounded-full p-2 transition backdrop-blur-sm shadow-xl"
+              @click="closeScreenshot"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <!-- Imagem -->
+            <img 
+              :key="currentScreenshotIdx"
+              :src="getScreenshotUrl(item.gameDetails.screenshots[currentScreenshotIdx])"
+              class="w-full h-auto max-h-[85vh] object-contain select-none animate-fade-in"
+              style="will-change: opacity;"
+            />
+            
+            <!-- Info Overlay (Sutil ao passar o mouse) -->
+            <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent pointer-events-none opacity-0 group-hover/img:opacity-100 transition-opacity">
+              <p class="text-white/60 text-xs text-center font-medium">Screenshot {{ currentScreenshotIdx + 1 }} de {{ item.gameDetails.screenshots.length }}</p>
+            </div>
+          </div>
+
+          <!-- Botão Próximo (Overlay) -->
+          <button 
+            v-if="currentScreenshotIdx < item.gameDetails.screenshots.length - 1"
+            @click.stop="nextScreenshot"
+            class="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition backdrop-blur-md group"
+          >
+            <svg class="w-8 h-8 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
       </div>
     </div>
   </div>
 
-  <!-- MODAL DE DOWNLOAD -->
-  <Modal v-if="showDownloadDialog" @close="showDownloadDialog = false">
-      <div>
-        <h3 class="text-lg font-bold text-cyan-400 mb-4">⬇️ Baixar Item</h3>
-        <div class="space-y-4">
-          <div>
-            <p class="text-sm text-gray-400">Item:</p>
-            <p class="text-cyan-300 font-semibold">{{ item?.name }}</p>
-          </div>
-          
-          <div>
-            <p class="text-sm text-gray-400">Tamanho:</p>
-            <p class="text-cyan-300">
-              <span v-if="modalInfo.checking">Verificando...</span>
-              <span v-else-if="modalInfo.size">{{ formatBytes(modalInfo.size) }} <span class="text-xs text-gray-400">(ETA ~{{ modalInfo.eta }}s)</span></span>
-              <span v-else>{{ formatBytes(item?.size) }}</span>
-            </p>
-          </div>
-
-          <div>
-            <label class="block text-sm font-semibold text-gray-300 mb-2">Pasta</label>
-            <div class="flex gap-2">
-              <div class="flex-1 p-3 bg-gray-900 border border-cyan-500/30 rounded">
-                <p class="text-sm text-cyan-300 truncate">
-                  {{ downloadDestination || 'downloads' }}
-                </p>
-              </div>
-              <button 
-                type="button"
-                @click.stop="browsePath"
-                class="border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-500 transition-all flex items-center justify-center gap-2 px-3 rounded border"
-              >
-                <span v-if="browseLoading">⏳</span>
-                <span v-else>...</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="p-3 bg-gray-900/40 border border-cyan-500/20 rounded space-y-2">
-            <div class="flex items-center justify-between gap-3">
-              <div class="text-sm font-bold text-cyan-300">Pré-flight Check</div>
-              <div class="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  class="btn-translucent text-xs"
-                  :disabled="preflightLoading"
-                  @click="runPreflightForce"
-                >
-                  <span v-if="preflightLoading">Analisando...</span>
-                  <span v-else>Forçar nova sondagem</span>
-                </Button>
-              </div>
-            </div>
-
-            <div v-if="preflightError" class="text-xs text-red-300 border border-red-500/30 bg-red-900/10 rounded p-2">
-              {{ preflightError }}
-            </div>
-
-            <div v-else-if="preflightResult" class="text-xs text-gray-300 space-y-1">
-              <div v-if="preflightAria2" class="text-gray-300">
-                <span class="text-gray-400">aria2:</span>
-                <span class="text-cyan-300 font-semibold"> {{ preflightAria2.available ? 'Disponível' : 'Indisponível' }} </span>
-              </div>
-              <div v-if="preflightHealth" class="text-gray-300">
-                <span class="text-gray-400">Saúde:</span>
-                <span class="text-cyan-300 font-semibold"> {{ preflightHealthLabel }} </span>
-                <span v-if="preflightHealth.seeders !== null && preflightHealth.seeders !== undefined" class="ml-2 text-amber-200">Seeders {{ preflightHealth.seeders }}</span>
-              </div>
-              <div>
-                <span class="text-gray-400">Range:</span>
-                <span class="text-cyan-300 font-semibold"> {{ ((item?.url || '').startsWith('magnet:') || String(preflightResult.note || '').toLowerCase().includes('magnet')) ? 'N/A (Magnet/aria2)' : (preflightResult.accept_ranges ? 'Suportado' : 'Não suportado') }} </span>
-              </div>
-              <div v-if="preflightResult.size !== null && preflightResult.size !== undefined">
-                <span class="text-gray-400">Tamanho:</span>
-                <span class="text-cyan-300 font-semibold"> {{ formatBytes(preflightResult.size) }} </span>
-              </div>
-              <div v-if="preflightResult.status_code !== null && preflightResult.status_code !== undefined">
-                <span class="text-gray-400">HTTP:</span>
-                <span class="text-cyan-300 font-semibold"> {{ preflightResult.status_code }} </span>
-              </div>
-              <div v-if="preflightResult.note" class="text-gray-400">
-                {{ preflightResult.note }}
-              </div>
-            </div>
-            <div v-else class="text-xs text-gray-500">
-              Opcional: analisa rapidamente o link antes de iniciar.
-            </div>
-          </div>
-
-          <div class="flex gap-2 pt-4 border-t border-gray-700">
-            <button 
-              type="button"
-              @click.prevent.stop="showDownloadDialog = false"
-              class="flex-1 py-2 rounded border border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/10"
-            >
-              Cancelar
-            </button>
-            <button 
-              type="button"
-              @click.prevent.stop="confirmDownload"
-              :class="[
-                'flex-1 px-4 py-2 rounded-lg font-semibold transform hover:scale-105 active:scale-95 transition-all duration-300',
-                downloadStore.loading ? 'opacity-60 cursor-not-allowed bg-gray-700 text-gray-200' : 'bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 text-white shadow-lg shadow-green-500/50 hover:shadow-green-500/80'
-              ]"
-              :disabled="downloadStore.loading"
-            >
-              <span v-if="downloadStore.loading">Aguarde...</span>
-              <span v-else>Baixar Agora</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Modal>
+  <!-- MODAL DE DOWNLOAD PREMIUM -->
+  <PremiumDownloadModal
+    :is-open="showDownloadDialog"
+    :item="item"
+    :image-url="headerImageUrl"
+    :destination="downloadDestination"
+    :browse-loading="browseLoading"
+    :loading="downloadStore.loading"
+    :free-space-info="freeSpaceInfo"
+    :estimated-required-space="estimatedRequiredSpace"
+    :is-repack-detected="isRepackDetected"
+    :is-placeholder-size="isPlaceholderSize"
+    :has-enough-space="hasEnoughSpace"
+    :modal-info="modalInfo"
+    :preflight-loading="preflightLoading"
+    :preflight-error="preflightError"
+    :preflight-result="preflightResult"
+    :preflight-aria2="preflightAria2"
+    :preflight-health="preflightHealth"
+    @close="showDownloadDialog = false"
+    @confirm="confirmDownload"
+    @browse="browsePath"
+    @refresh-preflight="runPreflightForce"
+  />
 
     <!-- Manual folder input fallback -->
     <Modal v-if="showManualFolderModal" @close="showManualFolderModal = false" title="Escolher pasta manualmente" :showDefaultButtons="false">
@@ -738,6 +708,7 @@ import { useDownloadStore } from '../stores/download'
 import { useToastStore } from '../stores/toast'
 import { formatBytes } from '../utils/format'
 import Modal from '../components/Modal.vue'
+import PremiumDownloadModal from '../components/PremiumDownloadModal.vue'
 import Input from '../components/Input.vue'
 import Button from '../components/Button.vue'
 import FavoriteToggleButton from '../components/FavoriteToggleButton.vue'
@@ -760,6 +731,39 @@ const showVideoModal = ref(false)
 const currentVideo = ref(null)
 const headerImageUrl = ref(null)
 
+// Screenshot Gallery Refs
+const showScreenshotModal = ref(false)
+const currentScreenshotIdx = ref(0)
+
+const openScreenshot = (idx) => {
+  currentScreenshotIdx.value = idx
+  showScreenshotModal.value = true
+  document.addEventListener('keydown', handleScreenshotKeys)
+}
+
+const closeScreenshot = () => {
+  showScreenshotModal.value = false
+  document.removeEventListener('keydown', handleScreenshotKeys)
+}
+
+const nextScreenshot = () => {
+  if (currentScreenshotIdx.value < item.value.gameDetails.screenshots.length - 1) {
+    currentScreenshotIdx.value++
+  }
+}
+
+const prevScreenshot = () => {
+  if (currentScreenshotIdx.value > 0) {
+    currentScreenshotIdx.value--
+  }
+}
+
+const handleScreenshotKeys = (e) => {
+  if (e.key === 'ArrowRight') nextScreenshot()
+  if (e.key === 'ArrowLeft') prevScreenshot()
+  if (e.key === 'Escape') closeScreenshot()
+}
+
 const videoIframeHtml = ref(null)
 
 // Download Refs
@@ -771,6 +775,52 @@ const showManualFolderModal = ref(false)
 const manualFolderPath = ref('')
 const browseLoading = ref(false)
 const modalInfo = ref({ size: null, accept_range: false, eta: null, checking: false })
+const freeSpaceInfo = ref(null)
+
+const isRepackDetected = computed(() => {
+  return item.value?.name?.toLowerCase().includes('repack') || 
+         item.value?.source?.toLowerCase().includes('fitgirl') ||
+         item.value?.source?.toLowerCase().includes('dodi')
+})
+
+const estimatedRequiredSpace = computed(() => {
+  const size = item.value?.size || modalInfo.value.size || 0
+  if (!size) return 0
+  return isRepackDetected.value ? size * 2.5 : size * 1.1
+})
+
+const isPlaceholderSize = computed(() => {
+  const size = item.value?.size || modalInfo.value.size || 0
+  if (!size) return false
+  if (size < 10 * 1024 * 1024) return true
+  const suspiciousKeywords = ['collection', 'all games']
+  const isSuspiciousName = suspiciousKeywords.some(k => item.value?.name?.toLowerCase().includes(k))
+  if (isSuspiciousName && size < 1024 * 1024 * 1024 * 30) { 
+    return true
+  }
+  return false
+})
+
+const hasEnoughSpace = computed(() => {
+  if (!freeSpaceInfo.value || !estimatedRequiredSpace.value) return true
+  return freeSpaceInfo.value.free > estimatedRequiredSpace.value
+})
+
+async function checkDiskSpace() {
+  try {
+    const path = downloadDestination.value || 'downloads'
+    const info = await downloadStore.getDiskSpace(path)
+    if (info && info.status === 'success') {
+      freeSpaceInfo.value = info
+    }
+  } catch (e) {
+    console.error('[ItemDetails] Erro ao checar espaço:', e)
+  }
+}
+
+watch(downloadDestination, () => {
+  checkDiskSpace()
+})
 
 const preflightLoading = ref(false)
 const preflightResult = ref(null)
@@ -1439,8 +1489,9 @@ const openDownloadConfigurationModal = () => {
   } else {
     modalInfo.value.checking = false
   }
-
+  
   showDownloadDialog.value = true
+  checkDiskSpace() // Check space immediately on open
 }
 
 const runPreflightForce = async () => {

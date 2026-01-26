@@ -1,11 +1,17 @@
 =======
-# 🚀 Furious App - Acelerador de Downloads Profissional v3.1.0
+# 🚀 Furious App - Acelerador de Downloads Profissional v3.3.0
 
 Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.
 
-**Versão 3.1 estável disponível!** - Com suporte completo a Windows e interface otimizada.
+**Versão 3.3 estável disponível!** - Com suporte completo a Windows e interface otimizada.
 
-## 🆕 Novidades na Versão 3.1.0
+## 🆕 Novidades na Versão 3.3.0
+- ✅ **Repacks e Placeholders**: Detecção automática de jogos Repack e arquivos "Placeholder" para evitar erros de espaço em disco.
+- ✅ **Segurança Aprimorada**: Verificação SSL opcional por fonte e proteção contra deleção acidental.
+- ✅ **Interface Refinada**: Novos modais com design premium, animações e feedback visual melhorado.
+- ✅ **Gerenciamento de Cache**: Melhorias na limpeza automática e persistência de dados.
+
+## 🌟 Destaques da Versão 3.1.0
 - ✅ **Biblioteca Global Unificada**: Nova interface "Biblioteca" que agrega todos os itens de todas as fontes JSON. Inclui busca rápida, paginação otimizada, agrupamento inteligente de versões e cache de imagens.
 - ✅ **Pré-flight Check (Sondagem)**: Analisador pré-download que verifica saúde do link, disponibilidade do aria2, status HTTP e conta seeds/peers reais (UDP) antes de iniciar o download.
 - ✅ **Engine de Download Ultra-Robusto**: Sistema aprimorado com fallback automático e headers de navegador
@@ -554,7 +560,7 @@ R: Sim, execute via Python. O instalador .EXE é apenas Windows.
 Desenvolvido por FURIOUSOFNIGHTGAMES 
 
 **Data de Lançamento**: Janeiro 2026
-**Versão**: 3.1
+**Versão**: 3.3.0
 **Status**: ✅ Produção
 
 ---

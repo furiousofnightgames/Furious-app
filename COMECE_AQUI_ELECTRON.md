@@ -127,17 +127,16 @@ python --version
 ### "Frontend não carrega"
 → Execute: `cd frontend && npm run build && cd ..`
 
-## 📊 O que Você Tem Agora
-
+## 📊 O que Você Tem Agora (v3.4.0)
 ```
-✅ Aplicação Desktop (Electron)
-✅ Backend Python (FastAPI) integrado
-✅ Frontend Vue.js moderno
-✅ Instalador profissional (.exe)
+✅ Aplicação Desktop (Electron) - Modo Game Hub
+✅ Integridade Blindada (Quick-Check físico)
+✅ Filtros e Temas Premium (Glassmorphic)
+✅ Backend Python com Persistência em Lote
+✅ Instalador Inteligente (Auto-Setup)
 ✅ Desinstalador automático
 ✅ Atalhos no Desktop e Menu Iniciar
-✅ Sem dependências externas
-✅ Funciona offline após instalação
+✅ Sem dependências externas / Offline-Ready
 ```
 
 ## 🎬 Começar Agora
