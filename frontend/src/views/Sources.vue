@@ -212,7 +212,7 @@
 
             <!-- Title with Inline Status -->
             <div class="flex items-center gap-2 mb-3">
-              <h3 class="text-[26px] font-bold text-gray-100 truncate group-hover:text-cyan-300 transition-colors leading-tight">
+              <h3 class="text-xl font-bold text-gray-100 whitespace-nowrap overflow-hidden group-hover:text-cyan-300 transition-colors leading-tight">
                   {{ getSourceName(source.url) }}
               </h3>
               <span :class="[
@@ -389,13 +389,24 @@ const getSourceName = (url) => {
     // Capitaliza primeira letra
     name = name.charAt(0).toUpperCase() + name.slice(1)
     
+    // Limite de 14 caracteres conforme solicitado
+    if (name.length > 14) {
+      name = name.substring(0, 14)
+    }
+    
     return name || 'Fonte Remota'
   } catch (e) {
     // Se não conseguir fazer parse da URL, tenta extrair do final
     const parts = url.split('/')
     const lastPart = parts[parts.length - 1]
-    const name = lastPart.replace(/\.json$/i, '')
-    return name.charAt(0).toUpperCase() + name.slice(1) || 'Fonte Remota'
+    let name = lastPart.replace(/\.json$/i, '')
+    name = name.charAt(0).toUpperCase() + name.slice(1)
+    
+    if (name.length > 14) {
+      name = name.substring(0, 14)
+    }
+    
+    return name || 'Fonte Remota'
   }
 }
 

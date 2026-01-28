@@ -300,6 +300,37 @@ DELETE /api/jobs/failed/clear
 DELETE /api/jobs/canceled/clear
 ```
 
+### 4.2 Integridade & Instalação
+#### Verificar Integridade (Quick-Check)
+```http
+POST /api/integrity/check
+Content-Type: application/json
+
+{ "job_id": 123 }
+```
+**Resposta (200 OK):**
+```json
+{
+  "status": "healthy",
+  "score": 100,
+  "issues": [],
+  "actual_size": 1090519040,
+  "card_size": 1090519040
+}
+```
+
+#### Verificar Instalação (Setup Detection)
+```http
+GET /api/jobs/{job_id}/setup-check
+```
+**Resposta:**
+```json
+{
+  "found": true,
+  "setup_path": "C:\\Downloads\\Game\\setup.exe"
+}
+```
+
 ### 4.1 Suporte a Range (downloads diretos)
 
 ```http

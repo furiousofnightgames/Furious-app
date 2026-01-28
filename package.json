@@ -1,6 +1,6 @@
 {
   "name": "furiousapp",
-  "version": "3.1.0",
+  "version": "3.3.0",
   "description": "Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.",
   "main": "electron-main.js",
   "homepage": "./",
@@ -38,6 +38,13 @@
       {
         "from": "portables",
         "to": "portables",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "data_seed",
+        "to": "data_seed",
         "filter": [
           "**/*"
         ]

@@ -7,7 +7,7 @@
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-12 h-12">
           <defs>
             <linearGradient id="totalGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-              <stop offset="0%" style="stop-color: #06b6d4" />
+              <stop offset="0%" style="stop-color: #0ea5e9" />
               <stop offset="100%" style="stop-color: #0ea5e9" />
             </linearGradient>
           </defs>
@@ -116,7 +116,7 @@
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6">
           <defs>
             <linearGradient id="activeDownloadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color: #06b6d4" />
+              <stop offset="0%" style="stop-color: #0ea5e9" />
               <stop offset="100%" style="stop-color: #0ea5e9" />
             </linearGradient>
           </defs>
@@ -130,7 +130,7 @@
         <div v-for="job in downloadStore.activeDownloads" :key="job.id">
           <div class="flex justify-between items-start mb-2">
             <div class="flex-1">
-              <p class="font-semibold text-cyan-300 break-words">{{ job.name }}</p>
+              <p class="font-semibold text-cyan-300 break-words">{{ job.name || job.item_name || 'Download' }}</p>
               <p class="text-xs text-gray-500">
                 <template v-if="job.status === 'queued'">
                   <span class="text-amber-400 font-medium">⏳ Aguardando</span>
@@ -151,6 +151,10 @@
               <template v-else-if="job.status === 'running'">Em andamento</template>
               <template v-else>0%</template>
             </span>
+          </div>
+          <div v-if="spaceWarnings[job.id] || job.status_reason === 'insufficient_space'" class="mb-2 p-2 bg-rose-500/20 border border-rose-500/40 rounded text-[11px] text-rose-300 font-bold animate-pulse flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M12 2L1 21h22L12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+             {{ spaceWarnings[job.id] || '⚠️ Download pausado: Espaço insuficiente em disco.' }}
           </div>
           <div class="w-full bg-gray-900 rounded-full h-2 mb-2">
             <div 
@@ -260,10 +264,19 @@
         <div v-for="job in pausedJobs" :key="job.id" class="p-4 bg-gradient-to-r from-gray-900/50 to-gray-900/30 rounded-lg border border-yellow-500/20 hover:border-yellow-500/40 transition-all">
           <div class="flex justify-between items-start mb-3">
             <div class="flex-1">
-              <p class="font-semibold text-yellow-300 break-words">{{ job.name }}</p>
-              <p class="text-xs text-gray-400">{{ formatBytes(job.downloaded) }} {{ job.size ? '/ ' + formatBytes(job.size) : '(desc.)' }}</p>
+              <p class="font-semibold text-yellow-300 break-words">{{ job.name || job.item_name }}</p>
+              <p class="text-xs text-gray-400">
+                {{ formatBytes(job.downloaded || 0) }} / {{ job.size ? formatBytes(job.size) : '(tam. desconhecido)' }}
+              </p>
+              <div v-if="job.status_reason === 'insufficient_space'" class="mt-1 text-[10px] text-rose-300/80 font-medium">
+                Metadados resolvidos: Tamanho real ({{ formatBytes(job.size) }}) excedeu o espaço livre ({{ formatBytes(job.free_space_at_pause || 0) }}).
+              </div>
             </div>
             <span class="text-sm font-bold text-yellow-400 bg-yellow-500/20 px-2 py-1 rounded">{{ downloadStore.formatProgress(Math.min(job.progress, 100)) }}%</span>
+          </div>
+          <div v-if="job.status_reason === 'insufficient_space'" class="mb-3 p-2 bg-rose-500/20 border border-rose-500/40 rounded text-[11px] text-rose-300 font-bold flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 animate-pulse"><path d="M12 2L1 21h22L12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+            BLOQUEADO: Espaço insuficiente no disco rígido.
           </div>
           <div class="w-full bg-gray-900/70 rounded-full h-2 mb-4 overflow-hidden">
             <div 
@@ -321,18 +334,29 @@
 
     <!-- Completed Downloads -->
     <Card v-if="downloadStore.completedDownloads.length > 0">
-      <div class="flex items-center gap-2 mb-4">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6">
-          <defs>
-            <linearGradient id="completedGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color: #10b981" />
-              <stop offset="100%" style="stop-color: #059669" />
-            </linearGradient>
-          </defs>
-          <circle cx="12" cy="12" r="9" fill="none" stroke="url(#completedGrad)" stroke-width="1.5"/>
-          <polyline points="7,12 11,16 17,8" fill="none" stroke="url(#completedGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <h2 class="text-xl font-bold text-green-400">Downloads Concluídos</h2>
+      <div class="flex items-center justify-between gap-2 mb-4">
+        <div class="flex items-center gap-2">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6">
+            <defs>
+              <linearGradient id="completedGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color: #10b981" />
+                <stop offset="100%" style="stop-color: #059669" />
+              </linearGradient>
+            </defs>
+            <circle cx="12" cy="12" r="9" fill="none" stroke="url(#completedGrad)" stroke-width="1.5"/>
+            <polyline points="7,12 11,16 17,8" fill="none" stroke="url(#completedGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <h2 class="text-xl font-bold text-green-400">Downloads Concluídos</h2>
+        </div>
+        <button 
+          @click="forceCheckSetups"
+          title="Recarregar Instaladores"
+          class="p-2 text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors group"
+        >
+          <svg class="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
       </div>
       <div class="space-y-3">
         <div v-for="job in downloadStore.completedDownloads" :key="job.id" class="p-4 bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-500/30 rounded-lg hover:border-green-500/50 transition-colors">
@@ -342,7 +366,7 @@
                 <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-green-400">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                 </svg>
-                <p class="font-semibold text-green-300 break-words">{{ job.name }}</p>
+                <p class="font-semibold text-green-300 break-words">{{ job.name || job.item_name }}</p>
               </div>
               <div class="flex items-center gap-4 text-sm">
                 <span class="text-gray-400">
@@ -351,7 +375,7 @@
                 </span>
                 <span class="text-gray-400">
                   Status:
-                  <span class="text-green-300 font-medium">Concluído</span>
+                  <span class="text-green-300 font-medium">{{ job.status === 'completed_cleaned' ? 'Instalado (Arquivos Removidos)' : 'Concluído' }}</span>
                 </span>
               </div>
             </div>
@@ -375,14 +399,65 @@
             </Button>
             <Button 
               @click="openFolder(job.id)"
-              variant="primary"
+              variant="outline"
               size="sm"
-              class="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 shadow-lg shadow-green-500/20 flex items-center justify-center gap-2"
+              class="flex-1 min-w-fit border-green-500/50 text-green-400 hover:bg-green-500/10 hover:border-green-500 flex items-center justify-center gap-2 btn-translucent"
             >
               <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
                 <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10z"/>
               </svg>
               Abrir Pasta
+            </Button>
+            <Button 
+              v-if="foundSetups[job.id]?.found && !job.is_installing && !foundSetups[job.id]?.is_manual"
+              @click="runInstaller(job.id)"
+              variant="success"
+              size="sm"
+              class="flex-1 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:via-blue-500 hover:to-indigo-500 shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2 transform hover:scale-[1.02] active:scale-[0.98] transition-all font-bold"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                <path d="M13 3h-2v10l-3-3-1.4 1.4L12 16.8l5.4-5.4L16 10l-3 3V3zM5 18v2h14v-2H5z"/>
+              </svg>
+              {{ job.setup_executed ? 'Instalar (Novamente)' : 'Instalar' }}
+            </Button>
+            <Button 
+              v-if="job.is_installing"
+              disabled
+              variant="outline"
+              size="sm"
+              class="flex-1 border-cyan-500 text-cyan-400 bg-cyan-500/5 flex items-center justify-center gap-2 animate-pulse cursor-wait"
+            >
+              <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Instalando...
+            </Button>
+
+            <!-- Botão para Instalação Manual (RuTracker/Online-Fix) -->
+            <Button 
+              v-if="foundSetups[job.id]?.is_manual && !job.setup_executed && !job.is_installing && !foundSetups[job.id]?.found"
+              @click="markAsInstalled(job.id)"
+              variant="primary"
+              size="sm"
+              class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
+              </svg>
+              Marcar como Instalado
+            </Button>
+
+            <Button 
+              v-if="job.status === 'completed' && job.setup_executed && !job.is_installing"
+              @click="cleanupInstaller(job.id)"
+              variant="outline"
+              size="sm"
+              class="flex-1 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500 flex items-center justify-center gap-2 btn-translucent"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                <path d="M15 4V3H9v1H4v2h1v13c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6h1V4h-5zM9 17H7V8h2v9zm4 0h-2V8h2v9zm4 0h-2V8h2v9z"/>
+              </svg>
+              Limpar Instalador
             </Button>
             <Button 
               @click="openDeleteFileDialog(job.id)"
@@ -393,8 +468,21 @@
               <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z"/>
               </svg>
-              Remover
+              {{ job.status === 'completed_cleaned' ? 'Remover do Histórico' : 'Remover' }}
             </Button>
+          </div>
+
+          <!-- Dica para Instalação Manual (Abaixo dos botões) -->
+          <div v-if="foundSetups[job.id]?.is_manual && !job.setup_executed && !job.is_installing" class="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg flex gap-3 items-start animate-in fade-in slide-in-from-top-1 shadow-inner">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-blue-400 mt-0.5"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+            <div class="space-y-1 flex-1">
+              <p class="text-xs font-bold text-blue-200">
+                 Instalação Manual: {{ foundSetups[job.id]?.manual_type === 'online-fix' ? 'Online-Fix' : 'Pronto para Rodar' }}
+              </p>
+              <p class="text-[10px] text-blue-300/80 leading-tight">
+                Este item não possui um instalador automático. Abra a pasta, configure os arquivos e, quando terminar, clique no botão <b>Marcar como Instalado</b> para habilitar a limpeza do lixo residual.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -434,7 +522,7 @@
                 <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-red-400">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                 </svg>
-                <p class="font-semibold text-red-300 break-words">{{ job.name }}</p>
+                <p class="font-semibold text-red-300 break-words">{{ job.name || job.item_name }}</p>
               </div>
               <div class="flex items-center gap-4 text-sm">
                 <span class="text-gray-400">
@@ -520,7 +608,7 @@
                 <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-amber-400">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
                 </svg>
-                <p class="font-semibold text-amber-300 break-words">{{ job.name }}</p>
+                <p class="font-semibold text-amber-300 break-words">{{ job.name || job.item_name }}</p>
               </div>
               <div class="flex items-center gap-4 text-sm">
                 <span class="text-gray-400">
@@ -593,35 +681,40 @@
     <Modal 
       :isOpen="showDeleteModal" 
       @close="showDeleteModal = false"
-      title="Remover Download"
+      title="Remover Registro"
+      maxWidthClass="max-w-lg"
     >
-      <div class="space-y-4">
-        <p class="text-gray-300">
-          Tem certeza que deseja <span class="text-red-400 font-semibold">deletar os arquivos</span> deste download?
-        </p>
-        <p class="text-sm text-gray-500 bg-gray-900/50 p-3 rounded border border-gray-700">
-          Esta ação não pode ser desfeita.
+      <div class="space-y-6">
+        <div class="flex items-center gap-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+          <div class="w-12 h-12 rounded-xl bg-rose-500/20 flex items-center justify-center shrink-0 shadow-lg">
+            <svg viewBox="0 0 24 24" fill="none" class="w-6 h-6 text-rose-500" stroke="currentColor" stroke-width="2.5">
+              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-[11px] font-black text-rose-400 uppercase tracking-widest mb-1">Confirmação Crítica</p>
+            <p class="text-sm font-bold text-white">Deseja realmente deletar este acervo do disco?</p>
+          </div>
+        </div>
+        
+        <p class="text-xs text-slate-500 uppercase tracking-widest leading-relaxed text-center px-4">
+          Esta operação irá apagar permanentemente os dados baixados. O processo não poderá ser revertido.
         </p>
       </div>
       <template #actions>
-        <div class="flex gap-6 mt-6">
-          <Button 
+        <div class="flex gap-4 mt-8">
+          <button 
             @click="showDeleteModal = false"
-            variant="outline"
-            class="flex-1 border-gray-600 text-gray-300 hover:bg-gray-900/50 btn-translucent"
+            class="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-2xl transition-all border border-white/10 active:scale-95"
           >
             Cancelar
-          </Button>
-          <Button 
+          </button>
+          <button 
             @click="deleteJobFile(jobToDelete)"
-            variant="danger"
-            class="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            class="flex-1 h-14 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-rose-900/40 transition-all active:scale-95 flex items-center justify-center gap-2"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 inline mr-2">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z"/>
-            </svg>
-            Deletar
-          </Button>
+            Confirmar Exclusão
+          </button>
         </div>
       </template>
     </Modal>
@@ -630,40 +723,43 @@
     <Modal 
       :isOpen="showClearAllModal"
       @close="showClearAllModal = false"
-      title="Limpar Downloads Concluídos"
+      title="Limpar Concluídos"
+      maxWidthClass="max-w-lg"
     >
-      <div class="space-y-4">
-        <p class="text-gray-300">
-          Tem certeza que deseja <span class="text-amber-400 font-semibold">deletar TODOS os downloads concluídos</span>?
-        </p>
-        <div class="bg-amber-900/20 border border-amber-500/30 rounded p-3 space-y-1">
-          <p class="text-sm text-amber-300 font-medium">
-            {{ downloadStore.completedDownloads.length }} item{{ downloadStore.completedDownloads.length !== 1 ? 's' : '' }} será{{ downloadStore.completedDownloads.length !== 1 ? 'ão' : '' }} removido{{ downloadStore.completedDownloads.length !== 1 ? 's' : '' }}
+      <div class="space-y-6">
+        <div class="flex items-center gap-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0 shadow-lg">
+            <svg viewBox="0 0 24 24" fill="none" class="w-6 h-6 text-emerald-500" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-[11px] font-black text-emerald-400 uppercase tracking-widest mb-1">Manutenção de Banco</p>
+            <p class="text-sm font-bold text-white">Remover todos os registros finalizados?</p>
+          </div>
+        </div>
+        
+        <div class="bg-black/20 rounded-xl p-4 border border-white/5 space-y-1 text-center">
+          <p class="text-sm font-black text-emerald-300 uppercase tracking-tighter">
+            {{ downloadStore.completedDownloads.length }} itens serão arquivados
           </p>
-          <p class="text-xs text-gray-500">
-            Esta ação não pode ser desfeita.
-          </p>
+          <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Os arquivos em disco não serão afetados.</p>
         </div>
       </div>
       <template #actions>
-        <div class="flex gap-6 mt-6">
-          <Button 
+        <div class="flex gap-4 mt-8">
+          <button 
             @click="showClearAllModal = false"
-            variant="outline"
-            class="flex-1 border-gray-600 text-gray-300 hover:bg-gray-900/50 btn-translucent"
+            class="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-2xl transition-all border border-white/10 active:scale-95"
           >
             Cancelar
-          </Button>
-          <Button 
+          </button>
+          <button 
             @click="clearCompleted"
-            variant="danger"
-            class="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+            class="flex-1 h-14 bg-gradient-to-br from-emerald-600 to-teal-700 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-emerald-900/40 transition-all active:scale-95"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 inline mr-2">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z"/>
-            </svg>
-            Limpar Tudo
-          </Button>
+            Limpar Histórico
+          </button>
         </div>
       </template>
     </Modal>
@@ -672,40 +768,42 @@
     <Modal 
       :isOpen="showClearFailedModal"
       @close="showClearFailedModal = false"
-      title="Limpar Downloads com Erro"
+      title="Sanear Falhas"
+      maxWidthClass="max-w-lg"
     >
-      <div class="space-y-4">
-        <p class="text-gray-300">
-          Tem certeza que deseja <span class="text-red-400 font-semibold">deletar TODOS os downloads com erro</span>?
-        </p>
-        <div class="bg-red-900/20 border border-red-500/30 rounded p-3 space-y-1">
-          <p class="text-sm text-red-300 font-medium">
-            {{ downloadStore.failedDownloads.length }} item{{ downloadStore.failedDownloads.length !== 1 ? 's' : '' }} será{{ downloadStore.failedDownloads.length !== 1 ? 'ão' : '' }} removido{{ downloadStore.failedDownloads.length !== 1 ? 's' : '' }}
-          </p>
-          <p class="text-xs text-gray-500">
-            Esta ação não pode ser desfeita.
+      <div class="space-y-6">
+        <div class="flex items-center gap-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+          <div class="w-12 h-12 rounded-xl bg-rose-500/20 flex items-center justify-center shrink-0 shadow-lg">
+            <svg viewBox="0 0 24 24" fill="none" class="w-6 h-6 text-rose-500" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-[11px] font-black text-rose-400 uppercase tracking-widest mb-1">Saneamento Técnico</p>
+            <p class="text-sm font-bold text-white">Expurgar registros com erro?</p>
+          </div>
+        </div>
+        
+        <div class="bg-black/20 rounded-xl p-4 border border-white/5 space-y-1 text-center">
+          <p class="text-sm font-black text-rose-300 uppercase tracking-tighter">
+            {{ downloadStore.failedDownloads.length }} logs de erro serão excluídos
           </p>
         </div>
       </div>
       <template #actions>
-        <div class="flex gap-6 mt-6">
-          <Button 
+        <div class="flex gap-4 mt-8">
+          <button 
             @click="showClearFailedModal = false"
-            variant="outline"
-            class="flex-1 border-gray-600 text-gray-300 hover:bg-gray-900/50 btn-translucent"
+            class="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-2xl transition-all border border-white/10 active:scale-95"
           >
-            Cancelar
-          </Button>
-          <Button 
+            Ignorar
+          </button>
+          <button 
             @click="clearFailed"
-            variant="danger"
-            class="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            class="flex-1 h-14 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-rose-900/40 transition-all active:scale-95"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 inline mr-2">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z"/>
-            </svg>
-            Limpar Tudo
-          </Button>
+            Limpar Agora
+          </button>
         </div>
       </template>
     </Modal>
@@ -714,40 +812,85 @@
     <Modal 
       :isOpen="showClearCanceledModal"
       @close="showClearCanceledModal = false"
-      title="Limpar Downloads Cancelados"
+      title="Arquivar Cancelados"
+      maxWidthClass="max-w-lg"
     >
-      <div class="space-y-4">
-        <p class="text-gray-300">
-          Tem certeza que deseja <span class="text-blue-400 font-semibold">deletar TODOS os downloads cancelados</span>?
-        </p>
-        <div class="bg-blue-900/20 border border-blue-500/30 rounded p-3 space-y-1">
-          <p class="text-sm text-blue-300 font-medium">
-            {{ downloadStore.canceledDownloads.length }} item{{ downloadStore.canceledDownloads.length !== 1 ? 's' : '' }} será{{ downloadStore.canceledDownloads.length !== 1 ? 'ão' : '' }} removido{{ downloadStore.canceledDownloads.length !== 1 ? 's' : '' }}
-          </p>
-          <p class="text-xs text-gray-500">
-            Esta ação não pode ser desfeita.
-          </p>
+      <div class="space-y-6">
+        <div class="flex items-center gap-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
+          <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0 shadow-lg">
+            <svg viewBox="0 0 24 24" fill="none" class="w-6 h-6 text-blue-500" stroke="currentColor" stroke-width="2.5">
+              <path d="M18.364 18.364A9 9 0 105.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-[11px] font-black text-blue-400 uppercase tracking-widest mb-1">Limpeza de Estado</p>
+            <p class="text-sm font-bold text-white">Deseja remover as tarefas abortadas?</p>
+          </div>
         </div>
       </div>
       <template #actions>
-        <div class="flex gap-6 mt-6">
-          <Button 
+        <div class="flex gap-4 mt-8">
+          <button 
             @click="showClearCanceledModal = false"
-            variant="outline"
-            class="flex-1 border-gray-600 text-gray-300 hover:bg-gray-900/50 btn-translucent"
+            class="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-2xl transition-all border border-white/10 active:scale-95"
           >
-            Cancelar
-          </Button>
-          <Button 
+            Voltar
+          </button>
+          <button 
             @click="clearCanceled"
-            variant="danger"
-            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+            class="flex-1 h-14 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-blue-900/40 transition-all active:scale-95"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 inline mr-2">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z"/>
+            Confirmar
+          </button>
+        </div>
+      </template>
+    </Modal>
+
+    <!-- Cleanup Installer Confirmation Modal -->
+    <Modal 
+      :isOpen="showCleanupModal"
+      @close="showCleanupModal = false"
+      title="Otimizar Espaço"
+      maxWidthClass="max-w-lg"
+    >
+      <div class="space-y-6">
+        <div class="flex items-center gap-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
+          <div class="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0 shadow-lg">
+            <svg viewBox="0 0 24 24" fill="none" class="w-6 h-6 text-amber-500" stroke="currentColor" stroke-width="2.5">
+              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Limpar Tudo
-          </Button>
+          </div>
+          <div>
+            <p class="text-[11px] font-black text-amber-400 uppercase tracking-widest mb-1">Manutenção Pós-Instalação</p>
+            <p class="text-sm font-bold text-white">Deseja expurgar o instalador original?</p>
+          </div>
+        </div>
+        
+        <div class="bg-black/20 rounded-xl p-4 border border-white/5 space-y-2">
+          <div class="flex gap-2">
+             <span class="text-emerald-400 font-black">✓</span>
+             <p class="text-xs text-slate-300">O jogo continuará instalado e funcional.</p>
+          </div>
+          <div class="flex gap-2">
+             <span class="text-emerald-400 font-black">✓</span>
+             <p class="text-xs text-slate-300">Espaço em disco será liberado imediatamente.</p>
+          </div>
+        </div>
+      </div>
+      <template #actions>
+        <div class="flex gap-4 mt-8">
+          <button 
+            @click="showCleanupModal = false"
+            class="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-2xl transition-all border border-white/10 active:scale-95"
+          >
+            Manter Arquivos
+          </button>
+          <button 
+            @click="confirmCleanup"
+            class="flex-1 h-14 bg-gradient-to-br from-amber-600 to-orange-700 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-amber-900/40 transition-all active:scale-95 flex items-center justify-center gap-2"
+          >
+            Executar Limpeza
+          </button>
         </div>
       </template>
     </Modal>
@@ -756,42 +899,207 @@
     <Modal 
       :isOpen="!!showErrorModal"
       @close="showErrorModal = null"
-      title="Detalhes do Erro"
+      title="Console de Erros"
+      maxWidthClass="max-w-2xl"
     >
-      <div v-if="showErrorModal" class="space-y-4">
-        <div class="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-          <p class="text-sm text-gray-300 font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
-            {{ getCurrentErrorLog() }}
-          </p>
+      <div v-if="showErrorModal" class="space-y-6">
+        <div class="bg-slate-900/80 border border-rose-500/20 rounded-3xl p-6 shadow-inner overflow-hidden relative">
+          <div class="absolute top-0 right-0 p-4 opacity-5">
+            <svg viewBox="0 0 24 24" fill="none" class="w-24 h-24 text-rose-500" stroke="currentColor"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          </div>
+          <p class="text-xs font-black font-mono text-rose-400 uppercase tracking-widest mb-4">Output Log v3.1</p>
+          <div class="bg-black/60 rounded-xl p-5 border border-white/5">
+            <p class="text-sm text-rose-100 font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto custom-scrollbar leading-relaxed">
+              {{ getCurrentErrorLog() }}
+            </p>
+          </div>
         </div>
-        <div class="flex items-center gap-2 text-xs text-gray-500">
-          <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-          </svg>
-          <span>Use este log para diagnosticar o problema</span>
-        </div>
+        
+        <p class="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] text-center">
+          Utilize estas informações para suporte técnico ou depuração.
+        </p>
       </div>
       <template #actions>
-        <div class="flex gap-6 mt-6">
-          <Button 
+        <div class="flex gap-4 mt-8">
+          <button 
             @click="copyErrorToClipboard"
-            variant="secondary"
-            class="flex-1"
+            class="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest rounded-2xl transition-all border border-white/10 active:scale-95 flex items-center justify-center gap-2"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 inline mr-2">
-              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-            </svg>
-            Copiar
-          </Button>
-          <Button 
+            Copiar Log
+          </button>
+          <button 
             @click="showErrorModal = null"
-            variant="outline"
-            class="flex-1"
+            class="flex-1 h-14 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-rose-900/40 transition-all active:scale-95"
           >
-            Fechar
-          </Button>
+            Fechar Painel
+          </button>
         </div>
       </template>
+    </Modal>
+
+    <!-- Modal de Ponte: Instalação em Andamento -->
+    <Modal 
+      v-if="showInstallingModal" 
+      @close="showInstallingModal = false" 
+      title="Status da Instalação" 
+      maxWidthClass="max-w-xl"
+    >
+      <div class="space-y-8 py-2">
+        <!-- Banner de Status Animado -->
+        <div class="flex flex-col items-center justify-center p-10 bg-gradient-to-br from-slate-900 to-slate-950 border border-cyan-500/20 rounded-[2rem] relative overflow-hidden shadow-2xl">
+          <div class="absolute inset-0 bg-cyan-500/5 blur-3xl opacity-20 animate-pulse"></div>
+          
+          <!-- Logo/Spinner Interativo -->
+          <div class="relative w-24 h-24 mb-6">
+            <div class="absolute inset-0 border-4 border-cyan-500/10 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin-slow"></div>
+            <div class="absolute inset-4 bg-cyan-500/10 rounded-full flex items-center justify-center">
+               <svg viewBox="0 0 24 24" fill="none" class="w-10 h-10 text-cyan-400 animate-pulse" stroke="currentColor" stroke-width="2.5">
+                  <path d="M12 22v-5m0-10V2m0 10l5 5m-5-5l-5 5m5-5l5-5m-5 5l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+               </svg>
+            </div>
+          </div>
+          
+          <h3 class="text-xl font-black text-white text-center uppercase italic tracking-tighter leading-tight">{{ installingJobName }}</h3>
+          <p class="text-cyan-400/60 text-[10px] font-black uppercase tracking-[0.3em] mt-3">Agente de Instalação Ativo</p>
+        </div>
+
+        <!-- Guia de Instalação Manual (Didático e Interativo) -->
+        <div class="space-y-4 px-2">
+          <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Checklist de Verificação:</p>
+          
+          <div class="grid grid-cols-1 gap-3">
+            <button 
+              v-for="(step, index) in [
+                { id: 1, text: 'Defina o <b>Idioma</b> na janela do instalador.' },
+                { id: 2, text: 'Aponte a <b>Pasta de Destino</b> (SSD recomendado).' },
+                { id: 3, text: 'Execute o <b>Install</b> e aguarde a barra de progresso.' }
+              ]"
+              :key="step.id"
+              @click="toggleStep(step.id)"
+              class="w-full flex items-center gap-4 p-4 bg-white/[0.03] border rounded-2xl transition-all text-left group"
+              :class="completedSteps.includes(step.id) ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-white/5 hover:border-cyan-500/30'"
+            >
+              <div class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center text-xs font-black transition-all border"
+                   :class="completedSteps.includes(step.id) ? 'bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20' : 'bg-slate-900 text-slate-600 border-slate-800 group-hover:border-cyan-500/30'">
+                <span v-if="completedSteps.includes(step.id)">✓</span>
+                <span v-else>{{ step.id }}</span>
+              </div>
+              <p class="text-xs font-bold transition-colors" :class="completedSteps.includes(step.id) ? 'text-emerald-200' : 'text-slate-300'" v-html="step.text"></p>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <template #actions>
+        <div class="flex gap-4 mt-8">
+          <button 
+            @click="showInstallingModal = false"
+            class="flex-1 h-14 bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-cyan-900/40 transition-all active:scale-95"
+          >
+            Continuar em Segundo Plano
+          </button>
+        </div>
+      </template>
+    </Modal>
+
+    <!-- Modal de Verificação de Integridade (Porteiro de Segurança) -->
+    <Modal 
+      v-if="showIntegrityCheckModal" 
+      @close="showIntegrityCheckModal = false" 
+      title="Segurança" 
+      maxWidthClass="max-w-lg"
+    >
+      <div class="space-y-8 py-4">
+        <!-- 1. LOADING STATE: Analyzing -->
+        <div v-if="isCheckingIntegrity" class="flex flex-col items-center justify-center p-12 space-y-6">
+           <div class="relative w-20 h-20">
+              <div class="absolute inset-0 border-4 border-cyan-500/10 rounded-full"></div>
+              <div class="absolute inset-0 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+              <div class="absolute inset-0 flex items-center justify-center">
+                 <svg viewBox="0 0 24 24" fill="none" class="w-8 h-8 text-cyan-500" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round"/>
+                 </svg>
+              </div>
+           </div>
+           <div class="text-center space-y-2">
+              <h3 class="text-xl font-black text-white uppercase italic tracking-tighter animate-pulse">Escaneando Arquivos...</h3>
+              <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Verificando integridade e instalador</p>
+           </div>
+        </div>
+
+        <!-- 2. RESULT STATE: Finished scanning -->
+        <div v-else-if="integrityCheckData" class="space-y-6 animate-in fade-in zoom-in-95 duration-500">
+           <!-- Health Banner -->
+           <div class="flex items-center gap-5 p-6 rounded-3xl border shadow-2xl" 
+                :class="{
+                  'bg-emerald-500/10 border-emerald-500/30 shadow-emerald-950/20': integrityCheckData.status === 'healthy',
+                  'bg-amber-500/10 border-amber-500/30 shadow-amber-950/20': integrityCheckData.status === 'warning',
+                  'bg-rose-500/10 border-rose-500/30 shadow-rose-950/20': integrityCheckData.status === 'critical'
+                }">
+              <div class="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+                   :class="{
+                     'bg-emerald-500/20 text-emerald-400': integrityCheckData.status === 'healthy',
+                     'bg-amber-500/20 text-amber-400': integrityCheckData.status === 'warning',
+                     'bg-rose-500/20 text-rose-500': integrityCheckData.status === 'critical'
+                   }">
+                 <svg v-if="integrityCheckData.status === 'healthy'" viewBox="0 0 24 24" fill="none" class="w-10 h-10" stroke="currentColor" stroke-width="3">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                 </svg>
+                 <svg v-else viewBox="0 0 24 24" fill="none" class="w-10 h-10" stroke="currentColor" stroke-width="3">
+                    <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round"/>
+                 </svg>
+              </div>
+              <div class="flex-1">
+                 <h3 class="text-2xl font-black uppercase italic tracking-tighter"
+                     :class="{
+                       'text-emerald-400': integrityCheckData.status === 'healthy',
+                       'text-amber-400': integrityCheckData.status === 'warning',
+                       'text-rose-400': integrityCheckData.status === 'critical'
+                     }">
+                   {{ integrityCheckData.status === 'healthy' ? 'Integridade OK' : 'Falha Detectada' }}
+                 </h3>
+                 <p class="text-[10px] font-black uppercase tracking-widest opacity-60 text-white">Score de Saúde: {{ integrityCheckData.health_score }}%</p>
+              </div>
+           </div>
+
+           <!-- Issues List (if any) -->
+           <div v-if="integrityCheckData.issues && integrityCheckData.issues.length > 0" class="bg-black/40 p-5 rounded-2xl border border-white/5 space-y-4">
+              <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Inconsistências Encontradas:</p>
+              <ul class="space-y-2">
+                 <li v-for="(issue, i) in integrityCheckData.issues" :key="i" class="text-xs font-bold text-rose-200/80 flex gap-3">
+                    <span class="text-rose-500 font-black shrink-0">•</span> {{ issue }}
+                 </li>
+              </ul>
+              <div class="pt-3 border-t border-white/5 space-y-2">
+                 <p class="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-relaxed">
+                   Dica: Verifique se o seu Antivírus/Defender excluiu arquivos ou tente baixar novamente o item.
+                 </p>
+              </div>
+           </div>
+
+           <!-- Action Area -->
+           <div class="flex flex-col gap-3">
+              <Button 
+                v-if="integrityCheckData.status === 'healthy'" 
+                @click="confirmRunInstaller" 
+                variant="success" 
+                size="lg" 
+                class="w-full h-16 bg-gradient-to-r from-emerald-600 to-teal-600 font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-emerald-900/20 active:scale-95"
+              >
+                 Iniciar Instalação
+              </Button>
+              <template v-else>
+                 <Button @click="confirmRunInstaller" variant="danger" size="lg" class="w-full h-16 bg-rose-600 hover:bg-rose-500 font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-rose-900/30 active:scale-95">
+                   Instalar Mesmo Assim
+                 </Button>
+                 <Button @click="showIntegrityCheckModal = false" variant="outline" size="lg" class="w-full h-14 bg-white/5 border-white/10 font-black uppercase tracking-widest rounded-2xl">
+                   Voltar e Corrigir
+                 </Button>
+              </template>
+           </div>
+        </div>
+      </div>
     </Modal>
   </div>
 </template>
@@ -819,14 +1127,105 @@ const showDeleteModal = ref(false)
 const showClearAllModal = ref(false)
 const showClearFailedModal = ref(false)
 const showClearCanceledModal = ref(false)
+const showCleanupModal = ref(false)
 const showErrorModal = ref(null)
 const errorLogCache = ref({})
 const jobToDelete = ref(null)
+const jobToCleanup = ref(null)
 const retryingJobId = ref(null)
 const jobStatusHistory = ref({})
+const foundSetups = ref({}) // jobId -> { found, setup_path }
+const spaceWarnings = ref({}) // jobId -> message
+const showInstallingModal = ref(false)
+const installingJobName = ref('')
+const installingJobPID = ref(null)
+const installingJobPath = ref('')
+const installingJobID = ref(null)
+const completedSteps = ref([])
+const showIntegrityCheckModal = ref(false)
+const isCheckingIntegrity = ref(false)
+const integrityCheckData = ref(null)
+const pendingJobToInstall = ref(null)
+let installCheckInterval = null
+
+async function markAsInstalled(jobId) {
+  try {
+    await downloadStore.markInstalled(jobId)
+    // Forçar re-check pra atualizar dicas se necessário
+    nextTick(() => checkJobSetups())
+  } catch (e) {}
+}
+
+function toggleStep(step) {
+  if (completedSteps.value.includes(step)) {
+    completedSteps.value = completedSteps.value.filter(s => s !== step)
+  } else {
+    completedSteps.value.push(step)
+  }
+}
 
 onMounted(() => {
-  downloadStore.fetchJobs()
+  downloadStore.fetchJobs().then(() => {
+    checkJobSetups()
+  })
+})
+
+async function checkJobSetups() {
+  const completed = downloadStore.completedDownloads
+  for (const job of completed) {
+    // Só checar se ainda não temos NENHUM dado para esse ID (evita re-scan de falhas/manuais)
+    if (foundSetups.value[job.id] === undefined) {
+      const res = await downloadStore.checkSetup(job.id)
+      if (res) {
+        foundSetups.value[job.id] = res
+      }
+    }
+  }
+}
+
+async function forceCheckSetups() {
+  // Limpar detecções negativas para forçar re-scan
+  Object.keys(foundSetups.value).forEach(id => {
+    if (!foundSetups.value[id].found) {
+      delete foundSetups.value[id]
+    }
+  })
+  await checkJobSetups()
+}
+
+// Monitora mudanças de tamanho (metadata resolvido)
+watch(() => downloadStore.jobs.map(j => `${j.id}:${j.total}`), async (newVals, oldVals) => {
+  if (!oldVals) return
+  
+  for (let i = 0; i < newVals.length; i++) {
+    const [id, totalStr] = newVals[i].split(':')
+    const total = parseInt(totalStr)
+    const oldVal = oldVals.find(v => v.startsWith(`${id}:`))
+    
+    if (oldVal) {
+      const oldTotal = parseInt(oldVal.split(':')[1])
+      // Se o tamanho aumentou significativamente (ex: metadata)
+      if (total > oldTotal * 2 && total > 1024 * 1024 * 50) {
+        console.log(`[Downloads] Tamanho do job ${id} aumentou drasticamente: ${oldTotal} -> ${total}`)
+        const job = downloadStore.jobs.find(j => j.id === parseInt(id))
+        if (job) {
+          const disk = await downloadStore.getDiskSpace(job.dest)
+          if (disk && disk.free < total * 1.5) { // 1.5x por segurança pra baixar + unpack inicial
+            spaceWarnings.value[id] = `⚠️ O tamanho real foi detectado (${formatBytes(total)}). Seu disco pode não ter espaço suficiente.`
+            toastStore.push('Aviso de Espaço', `O download de "${job.name}" foi pausado pois o tamanho real (${formatBytes(total)}) excede o espaço seguro disponível.`)
+            // INTERROMPER O DOWNLOAD IMEDIATAMENTE
+            downloadStore.pauseJob(job.id)
+          }
+        }
+      }
+    }
+  }
+}, { deep: true })
+
+
+// Watch completed downloads to check for new ones
+watch(() => downloadStore.completedDownloads.length, () => {
+  checkJobSetups()
 })
 
 // Atualiza detalhes em tempo real enquanto o modal está aberto
@@ -899,6 +1298,10 @@ if (job.status === 'completed' && (previousStatus === 'running' || previousStatu
     }
     
     toastStore.push(' Concluído', message)
+    
+    // CRÍTICO: Disparar verificação de instalador IMEDIATAMENTE após concluir
+    setTimeout(() => checkJobSetups(), 500)
+    setTimeout(() => checkJobSetups(), 3000) // Double-check caso o IO demore
   } catch (e) {}
 }
     }
@@ -1047,6 +1450,112 @@ async function clearCompleted() {
   }
 }
 
+async function runInstaller(jobId) {
+  try {
+    const job = downloadStore.jobs.find(j => j.id === jobId)
+    const setup = foundSetups.value[jobId]
+    if (!job || !setup) return
+
+    // 🛡️ ABRIR GATEKEEPER VISÍVEL IMEDIATAMENTE (Requisito do Usuário)
+    pendingJobToInstall.value = { id: jobId, path: setup.setup_path, name: job.name }
+    integrityCheckData.value = null
+    isCheckingIntegrity.value = true
+    showIntegrityCheckModal.value = true
+    
+    // Realizar verificação em background com delay artificial para ser visível e "dramático"
+    try {
+      const [res] = await Promise.all([
+        api.get(`/api/jobs/${jobId}/integrity`),
+        new Promise(resolve => setTimeout(resolve, 2500)) // Aumentado para 2.5s para ser bem perceptível
+      ])
+      integrityCheckData.value = res.data
+    } catch (intErr) {
+      console.error('[Integrity] Erro na verificação pré-instalação:', intErr)
+      // Fallback em caso de erro técnico na API
+      integrityCheckData.value = { status: 'warning', health_score: 50, issues: ['Falha técnica no sistema de verificação. Prossiga com cautela.'] }
+    } finally {
+      isCheckingIntegrity.value = false
+    }
+    
+  } catch (e) {
+    console.error('Erro ao iniciar instalador:', e)
+  }
+}
+
+function confirmRunInstaller() {
+  if (pendingJobToInstall.value) {
+    const { id, path, name } = pendingJobToInstall.value
+    showIntegrityCheckModal.value = false
+    proceedToRunInstaller(id, path, name)
+    pendingJobToInstall.value = null
+  }
+}
+
+async function proceedToRunInstaller(jobId, setupPath, jobName) {
+  try {
+    // Se já estiver instalando ESTE mesmo job, não lana de novo, apenas abre o modal
+    if (showInstallingModal.value && installingJobID.value === jobId) {
+      return
+    }
+
+    installingJobName.value = jobName
+    installingJobID.value = jobId
+    installingJobPath.value = setupPath
+    installingJobPID.value = null
+    completedSteps.value = [] // Reset checklist
+    
+    // Abrir o modal imediatamente
+    showInstallingModal.value = true
+    
+    // Iniciar no backend
+    const res = await downloadStore.runSetup(jobId, setupPath)
+    if (res && res.pid) {
+      installingJobPID.value = res.pid
+      startInstallerMonitor(res.pid)
+    }
+  } catch (err) {
+    console.error('[Installer] Falha ao executar subprocesso:', err)
+    showInstallingModal.value = false
+  }
+}
+
+async function reFocusInstaller() {
+  if (!installingJobPID.value) return
+  try {
+     const res = await api.post(`/api/system/process/${installingJobPID.value}/focus`)
+     if (res.data && res.data.success) {
+       console.log('[Focus] Comando de foco enviado com sucesso')
+     }
+  } catch (e) {
+     console.error('[Focus] Erro ao enviar comando de foco:', e)
+  }
+}
+
+function startInstallerMonitor(pid) {
+  if (installCheckInterval) clearInterval(installCheckInterval)
+  
+  installCheckInterval = setInterval(async () => {
+    try {
+      const res = await api.get(`/api/system/process/${pid}`)
+      if (res.data && res.data.running === false) {
+        console.log(`[Installer] Processo ${pid} finalizado.`)
+        stopInstallerMonitor()
+      }
+    } catch (e) {
+      // Se der erro na API, para o monitor por segurança
+      stopInstallerMonitor()
+    }
+  }, 3000)
+}
+
+function stopInstallerMonitor() {
+  if (installCheckInterval) {
+    clearInterval(installCheckInterval)
+    installCheckInterval = null
+  }
+  showInstallingModal.value = false
+}
+
 function deleteAllFailed() {
   console.log('[Downloads] deleteAllFailed() chamado')
   showClearFailedModal.value = true
@@ -1128,6 +1637,23 @@ function getCurrentErrorLog() {
   const name = job.name || 'Download'
   const url = job.url || 'URL desconhecida'
   return `Falha no download de "${name}"\n\nURL: ${url}\n\nNenhum detalhe de erro foi registrado pelo servidor.`
+}
+
+async function cleanupInstaller(jobId) {
+  jobToCleanup.value = jobId
+  showCleanupModal.value = true
+}
+
+async function confirmCleanup() {
+  if (!jobToCleanup.value) return
+  try {
+    const id = jobToCleanup.value
+    await downloadStore.cleanupJob(id)
+    showCleanupModal.value = false
+    jobToCleanup.value = null
+  } catch (e) {
+    console.error('Erro na limpeza:', e)
+  }
 }
 
 function copyErrorToClipboard() {

@@ -143,10 +143,12 @@ O Furious App pode pausar downloads automaticamente quando você estiver usando 
 2. Tente reduzir o número de conexões simultâneas
 3. Verifique se há limitações no servidor de origem
 
-### Erros Comuns
-- **Conexão Recusada**: Verifique se o serviço está em execução
-- **Sem Espaço em Disco**: Libere espaço ou altere o diretório de destino
-- **Erro de Permissão**: Execute o aplicativo como administrador
+### Erros Comuns & Códigos
+- **ENOSPC (Sem Espaço)**: O disco encheu. Libere espaço ou mude o destino.
+- **EACCES (Acesso Negado)**: O App não tem permissão para escrever na pasta. Tente executar como Admin.
+- **EARIA2_EXIT (Erro no Motor)**: O motor de download (aria2) falhou. Geralmente conflito de arquivos ou bloqueio de firewall.
+- **ESTALLED (Travado)**: O download não recebe dados há muito tempo. Tente Pausar/Continuar ou trocar de fonte.
+- **Conexão Recusada**: Verifique se o servidor backend está rodando (porta 8000/8001).
 
 ### Obtendo Ajuda
 - **Documentação**: Consulte os arquivos `.md` na pasta `docs/` do projeto
@@ -170,8 +172,23 @@ O Furious App é distribuído via instalador. Para atualizar, execute o instalad
 
 A aplicação é **local-first**. Dados e configurações ficam no computador do usuário.
 
+## 🛡️ Integridade & Instalação (Novo!)
+### Quick-Check (Verificação Física)
+Ao concluir um download, o botão muda para "Verificar Integridade".
+- O App escaneia o disco em busca de arquivos corrompidos.
+- **Verde**: Tudo certo! Botão muda para "Instalar".
+- **Vermelho**: Falta arquivo. O App avisa o que baixou errado.
+
+### Instalação Integrada
+- O App detecta `setup.exe` automaticamente.
+- **Assistente de Espaço**: Avisa se você tem espaço para instalar (Regra x2.5).
+- **Limpeza**: Após instalar, oferece deletar o instalador (Repack) para liberar espaço.
+
+### Atalhos
+- Crie atalhos na Área de Trabalho com 1 clique após a instalação.
+
 ---
 
-📅 **Última Atualização**: 27/12/2025 (v2.7.0)
+📅 **Última Atualização**: Janeiro 2026 (v3.3.0)
 
-© 2025 Furious App. Todos os direitos reservados.
+© 2026 Furious App. Todos os direitos reservados.

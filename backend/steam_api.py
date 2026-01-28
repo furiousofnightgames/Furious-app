@@ -9,6 +9,7 @@ import time
 import locale
 import re
 import ctypes
+import os
 from typing import Dict, Optional, List, Any
 
 
@@ -17,11 +18,31 @@ class SteamAPIClient:
         self._client: Optional[httpx.AsyncClient] = None
         self._timeout = timeout
         self._max_retries = max_retries
-        # Cache simples em memória: appId -> (dados_normalizados, timestamp)
-        self._cache: Dict[int, tuple[Dict, float]] = {}
+        # Cache em memória: appId -> (dados_normalizados, timestamp, is_localized)
+        self._cache: Dict[int, tuple[Dict, float, bool]] = {}
         self._cache_ttl = 600  # 10 minutos
+        self._is_verbose = os.environ.get("VERBOSE_TERMINAL") == "1"
         self._language_param = self._get_system_language_param()
-        print(f"[SteamAPI] Idioma do sistema detectado: {self._language_param}")
+        self._global_backoff_until = 0.0  # Timestamp para resfriamento global
+        
+        # --- Stealth Pool: Modern Organic Browsers ---
+        self._stealth_user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+        ]
+        
+        self._log(f"[SteamAPI] Idioma do sistema detectado: {self._language_param}")
+
+    def _log(self, msg: str, force: bool = False):
+        """Helper to print only when verbose or forced."""
+        if self._is_verbose or force:
+            try:
+                print(msg)
+            except:
+                pass
 
     def _get_system_language_param(self) -> str:
         """
@@ -86,34 +107,76 @@ class SteamAPIClient:
             self._client = httpx.AsyncClient(timeout=self._timeout, follow_redirects=True)
         return self._client
 
+    def _get_random_headers(self) -> Dict[str, str]:
+        """Gera pacotes de headers orgânicos para mascarar os pedidos dos bots."""
+        import random
+        ua = random.choice(self._stealth_user_agents)
+        
+        # Mapeamento do idioma detectado para strings Accept-Language reais
+        lang_map = {
+            "brazilian": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            "spanish": "es-ES,es;q=0.9,en;q=0.8",
+            "english": "en-US,en;q=0.9",
+        }
+        accept_lang = lang_map.get(self._language_param, "en-US,en;q=0.9,pt-BR;q=0.8")
+
+        return {
+            "User-Agent": ua,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": accept_lang,
+            "Accept-Encoding": "gzip, deflate, br",
+            "Referer": "https://store.steampowered.com/",
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Cache-Control": "max-age=0"
+        }
+
     async def close(self):
         if self._client and not self._client.is_closed:
             await self._client.aclose()
 
-    def _is_cache_valid(self, app_id: int) -> bool:
-        """Verifica se cache ainda é válido para um app_id."""
+    def _get_cached_details(self, app_id: int, localized: bool) -> Optional[Dict]:
+        """
+        Pega dados do cache se válidos.
+        Se localized=True, só aceita se o cache também for localizado.
+        Se localized=False, aceita qualquer cache válido (mais rápido).
+        """
         if app_id not in self._cache:
-            return False
-        _, timestamp = self._cache[app_id]
-        return (time.time() - timestamp) < self._cache_ttl
+            return None
+        
+        data, timestamp, cache_is_localized = self._cache[app_id]
+        
+        # Verificar TTL
+        if (time.time() - timestamp) > self._cache_ttl:
+            return None
+            
+        # Verificar se atende o requisito de localização
+        if localized and not cache_is_localized:
+            print(f"[SteamAPI] Cache upgrade necessário para AppID {app_id} (atual: EN, req: {self._language_param})")
+            return None
+            
+        return data
 
     def clear_cache(self):
         """Limpa todo o cache de API"""
         self._cache.clear()
         print("[SteamAPI] Cache limpo")
 
-    async def get_appdetails(self, app_id: int) -> Dict[str, Any]:
+    async def get_appdetails(self, app_id: int, localized: bool = True) -> Dict[str, Any]:
         """
         Busca detalhes completos do jogo na Steam API.
-        Implementa estratégia "Dual Fetch" para tradução robusta:
-        - Se idioma != english, busca English + Localized simultaneamente.
-        - Usa texto do Localized + Assets do English (reparando URLs quebradas).
+        localized=False: Busca apenas em Inglês (Modo Rápido para Capas).
+        localized=True: Dual Fetch (Inglês + Idioma do Sistema para Texto).
         """
 
-        # Cache
-        if self._is_cache_valid(app_id):
-            print(f"[SteamAPI] Cache hit para AppID {app_id}")
-            return self._cache[app_id][0]
+        # 0. Global Backoff Check (Cooling Down)
+        now = time.time()
+        if now < self._global_backoff_until:
+            rem = int(self._global_backoff_until - now)
+            self._log(f"⏸️ [SteamAPI] Resfriando... {rem}s restantes (Rate Limit detectado anteriormente)", force=True)
+            return self._empty_response(app_id, error="rate_limit_cooling_down")
 
         print(f"[SteamAPI] Buscando detalhes para AppID {app_id} (Lang: {self._language_param})...")
 
@@ -126,11 +189,21 @@ class SteamAPIClient:
                 tasks = []
                 
                 # 1. Fetch Inlgês (Padrão Ouro para Assets)
-                tasks.append(client.get(url, params={"appids": app_id, "l": "english"}, timeout=self._timeout))
+                tasks.append(client.get(
+                    url, 
+                    params={"appids": app_id, "l": "english"}, 
+                    timeout=self._timeout,
+                    headers=self._get_random_headers()
+                ))
                 
-                # 2. Fetch Localizado (se necessario)
-                if self._language_param != "english":
-                    tasks.append(client.get(url, params={"appids": app_id, "l": self._language_param}, timeout=self._timeout))
+                # 2. Fetch Localizado (se necessario e solicitado)
+                if localized and self._language_param != "english":
+                    tasks.append(client.get(
+                        url, 
+                        params={"appids": app_id, "l": self._language_param}, 
+                        timeout=self._timeout,
+                        headers=self._get_random_headers()
+                    ))
                 
                 # Executar em paralelo
                 responses = await asyncio.gather(*tasks, return_exceptions=True)
@@ -150,28 +223,35 @@ class SteamAPIClient:
                         
                         # Se tiver dados localizados validos, fazer o merge
                         app_data_final = app_data_en
-                        if resp_loc and not isinstance(resp_loc, Exception) and resp_loc.status_code == 200:
-                            data_loc = resp_loc.json()
-                            if str(app_id) in data_loc and data_loc[str(app_id)].get("success"):
-                                app_data_loc = data_loc[str(app_id)]["data"]
-                                print(f"[SteamAPI] Mesclando tradução ({self._language_param}) com assets originais...")
-                                app_data_final = self._merge_localized_data(app_data_en, app_data_loc)
+                        real_localization_success = False
+                        
+                        if localized and self._language_param != "english":
+                             if resp_loc and not isinstance(resp_loc, Exception) and resp_loc.status_code == 200:
+                                 try:
+                                     data_loc_json = resp_loc.json()
+                                     if str(app_id) in data_loc_json and data_loc_json[str(app_id)].get("success"):
+                                         app_data_loc = data_loc_json[str(app_id)]["data"]
+                                         self._log(f"[SteamAPI] Mesclando tradução ({self._language_param}) com assets originais...")
+                                         app_data_final = self._merge_localized_data(app_data_en, app_data_loc)
+                                         real_localization_success = True
+                                 except: pass
 
                         # Extrair e normalizar dados
                         details = self._normalize_appdetails(app_id, app_data_final)
                         
-                        # Cachear
-                        self._cache[app_id] = (details, time.time())
+                        was_localized = (localized and self._language_param != "english" and real_localization_success)
+                        self._cache[app_id] = (details, time.time(), was_localized)
                         return details
                     else:
-                        print(f"[SteamAPI] AppID {app_id} não encontrado ou indisponível")
+                        self._log(f"[SteamAPI] AppID {app_id} não encontrado ou indisponível")
                         return self._empty_response(app_id)
 
                 elif resp_en.status_code == 429:
-                    wait_time = 2 ** attempt
-                    print(f"[SteamAPI] Rate limit! Aguardando {wait_time}s antes de retry...")
-                    await asyncio.sleep(wait_time)
-                    continue
+                    # SMART BACKOFF: Se a Steam limitou, paramos TUDO por 90 segundos (Mecanismo Anti-Ban)
+                    wait_sec = 90
+                    self._global_backoff_until = time.time() + wait_sec
+                    self._log(f"🚨 [SteamAPI] RATE LIMIT (429) CRÍTICO! Ativando resfriamento global de {wait_sec}s.", force=True)
+                    return self._empty_response(app_id, error="rate_limit_detected")
                 else:
                     if attempt < self._max_retries:
                         await asyncio.sleep(2 ** attempt)
@@ -179,14 +259,14 @@ class SteamAPIClient:
                     return self._empty_response(app_id)
 
             except asyncio.TimeoutError:
-                print(f"[SteamAPI] Timeout na tentativa {attempt + 1}")
+                self._log(f"[SteamAPI] Timeout na tentativa {attempt + 1}")
                 if attempt < self._max_retries:
                     await asyncio.sleep(2 ** attempt)
                     continue
                 return self._empty_response(app_id)
 
             except Exception as e:
-                print(f"[SteamAPI] Erro na tentativa {attempt + 1}: {e}")
+                self._log(f"[SteamAPI] Erro na tentativa {attempt + 1}: {e}")
                 if attempt < self._max_retries:
                     await asyncio.sleep(2 ** attempt)
                     continue
@@ -434,6 +514,7 @@ class SteamAPIClient:
             "legal_notice": app_data.get("legal_notice", ""),
             "controller_support": self._extract_controller_support(app_data.get("categories", []), app_data.get("controller_support", "")),
             "about_the_game": self._replace_steam_placeholders(app_data.get("about_the_game", ""), app_id),
+            "fullgame_id": app_data.get("fullgame", {}).get("appid") if isinstance(app_data.get("fullgame"), dict) else None,
         }
 
     def _extract_controller_support(self, categories: List[Dict], raw_support: str) -> str:
@@ -524,12 +605,41 @@ class SteamAPIClient:
         
         return movies
 
-    def _empty_response(self, app_id: int) -> Dict[str, Any]:
+    async def search_games(self, query: str) -> List[Dict[str, Any]]:
+        """Busca jogos por nome na Steam Store (API de busca pública)"""
+        if not query: return []
+        self._log(f"[SteamAPI] Buscando jogos por nome: {query}")
+        
+        try:
+            client = await self._get_client()
+            url = "https://store.steampowered.com/api/storesearch"
+            params = {
+                "term": query,
+                "l": "brazilian",
+                "cc": "BR"
+            }
+            # Adicionar timeout específico para busca
+            resp = await client.get(url, params=params, headers=self._get_random_headers(), timeout=10)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("items"):
+                    return data["items"]
+        except Exception as e:
+            self._log(f"[SteamAPI] Erro na busca por nome: {e}")
+            
+        return []
+
+    def _empty_response(self, app_id: int, error: str = "not_found_or_unavailable") -> Dict[str, Any]:
         """Resposta vazia quando não conseguir dados da Steam."""
+        # Se o erro for relacionado a rate limit, avisamos explicitamente para os bots pararem
+        is_rate_limit = "rate_limit" in error
         return {
             "found": False,
             "app_id": app_id,
-            "error": "not_found_or_unavailable",
+            "error": error,
+            "rate_limited": is_rate_limit,
+            "retry_after": 90 if is_rate_limit else 0,
             "name": "",
             "header_image": "",
             "capsule": "",

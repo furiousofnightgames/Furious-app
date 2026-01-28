@@ -62,6 +62,18 @@ Section "Instalar Furious App" SecMain
     SetOutPath "$INSTDIR"
     File /r /x "PyScripter" /x "tcl" /x "Doc" /x "PyQt5" /x "PyQt5-Qt5" /x "PyQt5_Qt5" /x "PyQtWebEngine" /x "PyQtWebEngine_Qt5" /x "PyInstaller" /x "_pyinstaller_hooks_contrib" /x "altgraph" /x "pyarmor" /x "pyarmor_runtime" "launcher\win-unpacked\*.*"
     
+    ; --- LIMPEZA DE DADOS ANTIGOS (FORCE RICH SEED) ---
+    ; Remove o banco de dados antigo para garantir que o novo "Banco Rico" seja instalado
+    ; O Electron só instala o seed se o arquivo NÃO existir.
+    SetShellVarContext current
+    Delete "$APPDATA\furiousapp\data.db"
+    Delete "$APPDATA\furiousapp\last_run_version.txt"
+    
+    ; Remove pastas legadas (com hífen) para evitar conflitos
+    RMDir /r "$APPDATA\furious-app"
+    RMDir /r "$LOCALAPPDATA\furious-app"
+    setShellVarContext all
+    
     ; Copia ícone explicitamente para garantir exibição
     File "launcher\images\icone.ico"
 
@@ -83,7 +95,7 @@ Section "Instalar Furious App" SecMain
     ; Adiciona entrada no Painel de Controle (Adicionar/Remover Programas)
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayName" "Furious App"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "UninstallString" "$INSTDIR\Uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayVersion" "2.6.0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayVersion" "3.3.0"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "Publisher" "Furious Apps"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayIcon" "$INSTDIR\Furious App.exe"
@@ -104,6 +116,9 @@ Section "Uninstall"
     SetShellVarContext all
 
     SetShellVarContext current
+    RMDir /r "$APPDATA\furiousapp"
+    RMDir /r "$LOCALAPPDATA\furiousapp"
+    ; Limpeza legado
     RMDir /r "$APPDATA\furious-app"
     RMDir /r "$LOCALAPPDATA\furious-app"
     SetShellVarContext all

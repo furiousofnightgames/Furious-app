@@ -1,0 +1,172 @@
+/* Dynamic Themes Definitions */
+
+:root {
+  /* Default Theme (Cyberpunk) key values for fallback */
+  --bg-primary: linear-gradient(135deg, #0f0f0f 0%, #1a0f2e 50%, #0f1f2e 100%);
+  --overlay-scanlines: repeating-linear-gradient(0deg, rgba(6, 182, 212, 0.03) 0px, rgba(6, 182, 212, 0.03) 1px, transparent 1px, transparent 2px);
+
+  --font-display: 'Orbitron', sans-serif;
+  --font-body: 'Space Mono', monospace;
+}
+
+/* =========================================
+   THEME: CYBERPUNK (Default - Restored Original Look)
+   ========================================= */
+[data-theme="cyberpunk"] {
+  /* Colors - Restoring Original Slate/Sky Palette */
+  --primary: #2563eb;
+  /* Blue-600 (Darker Blue - Final) */
+  --primary-dark: #1d4ed8;
+  /* Blue-700 */
+  --secondary: #a855f7;
+  /* Purple (Kept for secondary accents) */
+  --secondary-dark: #581c87;
+
+  --accent-pink: #ec4899;
+  --accent-blue: #38bdf8;
+  --accent-lime: #84cc16;
+
+  /* Background: Formerly bg-slate-950 (#020617) */
+  --bg-gradient: #020617;
+
+  /* Glass/Header: Formerly bg-slate-900 (#0f172a) */
+  /* Making it slightly translucent to be modern but dark enough to match original */
+  --glass-bg: rgba(15, 23, 42, 0.95);
+
+  /* Border: Formerly border-slate-800 (#1e293b) */
+  --glass-border: #1e293b;
+  --glass-shadow: rgba(0, 0, 0, 0.3);
+
+  /* Text Gradients */
+  --text-gradient-primary: linear-gradient(135deg, #0ea3e9, #0284c7);
+  /* Sky Gradient matching logo */
+  --text-gradient-secondary: linear-gradient(135deg, #a855f7, #ec4899);
+
+  /* Shadows */
+  --glow-primary: 0 0 15px rgba(14, 165, 233, 0.3);
+  /* Sky glow */
+  --glow-secondary: 0 0 15px rgba(168, 85, 247, 0.3);
+  --text-shadow-neon: none;
+  /* Original didn't have heavy text shadow on body */
+
+  /* Grid - Very subtle to match original clean look */
+  --grid-color: rgba(30, 41, 59, 0.3);
+  --scanline-color: transparent;
+  /* Original didn't show scanlines strongly due to opaque bg */
+}
+
+/* =========================================
+   THEME: MATRIX (Hacker Green)
+   ========================================= */
+[data-theme="matrix"] {
+  /* Colors */
+  --primary: #00ff41;
+  /* Matrix Green */
+  --primary-dark: #003b00;
+  --secondary: #008f11;
+  /* Darker Green */
+  --secondary-dark: #0d0208;
+
+  --accent-pink: #ffff00;
+  /* Glitch Yellow */
+  --accent-blue: #003b00;
+  --accent-lime: #00ff41;
+
+  --bg-gradient: linear-gradient(180deg, #000000 0%, #0a0a0a 100%);
+  --glass-bg: rgba(0, 20, 0, 0.8);
+  --glass-border: rgba(0, 255, 65, 0.3);
+  --glass-shadow: rgba(0, 255, 65, 0.1);
+
+  /* Text Gradients - Flat Matrix style mostly, but subtle gradient allowed */
+  --text-gradient-primary: linear-gradient(180deg, #00ff41, #008f11);
+  --text-gradient-secondary: linear-gradient(180deg, #ffffff, #cccccc);
+
+  /* Shadows / Glows */
+  --glow-primary: 0 0 15px rgba(0, 255, 65, 0.6);
+  --glow-secondary: 0 0 15px rgba(255, 255, 255, 0.2);
+  --text-shadow-neon: 0 0 5px #00ff41, 0 0 10px #00ff41;
+
+  /* Grid */
+  --grid-color: rgba(0, 255, 65, 0.05);
+  --scanline-color: rgba(0, 255, 65, 0.05);
+}
+
+/* =========================================
+   THEME: OCEAN (Deep Blue)
+   ========================================= */
+[data-theme="ocean"] {
+  /* Colors */
+  --primary: #38bdf8;
+  /* Sky Blue */
+  --primary-dark: #0c4a6e;
+  --secondary: #818cf8;
+  /* Indigo */
+  --secondary-dark: #1e1b4b;
+
+  --accent-pink: #f472b6;
+  /* Pink (Coral-ish) */
+  --accent-blue: #60a5fa;
+  --accent-lime: #34d399;
+
+  --bg-gradient: linear-gradient(to bottom right, #0f172a, #1e293b, #0c4a6e);
+  --glass-bg: rgba(15, 23, 42, 0.6);
+  --glass-border: rgba(56, 189, 248, 0.2);
+  --glass-shadow: rgba(56, 189, 248, 0.1);
+
+  /* Text Gradients */
+  --text-gradient-primary: linear-gradient(to right, #38bdf8, #818cf8);
+  --text-gradient-secondary: linear-gradient(to right, #22d3ee, #38bdf8);
+
+  /* Shadows / Glows */
+  --glow-primary: 0 0 25px rgba(56, 189, 248, 0.3);
+  --glow-secondary: 0 0 25px rgba(129, 140, 248, 0.3);
+  --text-shadow-neon: 0 0 10px rgba(56, 189, 248, 0.5);
+
+  /* Grid */
+  --grid-color: rgba(56, 189, 248, 0.05);
+  --scanline-color: transparent;
+  /* Cleaner look */
+}
+
+/* =========================================
+   THEME: DRACULA (Vampire Neon)
+   ========================================= */
+[data-theme="dracula"] {
+  /* Colors */
+  --primary: #bd93f9;
+  /* Purple */
+  --primary-dark: #44475a;
+  --secondary: #ff79c6;
+  /* Pink */
+  --secondary-dark: #6272a4;
+
+  --accent-pink: #ff5555;
+  /* Red */
+  --accent-blue: #8be9fd;
+  /* Cyan */
+  --accent-lime: #50fa7b;
+  /* Green */
+
+  /* Richer Background */
+  --bg-gradient: linear-gradient(135deg, #1e1f29 0%, #282a36 50%, #191a21 100%);
+
+  /* More transparent glass to match Cyberpunk feel */
+  --glass-bg: rgba(40, 42, 54, 0.6);
+  --glass-border: rgba(189, 147, 249, 0.3);
+  --glass-shadow: rgba(189, 147, 249, 0.15);
+
+  /* Text Gradients - Vibrant */
+  --text-gradient-primary: linear-gradient(to right, #bd93f9, #ff79c6);
+  --text-gradient-secondary: linear-gradient(to right, #ff79c6, #ff5555);
+
+  /* Shadows / Glows - Added Neon back! */
+  --glow-primary: 0 0 20px rgba(189, 147, 249, 0.4);
+  --glow-secondary: 0 0 20px rgba(255, 121, 198, 0.4);
+
+  /* Text Shadow matching the main app style */
+  --text-shadow-neon: 0 0 7px #bd93f9, 0 0 10px #bd93f9, 0 0 21px #bd93f9;
+
+  /* Grid */
+  --grid-color: rgba(189, 147, 249, 0.08);
+  --scanline-color: rgba(189, 147, 249, 0.02);
+}

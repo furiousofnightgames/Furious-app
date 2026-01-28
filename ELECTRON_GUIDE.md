@@ -1,23 +1,21 @@
-# 📖 Guia Completo - Furious App Desktop
+# 📖 Guia Completo - Furious App Desktop v3.3.0
 
 ## Visão Geral
 
-O Furious App foi transformado em uma aplicação **Desktop** completa com:
+O Furious App evoluiu de um downloader para um **Hub de Gaming Premium**, oferecendo gestão completa do ciclo de vida dos jogos (Descoberta -> Download -> Integridade -> Instalação).
 
 ### Tecnologias Principais
 - **Electron 27** - Framework desktop multiplataforma
-- **Python 3.10.5** - Backend robusto com FastAPI
-- **Vue.js 3 + Vite** - Frontend reativo de alta performance
+- **Python 3.10.5** - Backend robusto com FastAPI e Buffered Persistence
+- **Vue.js 3 + Vite** - Frontend reativo com Dynamic Theme Engine
 
-### 🆕 Destaques v3.1.0
-- **Biblioteca Global Premium**: Gestão unificada de itens.
-- **Pré-flight Checks**: Validação de links e magnets antes do download.
-- **Engine de Download Ultra-Robusto**: Fallback automático, headers de navegador, tratamento de erro aprimorado.
-- **Steam Integration 2.0**: Nova página de detalhes com vídeos e requirements.
-- **Favoritos Premium**: Sistema reformulado com ícones automáticos e resolução de imagens.
-- **Análise Inteligente**: Sugestão automática de fontes com melhor saúde.ativo
-- **TailwindCSS** - Estilização com design responsivo
-- **SQLite** - Banco de dados integrado
+### 🆕 Destaques v3.3.0 (Game Hub Edition)
+- **Integridade Blindada (Quick-Check)**: Validação física de arquivos com Auto-Sync.
+- **Filtros Glassmorphic**: Navegação visual por Gêneros e Desenvolvedoras.
+- **Persistência Turbo**: Gravação em lote (Buffered Write) para scans massivos.
+- **Instalador Inteligente**: Detecção automática de setup e limpeza pós-instalação.
+- **Temas Dinâmicos**: Personalização visual completa (Cyberpunk, Matrix, Neon).
+- **Biblioteca Global Premium**: Gestão unificada com cache de imagens em alta resolução.
 
 ### Arquitetura Técnica
 
@@ -202,6 +200,18 @@ O instalador será gerado na pasta `dist/`.
 1. Atualize a versão no `package.json`
 2. Execute `npm run build:installer`
 3. O instalador será gerado em `dist/Furious App Setup X.Y.Z.exe`
+
+### 🆕 Atualizando o Banco de Dados Rico (Bundle)
+
+Para garantir que novos usuários já comecem com a biblioteca enriquecida (capas, descrições):
+
+1. **Enriqueça Localmente**: Use o app em desenvolvimento (`npm run dev`) para baixar capas e metadados. O banco fica em `AppData\Local\furious-app-dev`.
+2. **Snapshot**: Copie os arquivos para a pasta do projeto:
+   ```powershell
+   copy "$env:LOCALAPPDATA\furious-app-dev\data.db" ".\data_seed\data.db"
+   copy "$env:LOCALAPPDATA\furious-app-dev\steam_applist.json" ".\data_seed\steam_applist.json"
+   ```
+3. **Compile**: Gere o instalador normalmente. O `electron-builder` pegará os arquivos atualizados de `data_seed`.
 
 ### Atualizando a Aplicação
 
@@ -534,6 +544,6 @@ Para problemas:
 
 ---
 
-**Versão:** 3.1  
+**Versão:** 3.3.0  
 **Data:** Janeiro 2026  
 **Status:** ✅ Pronto para Produção

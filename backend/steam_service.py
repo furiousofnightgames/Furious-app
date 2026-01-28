@@ -5,7 +5,17 @@ import json
 import os
 import re
 import difflib
+import zlib
+from datetime import datetime
 from typing import Dict, Optional, Any, List, Set, Tuple
+
+# --- FERRAMENTAS CRÍTICAS DE PERSISTÊNCIA (ACESSO GLOBAL) ---
+from backend.db import get_session, get_db_file_path, init_db
+from backend.models.models import GameMetadata, SteamApp
+from sqlmodel import select
+from sqlalchemy import func
+
+print(">>> [TRACE] STEAM_SERVICE.PY VERSION 3.6: PERSISTENCE HARDENED <<<")
 
 _env_app_list_file = os.environ.get("STEAM_APP_LIST_FILE")
 _env_app_data_dir = os.environ.get("APP_DATA_DIR")
@@ -17,11 +27,12 @@ elif _env_app_data_dir:
 else:
     _local_app_data = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
     if _local_app_data:
-        _default_dir = os.path.join(_local_app_data, "furious-app")
+        _default_dir = os.path.join(_local_app_data, "furiousapp")
         os.makedirs(_default_dir, exist_ok=True)
         APP_LIST_FILE = os.path.join(_default_dir, "steam_applist.json")
     else:
         APP_LIST_FILE = "steam_applist.json"
+
 APP_LIST_URL_OFFICIAL = "https://api.steampowered.com/ISteamApps/GetAppList/v2/"
 APP_LIST_URL_FALLBACK = "https://raw.githubusercontent.com/dgibbs64/SteamCMD-AppID-List/main/steamcmd_appid.json"
 
@@ -30,669 +41,384 @@ from backend.image_service import SteamGridDBProvider
 from backend.steam_api import steam_api_client
 
 class SteamClient:
-    def __init__(self):
-        self._cache: Dict[str, Any] = {}
-        self._cache_ttl = 3600 * 24  # 24h para artes e buscas
-        self._semaphore = asyncio.Semaphore(5)
-        self._client: Optional[httpx.AsyncClient] = None
-        
-        # --- AppList & Search Index ---
-        self._app_list: List[Dict] = []
-        self._app_index: Dict[str, Set[int]] = {}
-        self._app_map: Dict[int, str] = {} # ID -> Name
-        self._app_list_loaded = False
-        self._app_list_loaded = False
-        self._loading_lock = asyncio.Lock()
-        
-        # --- Fallback Provider ---
-        self.sgdb = SteamGridDBProvider(STEAMGRIDDB_API_KEY) if STEAMGRIDDB_API_KEY else None
-        if self.sgdb:
-            print(f"[SteamService] SteamGridDB ativado como fallback (Key configurada).")
-        else:
-            print(f"[SteamService] SteamGridDB inativo (Falta STEAMGRIDDB_API_KEY). Apenas jogos da Steam terão imagens.")
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
-        return self._client
-
-    async def close(self):
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
-
-    # =========================================================================
-    #  APP LIST MANAGEMENT (Local "Hydra-like" Database)
-    # =========================================================================
-    
-    async def ensure_app_list(self):
-        """
-        Garante que a lista de apps da Steam esteja carregada e indexada em memória.
-        Faz download se não existir ou estiver velha.
-        """
-        if self._app_list_loaded:
-            return
-
-        async with self._loading_lock:
-            if self._app_list_loaded:
-                return
-
-            print(f"[SteamService] AppList cache path: {APP_LIST_FILE}")
-            
-            # Tentar carregar do disco
-            data = await self._load_from_disk()
-            
-            # Se não tem ou é velho (> 24h), baixa
-            if not data:
-                print("[SteamService] AppList local ausente ou antigo. Iniciando download...")
-                data = await self._download_app_list()
-                if data:
-                    await self._save_to_disk(data)
-            
-            if data:
-                self._build_index(data)
-                self._app_list_loaded = True
-                print(f"[SteamService] Índice de busca local pronto! {len(self._app_map)} jogos indexados.")
-            else:
-                print("[SteamService] FALHA CRÍTICA: Não foi possível carregar AppList. Busca funcionará apenas via API (lenta).")
-
-    async def _load_from_disk(self) -> Optional[List[Dict]]:
-        if not os.path.exists(APP_LIST_FILE):
-            return None
-        
-        try:
-            # Checar idade do arquivo (24h)
-            mtime = os.path.getmtime(APP_LIST_FILE)
-            if time.time() - mtime > 86400:
-                print("[SteamService] Cache local expirado.")
-                return None # Expirado
-                
-            # Ler arquivo de forma não bloqueante (em thread separada pois é IO)
-            def read():
-                with open(APP_LIST_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            
-            data = await asyncio.to_thread(read)
-            return data.get("applist", {}).get("apps", [])
-        except Exception as e:
-            print(f"[SteamService] Erro ao ler cache local: {e}")
-            return None
-
-    async def _download_app_list(self) -> Optional[List[Dict]]:
-        client = await self._get_client()
-        
-        async def try_download(url, name, params=None, headers=None):
-            try:
-                print(f"[SteamService] Baixando AppList via {name} ({url})...")
-                resp = await client.get(url, params=params, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                
-                # Normalizar estrutura
-                if "applist" in data and "apps" in data["applist"]:
-                    return data["applist"]["apps"]
-                if "apps" in data:
-                    return data["apps"]
-                if isinstance(data, list):
-                    return data
-                    
-                print(f"[SteamService] Formato JSON inválido em {name}.")
-                return None
-            except Exception as e:
-                print(f"[SteamService] Falha ao baixar de {name}: {e}")
-                return None
-
-        # 1. Tentar Oficial
-        apps = await try_download(
-            APP_LIST_URL_OFFICIAL,
-            "Steam Oficial",
-            params={"format": "json"},
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        if apps:
-            return apps
-
-        apps = await try_download(
-            "https://api.steampowered.com/ISteamApps/GetAppList/v2",
-            "Steam Oficial (alt)",
-            params={"format": "json"},
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        if apps:
-            return apps
-            
-        # 2. Tentar Fallback
-        print("[SteamService] Tentando servidor mirror (DGibbs)...")
-        apps = await try_download(APP_LIST_URL_FALLBACK, "GitHub Mirror")
-        return apps
-
-    async def _save_to_disk(self, apps: List[Dict]):
-        def save():
-            with open(APP_LIST_FILE, "w", encoding="utf-8") as f:
-                json.dump({"applist": {"apps": apps}}, f)
-        await asyncio.to_thread(save)
-
-    def _tokenize(self, text: str) -> Set[str]:
-        """Quebra texto em tokens normalizados para indexação."""
-        # Apenas alfanuméricos lowercase
-        return set(re.findall(r"\w+", text.lower()))
-
-    def _extract_number_tokens(self, text: str) -> Set[str]:
-        if not text:
-            return set()
-        return set(re.findall(r"\d+", text))
-
-    def _numbers_compatible(self, query_numbers: Set[str], candidate_numbers: Set[str]) -> bool:
-        if not query_numbers:
-            return True
-        if not candidate_numbers:
-            return False
-        return query_numbers.issubset(candidate_numbers)
-
-    def _build_index(self, apps: List[Dict]):
-        """
-        Cria um índice invertido simples: Token -> Set[AppIDs]
-        E um mapa direto: AppID -> Nome
-        """
-        self._app_index = {}
-        self._app_map = {}
-        
-        # Palavras ignoradas (stopwords comuns em nomes de jogos) para economizar RAM indexando
-        stopwords = {"the", "a", "an", "of", "in", "on", "at", "to", "for", "by", "edition", "pack", "dlc"}
-
-        for app in apps:
-            appid = app["appid"]
-            name = app["name"]
-            
-            if not name:
-                continue
-                
-            self._app_map[appid] = name
-            
-            # Indexação
-            tokens = self._tokenize(name)
-            for token in tokens:
-                # Ignorar tokens muito curtos (<3) EXCETO se for digito ou "io"/"go"
-                if len(token) < 3 and not token.isdigit() and token not in ("io", "go"):
-                    continue
-                if token in stopwords:
-                    continue
-                    
-                if token not in self._app_index:
-                    self._app_index[token] = set()
-                self._app_index[token].add(appid)
-
-    # =========================================================================
-    #  FUZZY SEARCH ENGINE
-    # =========================================================================
-
-    def _local_search(self, query: str) -> Optional[int]:
-        """
-        Realiza busca fuzzy no índice local.
-        Retorna o AppID com melhor match ou None.
-        """
-        if not self._app_list_loaded:
-            return None
-            
-        clean_query = self.sanitize_search_term(query).lower()
-        if not clean_query:
-            return None
-
-        query_numbers = self._extract_number_tokens(clean_query)
-            
-        tokens = self._tokenize(clean_query)
-        if not tokens:
-            return None
-
-        # 1. Encontrar candidatos (Interseção de tokens é muito restritiva, vamos usar União ponderada)
-        # Se o jogo tem "God" e "War", ele aparece na lista de candidatos.
-        # Jogos que tem MAIS tokens da query ganham prioridade.
-        
-        candidates: Dict[int, int] = {} # AppID -> Count de tokens matched
-        
-        for token in tokens:
-            if token in self._app_index:
-                for appid in self._app_index[token]:
-                    candidates[appid] = candidates.get(appid, 0) + 1
-        
-        # Filtrar candidatos que tenham pelo menos 50% dos tokens (ou todos se for curto)
-        min_matches = max(1, len(tokens) // 2)
-        top_candidates = [aid for aid, count in candidates.items() if count >= min_matches]
-        
-        if not top_candidates:
-            # Fallback: Tentar apenas o primeiro token (palavra chave principal)
-            first_token = list(tokens)[0]
-            if first_token in self._app_index:
-                top_candidates = list(self._app_index[first_token])
-        
-        if not top_candidates:
-            return None
-            
-        # Ordenar candidatos por número de matches (descendente) para não cortar os melhores
-        # Isso é CRUCIAL pois tokens comuns ("2", "simulator") geram milhares de candidatos
-        top_candidates.sort(key=lambda aid: candidates.get(aid, 0), reverse=True)
-
-        # Limitar candidatos para o SequenceMatcher (é lento se tiver 10000)
-        # Pegamos os top 100 mais frequentes se tiver muita coisa
-        if len(top_candidates) > 500:
-            top_candidates = top_candidates[:500]
-
-        # 2. Ranking preciso com difflib (Jaro-Winkler like)
-        best_ratio = 0.0
-        best_id = None
-        
-        # Para otimizar, pré-calculamos o clean_query
-        
-        for appid in top_candidates:
-            original_name = self._app_map.get(appid, "")
-            # Limpar o nome do candidato também para comparação justa
-            clean_original = self.sanitize_search_term(original_name).lower()
-
-            if query_numbers:
-                candidate_numbers = self._extract_number_tokens(clean_original)
-                if not self._numbers_compatible(query_numbers, candidate_numbers):
-                    continue
-            
-            # Comparação
-            ratio = difflib.SequenceMatcher(None, clean_query, clean_original).ratio()
-            
-            # Boost para match exato contido (ex: "Terraria" busca em "Terraria")
-            if clean_query == clean_original:
-                ratio += 0.2
-            
-            # REMOVED: Substring Match Boost which was causing False Positives
-            # e.g. "Yao-Guai Hunter" matches "Hunter" (0.95) -> WRONG
-            # Now relying purely on Ratio + Sanitization.
-
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_id = appid
-        
-        print(f"[SteamService Debug] '{query}' -> Melhor match: '{self._app_map.get(best_id)}' (Score: {best_ratio:.2f})")
-        
-        # Aceitar matches acima de 0.92 (fuzzy MUITO rigoroso para evitar falso positivo)
-        # Preferimos falhar e usar fallback (SteamGridDB) ou agrupar por nome
-        # do que pegar o jogo errado
-        if best_ratio > 0.92:
-            return best_id
-            
-        return None
-
-    # =========================================================================
-    #  CORE SERVICE
-    # =========================================================================
-
-    def _get_from_cache(self, key: str) -> Optional[Dict]:
-        if key in self._cache:
-            item = self._cache[key]
-            if time.time() < item["expires"]:
-                return item["data"]
-            else:
-                del self._cache[key]
-        return None
-
-    def _set_cache(self, key: str, data: Any):
-        self._cache[key] = {
-            "data": data,
-            "expires": time.time() + self._cache_ttl
-        }
-
-    def sanitize_search_term(self, query: str) -> str:
-        """
-        V6 Logic + Normalização
-        """
-        # 0. Normalização prévia
-        s = query
-        replacements = {
-            "’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "..."
-        }
-        for k, v in replacements.items():
-            s = s.replace(k, v)
-
-        # 1. Decodificar URL
+    def normalize_game_name(self, name: str) -> str:
+        if not name: return ""
+        s = str(name).strip()
+        replacements = {"‘": "'", "’": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "..."}
+        for k, v in replacements.items(): s = s.replace(k, v)
         from urllib.parse import unquote
         s = unquote(s)
         
-        # 2. Remover conteúdo entre colchetes/parenteses de forma segura
-        # Removemos apenas se estiver no final ou for típico de repack
-        s = re.sub(r"\[.*?\]", " ", s) # [FitGirl Repack]
-        s = re.sub(r"\(.*?\)", " ", s) # (Build 123)
-        s = re.sub(r"\{.*?\}", " ", s)
+        # 1. Basic Cleaning
+        s = re.sub(r'[\(\[].*?[\)\]]', '', s)
+        s = re.sub(r'http\S+', '', s)
+        
+        # 2. Keywords (Editions, Types)
+        keywords = r'(?i)\b(release|final|proper|complete|deluxe|ultimate|remaster(?:ed)?|definitive|bundle|redux|legendary|anniversary|goty|game of the year|director\'s cut|collectors|premium|gold|platinum|standard|special|limited|enchanced|edition|pack|collection|anthology|trilogy|quadrilogy|saga|series|franchise)\b'
+        s = re.sub(keywords, ' ', s)
+        
+        # 3. Scene Tags & Garbage
+        # specific handling for "build", "update" followed by numbers (with or without spaces) or dots
+        s = re.sub(r'(?i)\b(build|update|patch|revision|season|year)\s*\d+(?:[\s\.]\d+)*', ' ', s)
+        
+        scene_tags = r'(?i)\b(repack|dodi|fitgirl|elamigos|empress|cpy|codex|skidrow|reloaded|plaza|hi2u|kaos|prophet|razor1911|flt|tenoke|rune|goldberg|online|multi(?:layer)?|multi\d+|dlc|dlcs|crack(?:ed)?|fix|bonus(?:es)?|emulator|switch)\b'
+        s = re.sub(scene_tags, ' ', s)
 
-        # 3. Remover versões e builds
-        # Match v1.0.2, 1.0.2 (must have dot for no-v), v1 (must have v for no-dot)
-        s = re.sub(r"(?i)\bv\d[\w\.\-\+]*\b", " ", s)
-        s = re.sub(r"(?i)\b\d+\.\d+[\w\.\-\+]*\b", " ", s)
-        s = re.sub(r"(?i)\bbuild\s*\d+\b", " ", s)
-        s = re.sub(r"(?i)\bversion\s*\d+\b", " ", s) # FIX: Catch 'Version 42'
-        s = re.sub(r"(?i)\bupdate\s*\d+\b", " ", s)
+        # 4. Versions: "v1.0", "v 1 0", "1.0.1"
+        # Handles "v" followed by digit groups separated by dot or space
+        s = re.sub(r'(?i)\bv\s*\d+(?:[\.\s]\d+)+[a-z]?\b', ' ', s)
         
-        # Tags especificas de Scene/Release
-        s = re.sub(r"(?i)\b(denuvoless|repack|cracked|portable|bonus)\b", " ", s)
+        # 5. Remove "loose" numeric versions at the END of the string
+        # e.g. "F1 2016 1 8 0" -> "1 8 0" is 3 numeric groups.
+        s = re.sub(r'(?:\s+\d+){3,}$', ' ', s)
 
-        # 4. Substituir separadores por espaços
-        # Inclui: . _ - + / \ : , ; > < [ ] { }
-        s = re.sub(r"[._\-\+/\\:,;><\[\]\{\}]", " ", s) 
+        # 6. Cleanup
+        s = re.sub(r'[^a-zA-Z0-9\s\']', ' ', s) # Allow apostrophes for names like "Assassin's"
+        words = s.split()
         
-        # 5. Tags
-        # Separate tags that usually have a quantity prefix (e.g. "5 DLCs")
-        quantity_tags = [
-            "dlc", "dlcs", "bonus", "bonuses", "ost", "soundtrack", "content", "supporter", "rewards",
-            "emulator", "emulators", "switch", "yuzu", "ryujinx", "citra", "cemu", "build", "update"
-        ]
-        
-        # Mod-related tags
-        mod_tags = ["redux", "modpack", "modded", "mods", "mod", "graphics", "retextured", "retexture", "overhaul", "texture", "vanilla", "downgrader"]
-        
-        # General tags to remove (but NOT the number before them)
-        # Removed "game" from this list as it kills "Game Tycoon" -> "Tycoon"
-        general_tags = [
-            "repack", "fitgirl", "dodi", "elamigos", "goldberg", "crack", "cracked",
-            "skidrow", "codex", "plaza", "iso", "portable", "full", "pc",
-            "edition", "goty", "complete", "remastered", "remake", 
-            "bundle", "collection", "anthology", "trilogy", "quadrology", "saga",
-            "digital", "deluxe", "ultimate", "gold", "silver", "platinum", "premium",
-            "definitive", "director's", "directors", "cut", "expanded", "extended", "enhanced",
-            "season", "pass"
-        ] + mod_tags
-        
-        # Remove "Number + Quantity Tag" (e.g. "5 DLCs")
-        q_pattern = "|".join(quantity_tags)
-        s = re.sub(r"(?i)\b\d+\s+(" + q_pattern + r")\b", " ", s)
-        
-        # Remove just the tags (both types)
-        all_tags = quantity_tags + general_tags
-        all_pattern = "|".join(all_tags)
-        s = re.sub(r"(?i)\b(" + all_pattern + r")\b", " ", s)
-        
-        # 6. Cleanup final
-        s = re.sub(r"[^a-zA-Z0-9\s']", "", s)
-        s = re.sub(r"\s+", " ", s).strip()
-        
-        return s
+        return " ".join(words).lower()
 
-    async def search_monitor(self, query: str) -> Optional[int]:
-        """
-        Busca AppID híbrida: Local (AppList) -> API (Fallback)
-        """
-        if not query:
+    def get_synthetic_id(self, name: str) -> int:
+        norm = self.normalize_game_name(name)
+        if not norm: return 999999999
+        h = zlib.adler32(norm.encode()) & 0xffffffff
+        return 900000000 + (h % 99999999)
+
+    def is_appid_match_plausible(self, query: str, app_id: int) -> bool:
+        return True
+
+    def __init__(self, steam_api_key: Optional[str] = None, sgdb_api_key: Optional[str] = STEAMGRIDDB_API_KEY):
+        self.api_key = steam_api_key
+        self.sgdb = SteamGridDBProvider(sgdb_api_key) if sgdb_api_key else None
+        self._cache = {}
+        self._save_queue = []
+        self._stop_flush = False
+        self._semaphore = asyncio.Semaphore(5)
+        self._http_client = None
+
+    async def _get_client(self):
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
+        return self._http_client
+
+    def _log(self, msg: str, **kwargs):
+        """Log formatado para o SteamClient"""
+        print(f"[SteamClient] {msg}")
+
+    def sanitize_search_term(self, text: str) -> str:
+        """Limpa termos de busca para melhorar o matching"""
+        if not text: return ""
+        # Remove caracteres especiais preservando espaços e alfanuméricos básicos
+        s = re.sub(r'[^a-zA-Z0-9\s\']', ' ', str(text))
+        # Remove espaços duplos
+        return " ".join(s.split()).lower()
+
+    async def is_appid_match_plausible_async(self, query: str, app_id: int) -> bool:
+        """Versão assíncrona da validação de plausibilidade"""
+        if not query or not app_id: return False
+        
+        # Don't check for very high synthetic IDs
+        if app_id >= 900000000: return True
+
+        # 1. TENTATIVA LOCAL: Se o ID está na SteamApp, verificamos o nome lá. 
+        # Ganho imenso: evita chamar API só para validar se o ID faz sentido.
+        session = get_session()
+        try:
+            local_app = session.get(SteamApp, int(app_id))
+            if local_app:
+                return self.is_name_match_plausible(query, local_app.name)
+        except Exception as e:
+            self._log(f"Erro ao validar plausibilidade local: {e}")
+        finally:
+            session.close()
+
+        # 2. SE NÃO ESTIVER NA LISTA LOCAL, busca detalhes (pode bater no cache ou API)
+        details = await self.get_game_details(app_id)
+        if not details: return False
+        
+        candidate_name = details.get("name", "")
+        return self.is_name_match_plausible(query, candidate_name)
+
+    def is_name_match_plausible(self, query: str, candidate_name: str) -> bool:
+        """Verifica se o nome encontrado faz sentido para a busca"""
+        # USER REQUEST: Bypass strict plausibility checks as they are blocking valid games.
+        # We will log low confidence matches but allow them to pass.
+        if not query or not candidate_name: return False
+        
+        q = self.normalize_game_name(query)
+        c = self.normalize_game_name(candidate_name)
+        
+        if q in c or c in q: return True
+        
+        ratio = difflib.SequenceMatcher(None, q, c).ratio()
+        if ratio <= 0.7:
+             self._log(f"[Plausibility] Low confidence match allowed ({ratio:.2f}): '{q}' vs '{c}'")
+        
+        return True
+
+    def _get_from_cache(self, key: str):
+        return self._cache.get(key)
+
+    def _set_cache(self, key: str, value: Any):
+        self._cache[key] = value
+
+    async def close(self):
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
+
+    async def start_persistence_loop(self):
+        self._log("[SteamService] Iniciando loop de persistência...")
+        self._stop_flush = False
+        while not self._stop_flush:
+            await asyncio.sleep(1)
+            await self.flush_metadata()
+
+    async def stop_persistence_loop(self):
+        """Força salvamento final."""
+        self._stop_flush = True
+        await self.flush_metadata()
+        self._log("[SteamService] Loop encerrado e flusheado.")
+
+    def clear_queue(self):
+        """Limpa a fila de persistência sem salvar."""
+        if hasattr(self, "_save_queue"):
+            self._save_queue = []
+        self._log("[SteamService] Fila de persistência limpa.")
+
+    def clear_cache(self):
+        """Limpa o cache em memória."""
+        self._cache = {}
+        self._log("[SteamService] Cache em memória limpo.")
+
+
+
+    async def flush_metadata(self):
+        """Sincroniza o buffer com o disco."""
+        if not hasattr(self, "_save_queue") or not self._save_queue:
+            return
+
+        batch = list(self._save_queue)
+        self._save_queue = []
+        
+        db_path = get_db_file_path()
+        size_before = db_path.stat().st_size if db_path.exists() else 0
+        
+        session = get_session()
+        try:
+            # Dedup
+            unique = {}
+            for d in batch:
+                aid = d.get("app_id") or d.get("steam_appid") or d.get("appId")
+                if aid: unique[int(aid)] = d
+            
+            processed = 0
+            for app_id, details in unique.items():
+                try:
+                    obj = session.get(GameMetadata, app_id)
+                    if not obj:
+                        obj = GameMetadata(app_id=app_id)
+                    
+                    obj.name = details.get("name") or details.get("game_name") or obj.name
+                    obj.type = details.get("type") or obj.type
+                    for field in ["genres", "developers"]:
+                        val = details.get(field)
+                        if val: setattr(obj, f"{field}_json", json.dumps(val))
+                    
+                    obj.header_image_url = details.get("header") or details.get("header_image") or obj.header_image_url
+                    obj.capsule_image_url = details.get("capsule") or details.get("capsule_image") or details.get("image") or obj.capsule_image_url
+                    obj.updated_at = datetime.now()
+                    session.add(obj)
+                    processed += 1
+                except: continue
+                
+            session.commit()
+            if processed > 0:
+                print(f"[SteamService] ✅ FLUSH COMPLETO: {processed} itens. DB: {size_before} bytes")
+        except Exception as e:
+            print(f"[SteamService] ❌ ERRO NO FLUSH: {e}")
+        finally:
+            session.close()
+
+    def persist_metadata(self, details: Dict[str, Any], force_flush: bool = True):
+        """Salva metadados DIRETAMENTE no banco (Sem Buffer - Modo Seguro)"""
+        aid = details.get("app_id") or details.get("steam_appid") or details.get("appId")
+        if not aid: return
+
+        # Direct synchronous write
+        session = get_session()
+        try:
+            app_id = int(aid)
+            obj = session.get(GameMetadata, app_id)
+            if not obj:
+                obj = GameMetadata(app_id=app_id)
+            
+            obj.name = details.get("name") or details.get("game_name") or obj.name
+            obj.type = details.get("type") or obj.type
+            for field in ["genres", "developers"]:
+                val = details.get(field)
+                if val: setattr(obj, f"{field}_json", json.dumps(val))
+            
+            obj.header_image_url = details.get("header") or details.get("header_image") or obj.header_image_url
+            obj.capsule_image_url = details.get("capsule") or details.get("capsule_image") or details.get("image") or obj.capsule_image_url
+            obj.updated_at = datetime.now()
+            
+            session.add(obj)
+            session.commit()
+            # print(f"[DB-SAFE] Salvo imediatamente: {app_id} - {obj.name}")
+        except Exception as e:
+            print(f"[SteamService] ❌ Erro ao salvar {aid}: {e}")
+        finally:
+            session.close()
+
+    def get_total_metadata_count(self) -> int:
+        session = get_session()
+        try:
+            statement = select(func.count()).select_from(GameMetadata)
+            return int(session.exec(statement).one() or 0)
+        except: return 0
+        finally: session.close()
+
+    def get_batch_metadata(self, app_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        if not app_ids: return {}
+        ids = [int(aid) for aid in app_ids if aid is not None]
+        results_map = {}
+        session = get_session()
+        try:
+            chunk_size = 500
+            for i in range(0, len(ids), chunk_size):
+                chunk = ids[i:i + chunk_size]
+                statement = select(GameMetadata).where(GameMetadata.app_id.in_(chunk))
+                for r in session.exec(statement).all():
+                    results_map[int(r.app_id)] = {
+                        "app_id": int(r.app_id),
+                        "genres": json.loads(r.genres_json or "[]"),
+                        "developers": json.loads(r.developers_json or "[]"),
+                        "name": r.name,
+                        "header_image": r.header_image_url,
+                        "capsule": r.capsule_image_url
+                    }
+            return results_map
+        finally: session.close()
+
+    async def find_appid_locally(self, query: str) -> Optional[int]:
+        """Busca o AppID no banco de dados local (SteamApp)"""
+        if not query: return None
+        norm = self.normalize_game_name(query)
+        session = get_session()
+        try:
+            # 1. Busca exata pelo nome normalizado
+            statement = select(SteamApp.appid).where(SteamApp.normalized_name == norm).limit(5)
+            results = session.exec(statement).all()
+            if results:
+                # Se houver mais de um, por enquanto pegamos o primeiro (geralmente o jogo base tem ID menor ou é o primeiro)
+                # O resolver geralmente lida com isso se for o caso.
+                return int(results[0])
+            
+            # 2. Busca exata pelo nome original (case-insensitive)
+            statement = select(SteamApp.appid).where(func.lower(SteamApp.name) == query.lower()).limit(1)
+            res = session.exec(statement).first()
+            if res: return int(res)
+
             return None
-        
-        query_str = str(query).strip()
-        if query_str.isdigit():
-            return int(query_str)
-        
-        # 0. Cache check antes de tudo
-        clean_query = self.sanitize_search_term(query_str)
-        cache_term = (clean_query or "").lower().strip()
-        if len(cache_term) < 4:
-            cache_term = query_str.lower().strip()
-        cache_key = f"search:{cache_term}" if cache_term else None
-        if cache_key:
-            cached = self._get_from_cache(cache_key)
-            if cached:
-                cached_name = self._app_map.get(int(cached), "")
-                cached_clean = self.sanitize_search_term(cached_name).lower()
-                query_numbers = self._extract_number_tokens(cache_term)
-                cached_numbers = self._extract_number_tokens(cached_clean)
-                if query_numbers and not self._numbers_compatible(query_numbers, cached_numbers):
-                    if cache_key in self._cache:
-                        del self._cache[cache_key]
-                else:
-                    q_tokens = [
-                        t for t in re.findall(r"\w+", cache_term)
-                        if (t.isdigit() and len(t) >= 1) or len(t) >= 3
-                    ]
-                    if not q_tokens:
-                        return cached
-                    if all(t in cached_clean for t in q_tokens[:2]):
-                        return cached
-                if cache_key in self._cache:
-                    del self._cache[cache_key]
+        except Exception as e:
+            self._log(f"Erro na busca local de AppID: {e}")
+            return None
+        finally:
+            session.close()
 
-        # 1. TENTATIVA LOCAL (Rápida e Inteligente)
-        # Garante carregamento do DB
-        if not self._app_list_loaded:
-            print("[SteamService] Inicializando busca local...")
-            # Não fazemos await ensure_app_list() aqui para não travar a primeira request HTTP
-            # disparamos em background se necessário, ou assumimos que startup fez
-            await self.ensure_app_list()
-        
-        local_id = self._local_search(query_str) # Tenta com string original levemente limpa
-        if not local_id and clean_query != query_str:
-            local_id = self._local_search(clean_query) # Tenta com string sanitizada v6
-
+    async def search_monitor(self, query: str, priority: bool = False) -> Optional[int]:
+        """Tenta encontrar o AppID para um jogo, priorizando o banco local"""
+        # 1. Tentar busca local primeiro (MUITO mais rápido e offline)
+        local_id = await self.find_appid_locally(query)
         if local_id:
-            print(f"[SteamService] [LOCAL] Encontrado: {local_id} ('{self._app_map[local_id]}') para '{query_str}'")
-            if cache_key:
-                self._set_cache(cache_key, local_id)
+            self._log(f"AppID encontrado LOCALMENTE para '{query}': {local_id}")
             return local_id
 
-        # 2. FALLBACK API (Lenta e Estrita)
-        api_term = clean_query or query_str
-        print(f"[SteamService] [API] Local falhou. Tentando Store Search para '{api_term}'")
-        
-        async with self._semaphore:
-            client = await self._get_client()
-            async def do_api_search(term):
-                try:
-                    url = "https://store.steampowered.com/api/storesearch/"
-                    params = { "term": term, "l": "english", "cc": "US" }
-                    resp = await client.get(url, params=params)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        if data.get("total") > 0 and data.get("items"):
-                            return int(data["items"][0]["id"])
-                except Exception as e:
-                    print(f"[SteamService] Erro API: {e}")
-                return None
-            
-            api_id = await do_api_search(api_term)
-            
-            # Retry API com menos palavras
-            # Retry API com menos palavras
-            if not api_id and " " in api_term:
-                words = api_term.split()
-                # Só reduz se tivermos mais de 2 palavras. "Grand Theft" (2) é muito genérico.
-                # "Grand Theft Auto" (3) é ok.
-                if len(words) > 2:
-                    short_q = " ".join(words[:-1])
-                    print(f"[SteamService] [API] Retry curto (Smart): '{short_q}'")
-                    await asyncio.sleep(0.2)
-                    api_id = await do_api_search(short_q)
-            
-            if api_id:
-                if self._app_list_loaded and int(api_id) in self._app_map:
-                    api_name = self._app_map.get(int(api_id), "")
-                    api_clean = self.sanitize_search_term(api_name).lower()
-                    query_numbers = self._extract_number_tokens(api_term.lower())
-                    api_numbers = self._extract_number_tokens(api_clean)
-                    if query_numbers and not self._numbers_compatible(query_numbers, api_numbers):
-                        api_id = None
-
-            if api_id:
-                print(f"[SteamService] [API] Encontrado: {api_id}")
-                if cache_key:
-                    self._set_cache(cache_key, api_id)
-                return api_id
-        
-        print(f"[SteamService] Nenhum resultado para '{api_term}'")
+        # 2. Fallback para API do Steam (Original)
+        try:
+            res = await steam_api_client.search_games(query)
+            if res: return int(res[0].get("id"))
+        except: pass
         return None
 
-    async def _validate_image(self, url: str) -> bool:
-        try:
-            # Validar se a imagem existe (HEAD request)
-            # Timeout curto para não atrasar muito
-            client = await self._get_client()
-            resp = await client.head(url, timeout=1.5)
-            return resp.status_code == 200
-        except:
-            return False
-
-    async def get_game_details(self, app_id: int) -> Dict[str, Any]:
-        """
-        Busca detalhes completos do jogo na Steam API
-        Retorna: descrição, gêneros, desenvolvedora, vídeos, etc
+    async def get_game_details(self, app_id: int, priority: bool = False) -> Dict[str, Any]:
+        """Busca detalhes do jogo (nome, gêneros, desenvolvedores, imagens).
+           Tenta: Cache Memória -> Banco de Dados -> API Steam.
         """
         cache_key = f"details:{app_id}"
         cached = self._get_from_cache(cache_key)
-        if cached:
+        if cached: 
             return cached
         
+        # 1. Tentar Banco de Dados Local (GameMetadata) - Cache Persistente
+        session = get_session()
         try:
-            client = await self._get_client()
-            url = f"https://store.steampowered.com/api/appdetails"
-            params = {"appids": app_id, "l": "english"}
-            
-            resp = await client.get(url, params=params, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                if str(app_id) in data and data[str(app_id)].get("success"):
-                    app_data = data[str(app_id)]["data"]
-                    
-                    # Extrair vídeos
-                    videos = []
-                    if "movies" in app_data:
-                        for movie in app_data["movies"][:3]:  # Primeiros 3 vídeos
-                            if "webm" in movie:
-                                videos.append({
-                                    "name": movie.get("name", "Trailer"),
-                                    "thumbnail": movie.get("thumbnail", ""),
-                                    "webm": movie["webm"].get("480", ""),
-                                    "mp4": movie.get("mp4", {}).get("480", "")
-                                })
-                    
-                    # Extrair informações principais
-                    details = {
-                        "app_id": app_id,
-                        "name": app_data.get("name", ""),
-                        "description": app_data.get("short_description", ""),
-                        "full_description": app_data.get("detailed_description", "")[:500],  # Primeiros 500 chars (legacy use)
-                        "about_the_game": app_data.get("about_the_game", ""), # Full description HTML
-                        "developers": app_data.get("developers", []),
-                        "publishers": app_data.get("publishers", []),
-                        "genres": [g.get("description", "") for g in app_data.get("genres", [])],
-                        "categories": [c.get("description", "") for c in app_data.get("categories", [])],
-                        "release_date": app_data.get("release_date", {}).get("date", ""),
-                        "price": app_data.get("price_overview", {}).get("final_formatted", "Free"),
-                        "metacritic": app_data.get("metacritic", {}).get("score", None),
-                        "videos": videos,
-                        "website": app_data.get("website", ""),
-                        # New Fields
-                        "supported_languages": app_data.get("supported_languages", ""),
-                        "pc_requirements": app_data.get("pc_requirements", {}),
-                        "controller_support": app_data.get("controller_support", ""),
-                        "legal_notice": app_data.get("legal_notice", ""),
-                    }
-                    
-                    print(f"[SteamService] DEBUG: Dados extraídos para {app_id}:")
-                    print(f"  - PC Req (Raw): {app_data.get('pc_requirements')}")
-                    print(f"  - Controller (Raw): {app_data.get('controller_support')}")
-                    print(f"  - Idiomas (Raw): {app_data.get('supported_languages')}")
-                    
-                    # Cachear por 24h
-                    self._set_cache(cache_key, details)
-                    return details
+            obj = session.get(GameMetadata, int(app_id))
+            if obj and (obj.header_image_url or obj.capsule_image_url):
+                details = {
+                    "app_id": int(app_id),
+                    "name": obj.name,
+                    "developers": json.loads(obj.developers_json or "[]"),
+                    "genres": json.loads(obj.genres_json or "[]"),
+                    "header": obj.header_image_url,
+                    "capsule": obj.capsule_image_url,
+                    "type": obj.type
+                }
+                self._set_cache(cache_key, details)
+                self._log(f"[DB-HIT] Metadados recuperados do banco para ID {app_id}")
+                return details
         except Exception as e:
-            print(f"[SteamService] Erro ao buscar detalhes: {e}")
-            import traceback
-            traceback.print_exc()
-        
+            self._log(f"Erro ao ler GameMetadata do banco: {e}")
+        finally:
+            session.close()
+
+        # 2. Tentar API do Steam (Request Externo)
+        self._log(f"[API-REQ] Buscando detalhes na Steam Store para ID {app_id}...")
+        async with self._semaphore:
+            try:
+                client = await self._get_client()
+                url = "https://store.steampowered.com/api/appdetails"
+                resp = await client.get(url, params={"appids": app_id, "l": "brazilian"}, timeout=10)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if str(app_id) in data and data[str(app_id)].get("success"):
+                        app_data = data[str(app_id)]["data"]
+                        details = {
+                            "app_id": int(app_id),
+                            "name": app_data.get("name", ""),
+                            "developers": app_data.get("developers", []),
+                            "genres": [g.get("description", "") for g in app_data.get("genres", [])],
+                            "header": app_data.get("header_image", ""),
+                            "capsule": app_data.get("capsule_image", ""),
+                            "type": app_data.get("type", "game")
+                        }
+                        self._set_cache(cache_key, details)
+                        # Persiste para o banco para futuras consultas
+                        self.persist_metadata(details, force_flush=priority)
+                        return details
+            except Exception as e:
+                self._log(f"Erro ao buscar detalhes do Steam API (AppID {app_id}): {e}")
         return {}
 
-    async def get_game_art(self, query: str) -> Dict[str, Optional[str]]:
-        # Estratégia de "Split Retry": Tentar query original, e se falhar, tentar prefixo (antes de : ou -)
-        # Isso resolve casos como "Game: DLC Bundle" ou "Game - Deluxe Edition"
-        queries_to_try = [query]
+    async def get_game_art(self, query: str, priority: bool = False) -> Dict[str, Any]:
+        """Busca arte de um jogo (AppID ou Nome)"""
+        if not query: return {"found": False}
         
-        # Detectar separadores comuns de titulos compostos
-        # Regex para separar em qualquer um destes: " – ", ": ", " - ", " — "
-        # Pega o primeiro grupo (titulo base)
-        import re
-        match = re.split(r"(?:\s[–\-—]\s|:\s)", query, maxsplit=1)
-        if match and len(match) > 1:
-             base_title = match[0].strip()
-             if len(base_title) > 3 and base_title not in queries_to_try:
-                  queries_to_try.append(base_title)
+        # Se for AppID numérico
+        if str(query).isdigit():
+            aid = int(query)
+            details = await self.get_game_details(aid, priority=priority)
+            if details:
+                return {"found": True, "app_id": aid, **details}
         
-        final_result = {
-            "app_id": None,
-            "header": None, "capsule": None, "hero": None, "logo": None, "background": None
-        }
-
-        for q in queries_to_try:
-            print(f"[SteamService] Buscando arte para: '{q}'")
-            app_id = await self.search_monitor(q)
-            
-            # Se achou app_id, monta o resultado e valida
-            if app_id:
-                # Use semaphore to prevent 503 Rate Limits
-                async with self._semaphore:
-                     details = await steam_api_client.get_appdetails(app_id)
+        # Se for nome, tenta resolver AppID primeiro
+        aid = await self.search_monitor(query, priority=priority)
+        if aid:
+            details = await self.get_game_details(aid, priority=priority)
+            if details:
+                return {"found": True, "app_id": aid, **details}
                 
-                app_type = str(details.get("type") or "").lower().strip()
-                
-                header = (details.get("header_image") or "").strip()
-                capsule = (details.get("capsule") or details.get("capsule_large") or "").strip()
-                background = (details.get("background") or "").strip()
-                
-                has_art = bool(header or capsule or background)
+        return {"found": False, "app_id": None}
 
-                if app_type and app_type not in ("game", "application"):
-                    if has_art:
-                        print(f"[SteamService] AppID {app_id} é type='{app_type}' mas possui arte. Usando.")
-                    else:
-                        print(f"[SteamService] ALERTA: AppID {app_id} é type='{app_type}' e sem arte. Ignorando.")
-                        # Tentar próximo candidato ou fallback
-                        continue
-
-                if has_art:
-                    result = {
-                        "app_id": app_id,
-                        "header": header or None,
-                        "capsule": capsule or None,
-                        "hero": None,
-                        "logo": None,
-                        "background": background or None,
-                    }
-
-                    cache_key = f"art:{app_id}"
-                    self._set_cache(cache_key, result)
-                    return result
-                else:
-                    print(f"[SteamService] ALERTA: AppID {app_id} encontrado mas sem arte via appdetails. Ignorando.")
-            
-            # Se não achou na Steam (ou imagem falhou), e temos SGDB, tentamos SGDB para este Q
-            if self.sgdb:
-                 print(f"[SteamService] Fallback SteamGridDB para: '{q}'")
-                 fallback_art = await self.sgdb.search_and_get_art(q)
-                 if fallback_art:
-                    final_result.update(fallback_art)
-                    # Salvar cache da query original (não do Q) para resolver o request
-                    fallback_key = f"art:fallback:{self.sanitize_search_term(query)}" 
-                    self._set_cache(fallback_key, final_result)
-                    return final_result
-
-        return final_result
-
-        cache_key = f"art:{app_id}"
-        cached = self._get_from_cache(cache_key)
-        if cached:
-            return cached
-
-        base_cdn = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{app_id}"
-        
-        # Assumimos sucesso se temos AppID (CDN da Steam é padronizada)
-        result = {
-            "app_id": app_id,
-            "header": f"{base_cdn}/header.jpg",
-            "capsule": f"{base_cdn}/capsule_616x353.jpg",
-            "hero": f"{base_cdn}/library_hero.jpg",
-            "logo": f"{base_cdn}/logo.png",
-            "background": f"{base_cdn}/page_bg_generated_v6b.jpg"
-        }
-        
-        self._set_cache(cache_key, result)
-        return result
-
-# Instância global
 steam_client = SteamClient()

@@ -154,7 +154,7 @@
           Voltar ao Dashboard
         </button>
       </router-link>
-      <p class="mt-4 text-xs text-slate-600 font-mono">v2.7.1 • Dev: FuriousOfNightGames</p>
+      <p class="mt-4 text-xs text-slate-600 font-mono">v3.3.0 • Dev: FuriousOfNightGames</p>
     </div>
   </div>
 </template>

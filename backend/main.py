@@ -1,6 +1,7 @@
 import sys
 import os
 import pathlib
+import shutil
 
 # Add project root to sys.path to allow imports from 'engine'
 # This is required when running from inside 'backend' folder or as a module
@@ -8,6 +9,46 @@ current_dir = pathlib.Path(__file__).parent.resolve()
 project_root = current_dir.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+
+from backend.db import get_db_path
+
+def ensure_seed_data():
+    """Garante que o steam_applist.json esteja em AppData para importação."""
+    try:
+        # Destino: Ao lado do banco de dados (Roaming/furiousapp)
+        db_path = get_db_path()
+        dest_dir = db_path.parent
+        dest_file = dest_dir / "steam_applist.json"
+        
+        if dest_file.exists():
+            return
+            
+        print(f"[SeedManager] steam_applist.json não encontrado em {dest_dir}. Procurando fonte...")
+        
+        # Fontes possíveis
+        possible_sources = []
+        
+        # 1. Perto do executável (Electron Resource)
+        # Em produção, recursos ficam em resources/steam_applist.json se configurado extraResources
+        if getattr(sys, 'frozen', False):
+            base_path = pathlib.Path(sys.executable).parent
+            possible_sources.append(base_path / "resources" / "steam_applist.json")
+            possible_sources.append(base_path / "steam_applist.json")
+        
+        # 2. Desenvolvimento (data_seed na raiz)
+        possible_sources.append(project_root / "data_seed" / "steam_applist.json")
+        
+        source = next((p for p in possible_sources if p.exists()), None)
+        
+        if source:
+            print(f"[SeedManager] Fonte encontrada: {source}. Copiando...")
+            shutil.copy2(source, dest_file)
+            print("[SeedManager] ✅ Cópia concluída com sucesso.")
+        else:
+            print("[SeedManager] ⚠️ Aviso: Fonte do steam_applist.json não encontrada. O banco iniciará vazio.")
+            
+    except Exception as e:
+        print(f"[SeedManager] Erro ao garantir arquivos de seed: {e}")
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
@@ -31,15 +72,19 @@ from sqlmodel import select, delete
 from engine.manager import job_manager
 from engine.download import supports_range
 from backend.db import init_db, get_session
-from backend.models.models import Source, Item, Favorite, Job, JobPart
+from backend.models.models import Source, Item, Favorite, Job, JobPart, ResolverAlias, GameMetadata, SteamApp
 from backend import config as backend_config
 from backend.steam_service import steam_client
 from backend.resolver import clear_session_cache, get_resolver_telemetry
 from backend.steam_api import steam_api_client
+from backend.services.integrity_service import integrity_service
 
 _library_cache: Dict[str, Any] = {"valid": False, "value": None, "built_at": None, "sources_sig": None}
 
 _magnet_health_cache: Dict[str, Any] = {}
+
+# Rastreia processos de instalação ativos {job_id: pid}
+active_installers: Dict[int, int] = {}
 
 
 def _magnet_cache_key(url: str) -> str:
@@ -87,7 +132,7 @@ def _normalize_library_name(name: str) -> str:
     s = re.sub(r"\b(build|b)\s*\d+(?:\.\d+)*\b", " ", s)
     s = re.sub(r"\b(update|patch|hotfix)\s*\d+(?:\.\d+)*\b", " ", s)
     s = re.sub(r"\b\d+(?:\.\d+){1,}\b", " ", s)
-    s = re.sub(r"\b(release|final|proper|complete|deluxe|ultimate|remaster(?:ed)?|definitive|bundle|redux)\b", " ", s)
+    s = re.sub(r"\b(release|final|proper|complete|deluxe|ultimate|remaster(?:ed)?|definitive|bundle|redux|legendary|anniversary|goty|game of the year|director's cut)\b", " ", s)
     s = re.sub(r"\b(multi\s*\d+|multi\d+)\b", " ", s)
     s = re.sub(r"\bupdate\s+from\b.*", " ", s) # Clean "Update From v1 to v2" entirely
     s = re.sub(r"\b(selective\s*download|repack)\b", " ", s)
@@ -137,7 +182,9 @@ def _normalize_library_name(name: str) -> str:
     except Exception:
         pass
 
-    s = re.sub(r"\b\d{6,}\b", " ", s)
+    # Strip 5+ digit numbers (Build IDs like 11237, 128392)
+    # Avoids stripping years (2024, 1942) which are 4 digits.
+    s = re.sub(r"\b\d{5,}\b", " ", s)
     s = re.sub(r"[^a-z0-9]+", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
@@ -239,7 +286,7 @@ def _upload_date_to_ts(v: Any) -> int:
                 "year": 365 * 86400,
             }.get(unit, 0)
             if mult > 0:
-                return int(datetime.utcnow().timestamp()) - (n * mult)
+                return int(datetime.now().timestamp()) - (n * mult)
     except Exception:
         pass
 
@@ -334,14 +381,6 @@ async def _build_library_payload() -> Dict[str, Any]:
     for k in keys_to_remove:
         del groups[k]
     
-    # DEBUG: Show all groups before second merge
-    print(f"\n[DEBUG] Grupos antes do segundo merge: {len(groups)}")
-    gta_groups = {k: g for k, g in groups.items() if 'grand theft auto' in g.get('display_name', '').lower()}
-    if gta_groups:
-        print("[DEBUG] Grupos GTA encontrados:")
-        for key, g in gta_groups.items():
-            print(f"  - {key}: '{g.get('display_name')}' ({len(g.get('versions', []))} versões)")
-    
     # 3. SECOND MERGE PASS: Consolidate Steam groups with identical normalized names
     # This handles cases like GTA San Andreas (AppID 12120) + GTA San Andreas Definitive (AppID 1547000)
     # Both normalize to "grand theft auto san andreas" but have different AppIDs
@@ -403,7 +442,9 @@ async def _build_library_payload() -> Dict[str, Any]:
         if group_app_id:
             for v in versions:
                 try:
-                    if _extract_library_app_id(v) is None:
+                    # Só propaga se não tiver um ID diferente já definido (raro)
+                    current_aid = _extract_library_app_id(v)
+                    if current_aid is None or current_aid == group_app_id:
                         v["appId"] = group_app_id
                         v["steam_appid"] = group_app_id
                 except Exception:
@@ -446,18 +487,226 @@ async def _build_library_payload() -> Dict[str, Any]:
         out_groups.append(merged)
 
     out_groups.sort(key=lambda x: (-_coerce_int(x.get('recent_ts')) or 0, str(x.get('name') or '').lower()))
-    return {
+    
+    payload = {
         "groups": out_groups,
         "total_sources": len(sources),
         "total_items": total_items,
         "built_at": datetime.utcnow().isoformat() + 'Z',
         "sources_sig": sources_sig,
     }
+    
+    # Apply enrichment immediately for the first load
+    _apply_persistent_enrichment(payload)
+    return payload
+
+
+# Prioridade de Gêneros para Gênero Principal (Categoria)
+# Quanto menor o número, maior a prioridade.
+GENRE_PRIORITY = {
+    # Tier 1: Core Action & Competitive
+    "Action": 1, "Ação": 1, "Shooter": 1, "Tiro": 1, "FPS": 1,
+    "Corrida": 2, "Racing": 2, "Sports": 2, "Esportes": 2,
+    "Fighting": 3, "Luta": 3,
+    
+    # Tier 2: Core Adventure & RPG
+    "RPG": 5, "Strategy": 6, "Estratégia": 6, 
+    "Adventure": 7, "Aventura": 7,
+    "Survival": 8, "Sobrevivência": 8,
+    "Horror": 9, "Terror": 9, "Psychological Horror": 9, "Terror Psicológico": 9,
+    
+    # Tier 3: Gameplay Styles
+    "Simulation": 15, "Simulação": 15,
+    "Platformer": 16, "Plataforma": 16,
+    "Puzzle": 17, "Quebra-cabeça": 17,
+    "Sandbox": 18, "Open World": 19, "Mundo Aberto": 19,
+    
+    # Tier 4: Generic / Meta Labels (Low Priority)
+    "Indie": 100, 
+    "Casual": 105,
+    "Multiplayer": 110, "Multijogador": 110, "Massively Multiplayer": 110,
+    
+    # Tier 5: Technical / Software (Lowest Priority - Fallbacks)
+    "Early Access": 200, "Acesso Antecipado": 200,
+    "Free to Play": 205, "Gratuito para Jogar": 205,
+    "Utilities": 210, "Utilitários": 210,
+    "Video Production": 215, "Design & Illustration": 216, "Education": 217
+}
+
+def _pick_best_genre(genres: List[str]) -> str:
+    if not genres:
+        return "Geral"
+    # Sort genres by priority, fallback to 999 for unknown
+    sorted_genres = sorted(genres, key=lambda g: GENRE_PRIORITY.get(g, 999))
+    return sorted_genres[0]
+
+def _apply_persistent_enrichment(payload: Dict[str, Any]):
+    """
+    Applies Recognition and Enrichment passes to a library payload.
+    This is fast (DB lookups) and should be run even if the base library is cached.
+    """
+    out_groups = payload.get("groups", [])
+    if not out_groups:
+        return
+
+    # 1. RECOGNITION PASS: Restore learned AppIDs from ResolverAlias cache
+    try:
+        session = get_session()
+        try:
+            # Prepare lookup map: key -> group
+            # We use both raw key and sanitized variants to match any possible DB alias
+            lookup_map: Dict[str, List[Dict[str, Any]]] = {}
+            for g in out_groups:
+                if not g.get("appId") and not g["key"].startswith("url:"):
+                    # Method A: Direct key
+                    k1 = str(g["key"]).strip().lower()
+                    if k1 not in lookup_map: lookup_map[k1] = []
+                    lookup_map[k1].append(g)
+
+                    # Method B: Sanitized (Match resolver.py logic)
+                    raw_name = g.get("name", "")
+                    k2 = (steam_client.sanitize_search_term(raw_name) or "").strip().lower()
+                    if k2 and k2 != k1:
+                        if k2 not in lookup_map: lookup_map[k2] = []
+                        lookup_map[k2].append(g)
+                    
+                    # Method C: Fully Normalized (SteamApp style)
+                    k3 = steam_client.normalize_game_name(raw_name)
+                    if k3 and k3 not in (k1, k2):
+                        if k3 not in lookup_map: lookup_map[k3] = []
+                        lookup_map[k3].append(g)
+            
+            if lookup_map:
+                all_possible_keys = list(lookup_map.keys())
+                statement = select(ResolverAlias).where(ResolverAlias.key.in_(all_possible_keys))
+                aliases = session.exec(statement).all()
+                
+                applied_count = 0
+                for a in aliases:
+                    targets = lookup_map.get(a.key)
+                    if targets:
+                        for target_g in targets:
+                            if not target_g.get("appId"): # Don't overwrite if found multiple ways
+                                aid = int(a.app_id)
+                                
+                                # SAFE PLAUSIBILITY GATE: Ignore bad legacy mappings without deleting them
+                                # This recovers the library if a generic pattern like "mara" poisoned the cache.
+                                query_name = str(target_g.get("name") or target_g.get("key", ""))
+                                if not steam_client.is_appid_match_plausible(query_name, aid):
+                                    continue
+
+                                target_g["appId"] = aid
+                                target_g["steam_appid"] = aid
+                                target_g["id_resolved"] = True # Explicit flag for remembrance
+                                if target_g.get("best"):
+                                    target_g["best"]["appId"] = aid
+                                    target_g["best"]["steam_appid"] = aid
+                                applied_count += 1
+                
+                # 1.1 AUTO-DISCOVERY PASS: Check against SteamApp table for remaining unknown games
+                # This ensures any game in the official 165k list is identified INSTANTLY.
+                remaining_unknowns = {}
+                for g in out_groups:
+                    if not g.get("appId") and not g["key"].startswith("url:"):
+                        norm_name = steam_client.normalize_game_name(g.get("name", ""))
+                        if norm_name:
+                            if norm_name not in remaining_unknowns: remaining_unknowns[norm_name] = []
+                            remaining_unknowns[norm_name].append(g)
+                
+                if remaining_unknowns:
+                    all_norms = list(remaining_unknowns.keys())
+                    # Chunk queries for performance if many unknowns
+                    for i in range(0, len(all_norms), 500):
+                        chunk = all_norms[i:i+500]
+                        statement = select(SteamApp).where(SteamApp.normalized_name.in_(chunk))
+                        steam_apps = session.exec(statement).all()
+                        for sa in steam_apps:
+                            targets = remaining_unknowns.get(sa.normalized_name)
+                            if targets:
+                                for tg in targets:
+                                    if not tg.get("appId"):
+                                        tg["appId"] = int(sa.appid)
+                                        tg["steam_appid"] = int(sa.appid)
+                                        tg["id_resolved"] = True
+                                        if tg.get("best"):
+                                            tg["best"]["appId"] = int(sa.appid)
+                                            tg["best"]["steam_appid"] = int(sa.appid)
+                                        applied_count += 1
+                
+                if applied_count > 0:
+                    print(f"[Library] Recognition: Restaurados/Identificados {applied_count} AppIDs do banco.")
+        finally:
+            session.close()
+    except Exception as rae:
+        print(f"[Library] Erro no Recognition Pass: {rae}")
+
+    # 2. ENRICHMENT PASS: Add persistent metadata (Genres/Devs/Images) from local cache
+    all_app_ids = [g.get("appId") for g in out_groups if g.get("appId")]
+    if all_app_ids:
+        try:
+            cached_meta = steam_client.get_batch_metadata(list(set(all_app_ids)))
+            enriched_count = 0
+            for g in out_groups:
+                aid = g.get("appId")
+                if aid and aid in cached_meta:
+                    m = cached_meta[aid]
+                    
+                    # meta_name = str(m.get("name") or "")
+                    
+                    b = g.get("best")
+                    if b:
+                        # Apply saved metadata
+                        if m.get("genres"): b["genres"] = m.get("genres")
+                        if m.get("developers"): b["developer"] = m.get("developers")[0]
+                        if m.get("header_image"): b["header_image"] = m["header_image"]
+                        
+                        # Fallback: Se não tem capsule (grid), usa o header (horizontal) para não ficar vazio
+                        b["image"] = m.get("capsule") or m.get("header_image")
+                        
+                        # Pass not_found flag to frontend
+                        if m.get("not_found_on_store"):
+                            b["not_found_on_store"] = True
+                        
+                        # Mark as resolved if we have metadata (genres/devs) OR images OR confirmed not found.
+                        # This prevents the progress counter from dropping to 0 during an image reset.
+                        has_metadata = bool(m.get("genres") or m.get("developers"))
+                        has_images = bool(m.get("capsule") or m.get("header_image"))
+                        
+                        if has_metadata or has_images or m.get("not_found_on_store"):
+                            g["metadata_resolved"] = True
+                        
+                        enriched_count += 1
+                        
+                        # Sync category for legacy cards using improved priority logic
+                        if b.get("genres") and len(b["genres"]) > 0:
+                            b["category"] = _pick_best_genre(b["genres"])
+            if enriched_count > 0:
+                print(f"[Library] Enrichment: Injetados {enriched_count} metadados do banco.")
+            
+            # --- TRUE-NORTH PERSISTENCE AUDIT ---
+            try:
+                total_db_records = steam_client.get_total_metadata_count()
+                from backend.db import get_db_file_path
+                db_path = get_db_file_path()
+                db_size = db_path.stat().st_size if db_path.exists() else 0
+                
+                print(f"📊 [TRUE-NORTH-AUDIT] Registros no Banco (Físico): {total_db_records}")
+                print(f"📏 [TRUE-NORTH-AUDIT] Tamanho do Arquivo: {db_size} bytes")
+                print(f"📂 [TRUE-NORTH-AUDIT] Path: {db_path.absolute()}")
+            except Exception as audit_err:
+                print(f"[AUDIT-ERR] Falha ao gerar auditoria: {audit_err}")
+
+        except Exception as ee:
+            print(f"[Library] Erro no Enrichment: {ee}")
 
 
 async def library_index(refresh: bool = False):
     if not refresh and _library_cache.get("valid") and _library_cache.get("value") is not None:
-        return _library_cache["value"]
+        payload = _library_cache["value"]
+        # CRITICAL: Dynamically apply persistence layer even if using memory cache
+        # This ensures F5 reflects recent background enrichment results.
+        _apply_persistent_enrichment(payload)
+        return payload
 
     payload = await _build_library_payload()
     try:
@@ -469,59 +718,185 @@ async def library_index(refresh: bool = False):
         pass
     return payload
 
+
+async def repair_missing_mappings():
+    """
+    Utility para reconstruir a tabela ResolverAlias a partir de GameMetadata.
+    Isso 'cura' o progresso perdido se o usuário limpou o cache sem querer.
+    """
+    print("[RECOVER] Iniciando reconstrução de mappings a partir dos metadados...")
+    session = get_session()
+    try:
+        from sqlalchemy import select
+        from backend.models.models import GameMetadata, ResolverAlias
+        from backend.steam_service import steam_client
+        
+        # 1. Pegar todos os metadados que tem AppID
+        # Usamos .scalars() para garantir que pegamos os objetos GameMetadata diretamente, não Tuplas.
+        statement = select(GameMetadata).where(GameMetadata.app_id != None)
+        metas = session.exec(statement).scalars().all()
+        
+        print(f"[RECOVER] Encontrados {len(metas)} registros de metadados para analisar.")
+        
+        repaired_count = 0
+        for m in metas:
+            try:
+                # Acesso seguro via getattr caso a estrutura varie
+                m_name = getattr(m, 'name', None)
+                m_id = getattr(m, 'app_id', None)
+                
+                if not m_name or m_id is None:
+                    continue
+                
+                # Sanitiza como o resolver faz (ex: "Ebola Village (Dodi)" -> "ebola village")
+                key = (steam_client.sanitize_search_term(m_name) or "").strip().lower()
+                if not key:
+                    continue
+                
+                # Fallback: tentar versão super normalizada se a básica falhar no banco (opcional, mas aumenta sucesso)
+                alt_key = steam_client.normalize_game_name(m_name)
+                
+                # Verifica se já existe esse mapping
+                exists = session.exec(select(ResolverAlias).where(ResolverAlias.key == key)).first()
+                if not exists and alt_key:
+                    exists = session.exec(select(ResolverAlias).where(ResolverAlias.key == alt_key)).first()
+                
+                if not exists:
+                    new_alias = ResolverAlias(key=key, app_id=int(m_id))
+                    session.add(new_alias)
+                    
+                    if alt_key and alt_key != key:
+                        new_alias_alt = ResolverAlias(key=alt_key, app_id=int(m_id))
+                        session.add(new_alias_alt)
+                        
+                    repaired_count += 1
+                    
+                    # Log a cada 100 para não inundar o console
+                    if repaired_count % 100 == 0:
+                        print(f"[RECOVER] Reconstruindo... {repaired_count} mappings processados.")
+            except Exception as item_err:
+                # Continua para o próximo item em caso de erro individual
+                continue
+        
+        if repaired_count > 0:
+            session.commit()
+            print(f"[RECOVER] ✅ Sucesso! Reconstruídos {repaired_count} mappings de AppIDs.")
+            # Invalida cache para refletir no frontend
+            _invalidate_library_cache()
+        else:
+            print("[RECOVER] Nenhuma correção necessária ou possível (mappings já existem).")
+            
+    except Exception as e:
+        import traceback
+        print(f"[RECOVER] ❌ Falha crítica ao reparar mappings: {e}")
+        traceback.print_exc()
+    finally:
+        session.close()
+
+
+# Track background task
+broadcast_task: Optional[asyncio.Task] = None
+
 # Define lifespan before creating app
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global broadcast_task
     # Startup
+    ensure_seed_data()
     init_db()
     await job_manager.start()
     
+    # Auto-import Steam Apps if database is empty (Runs in background to not block startup)
+    try:
+        from backend.import_steam_apps import import_steam_apps
+        asyncio.create_task(asyncio.to_thread(import_steam_apps))
+    except Exception as e:
+        print(f"[Startup] Erro ao iniciar importação da lista Steam: {e}")
+
     # Limpar caches de sessão ao iniciar
     clear_session_cache()
     steam_api_client.clear_cache()
+    
+    # Auto-cleanup: remove logs older than 7 days
+    try:
+        from backend.cleanup import cleanup_old_logs
+        cleanup_old_logs()
+    except Exception as e:
+        print(f"[Cleanup] Warning: Failed to run cleanup: {e}")
+
     print("[STARTUP] Todos os caches foram limpos")
     
     session = get_session()
     
     # CRITICAL FIX: Auto-pause any jobs that were 'running' when server stopped
-    # This prevents UI confusion where downloads show as "Active" when they're actually paused
     running_jobs = session.exec(select(Job).where(Job.status == "running")).all()
     if running_jobs:
         print(f" Found {len(running_jobs)} jobs that were running before restart")
-        print(f"   Auto-pausing to prevent state confusion...")
         for j in running_jobs:
             j.status = "paused"
             session.add(j)
         session.commit()
-        print(f" {len(running_jobs)} jobs marked as paused")
-        print(f"   Click 'Continue' in the UI to resume downloads")
-    
-    
-    # DISABLED: Auto-resume logic removed to prevent confusion
-    # Jobs should stay paused until user explicitly clicks "Continue"
-    # 
-    # Previous behavior: Jobs with resume_on_start=True were auto-resumed
-    # New behavior: ALL paused jobs stay paused on server restart
-    #
-    # jobs_to_resume = session.exec(select(Job).where(
-    #     (Job.resume_on_start == True) & 
-    #     ((Job.status == "paused") | (Job.status == "queued"))
-    # )).all()
-    # for j in jobs_to_resume:
-    #     await job_manager.enqueue_job(j.id)
     
     session.close()
     
+    # PROGRESS RECOVERY: Tentativa de recuperar progressos perdidos
+    # Reconstroi mappings de nome -> appId se eles foram apagados mas o metadado existe.
+    try:
+        await repair_missing_mappings()
+    except Exception as re:
+        print(f"[RECOVER] Erro na recuperação automática: {re}")
+    
     # Start background broadcaster task
-    asyncio.create_task(broadcast_progress())
+    broadcast_task = asyncio.create_task(broadcast_progress())
+    
+    # Start Metadata Persistence Loop
+    persistence_task = asyncio.create_task(steam_client.start_persistence_loop())
     
     yield
     
     # Shutdown
+    print("[SHUTDOWN] Starting graceful shutdown...")
+    
+    # CRITICAL: Stop persistence loop FIRST (this triggers final flush)
+    try:
+        print("[SHUTDOWN] Stopping metadata persistence loop...")
+        await steam_client.stop_persistence_loop()
+        print("[SHUTDOWN] Metadata persistence stopped and flushed.")
+    except Exception as e:
+        print(f"[SHUTDOWN] Error stopping persistence: {e}")
+    
+    # Cancel broadcast task
+    if broadcast_task:
+        broadcast_task.cancel()
+        try:
+            await broadcast_task
+        except asyncio.CancelledError:
+            pass
+
+    # Cancel persistence task (already stopped above, just cleanup)
+    if 'persistence_task' in locals() and persistence_task:
+        persistence_task.cancel()
+        try:
+            await persistence_task
+        except asyncio.CancelledError:
+            pass
+
     await job_manager.stop()
     await steam_client.close()
+    print("[SHUTDOWN] Graceful shutdown complete.")
 
 app = FastAPI(title="Launcher JSON Accelerator — Backend", lifespan=lifespan)
+
+@app.get("/api/system/flush")
+async def manual_flush():
+    """Força a gravação de todos os metadados pendentes no banco de dados."""
+    try:
+        print("[API] Forçando flush manual de metadados...")
+        await steam_client.flush_metadata()
+        return {"status": "success", "message": "Flush completed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 
 # CORS for local UI
 app.add_middleware(
@@ -548,6 +923,43 @@ def get_system_default_path():
         return {"path": str(downloads.absolute())}
     except Exception as e:
         return {"path": "", "error": str(e)}
+
+
+@app.get("/api/system/disk-space")
+def get_system_disk_space(path: str = None):
+    """
+    Retorna o espaço livre em disco para o caminho fornecido ou padrão.
+    """
+    import shutil
+    try:
+        p = path or str(pathlib.Path.home())
+        # Garantir path absoluto ou prefixar com home
+        if not os.path.isabs(p):
+            p = str(pathlib.Path.home() / p)
+        
+        # Se o caminho não existe (ex: pasta downloads ainda não criada), 
+        # subir até achar um diretório pai que existe para checar o disco.
+        check_p = p
+        while check_p and not os.path.exists(check_p):
+            parent = os.path.dirname(check_p)
+            if parent == check_p: break # root
+            check_p = parent
+            
+        if not os.path.exists(check_p):
+            check_p = str(pathlib.Path.home())
+
+        total, used, free = shutil.disk_usage(check_p)
+        return {
+            "path": p,
+            "checked_path": check_p,
+            "total": total,
+            "used": used,
+            "free": free,
+            "status": "success"
+        }
+    except Exception as e:
+        print(f"[DiskSpace] Erro ao checar {path}: {e}")
+        return {"status": "error", "error": str(e), "free": 0}
 
 
 
@@ -604,10 +1016,46 @@ async def get_steam_arts(term: str):
     return {**results, "found": True}
 
 
+@app.post("/api/library/images/clear")
+def clear_gamemetadata_images():
+    """
+    Limpa APENAS as colunas de imagens (header/capsule) da tabela GameMetadata.
+    Preserva gêneros, desenvolvedoras e mappings de AppID.
+    Força apenas a re-baixa das imagens.
+    """
+    try:
+        session = get_session()
+        try:
+            from sqlalchemy import update
+            
+            # 1. Resetar imagens no banco
+            stmt_images = (
+                update(GameMetadata)
+                .values(header_image_url=None, capsule_image_url=None)
+            )
+            session.execute(stmt_images)
+            
+            # Nota: NÃO limpamos ResolverAlias aqui para não perder o progresso dos bots
+            # como solicitado pelo usuário ("limpar imagens so imagens").
+            
+            session.commit()
+            
+            # 2. Limpar caches em memória
+            clear_session_cache()
+            _invalidate_library_cache()
+            
+            return {"status": "success", "message": "Cache de imagens sinalizado para limpeza."}
+        finally:
+            session.close()
+    except Exception as e:
+        print(f"[API] Erro ao limpar imagens: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== RESOLVER ENDPOINT (Fallback Chain Completa) ====================
 
 @app.post("/api/resolver")
-async def resolve_game_images(game_name: str):
+async def resolve_game_images(game_name: str, priority: bool = False):
     """
     Endpoint de resolução 100% de imagens de jogos.
     Implementa fallback chain completa conforme plano_completo_imagens.md:
@@ -632,7 +1080,7 @@ async def resolve_game_images(game_name: str):
         "error": str | null
     }
     
-    Uso: POST /api/resolver?game_name=GTA%20V
+    Uso: POST /api/resolver?game_name=GTA%20V&priority=true
     """
     from backend.resolver import resolve_game_images as resolve
     
@@ -640,7 +1088,7 @@ async def resolve_game_images(game_name: str):
         return {"found": False, "error": "empty_name"}
     
     try:
-        result = await resolve(game_name)
+        result = await resolve(game_name, priority=priority)
         return result
     except Exception as e:
         print(f"[Resolver] Erro: {e}")
@@ -672,11 +1120,11 @@ async def get_game_details(app_id_or_name: str):
         try:
             app_id = int(app_id_or_name)
             print(f"[GameDetails] Tratando como AppID: {app_id}")
-            result = await details_controller.get_game_details(app_id=app_id)
+            result = await details_controller.get_game_details(app_id=app_id, priority=True)
         except ValueError:
             # Se não for int, tratar como nome
             print(f"[GameDetails] Tratando como nome do jogo: {app_id_or_name}")
-            result = await details_controller.get_game_details(game_name=app_id_or_name)
+            result = await details_controller.get_game_details(game_name=app_id_or_name, priority=True)
         
         # Log detalhado do resultado
         print(f"[GameDetails] Resultado obtido:")
@@ -703,17 +1151,58 @@ async def get_game_details(app_id_or_name: str):
 @app.post("/api/cache/clear")
 async def clear_all_caches():
     """
-    Limpa todos os caches de sessão e API.
-    Útil para forçar recarregamento de imagens e dados.
+    Limpa todos os caches de sessão, API e Banco de Dados (Metadados/Aliases).
+    Útil para um Full Reset completo em caso de erros de imagem/gênero.
     """
     try:
+        from sqlalchemy import text
+        # 1. Caches em Memória (Sessão + Client)
         clear_session_cache()
         steam_api_client.clear_cache()
+        
+        # 1.5. Limpar fila de persistência pendente (evita regravação imediata)
+        if hasattr(steam_client, "clear_queue"):
+            steam_client.clear_queue()
+        
+        # 1.6. Limpar cache em memória do SteamService (CRÍTICO)
+        if hasattr(steam_client, "clear_cache"):
+            steam_client.clear_cache()
+
+        
+        # 2. Persistência no Banco de Dados
+        from backend.models.models import GameMetadata, ResolverAlias
+        session = get_session()
+        try:
+            print("[CacheClear] Iniciando limpeza do Banco de Dados...")
+            
+            # 1. Truncate Tables (Correct table names based on db.py init)
+            session.exec(text("DELETE FROM gamemetadata"))
+            session.exec(text("DELETE FROM resolveralias"))
+            session.commit() # <--- COMMIT AQUI para garantir que os dados sumam
+            print("[CacheClear] Tabelas truncadas e transação commitada.")
+            
+            # 2. VACUUM (Tentativa isolada)
+            try:
+                # VACUUM não pode rodar em transação. O commit acima fechou a anterior.
+                # Se falhar por lock, não desfaz o delete.
+                session.exec(text("VACUUM"))
+                print("[CacheClear] VACUUM executado com sucesso.")
+            except Exception as vac_err:
+                print(f"[CacheClear] Aviso: VACUUM falhou (banco pode não ter diminuído tamanho): {vac_err}")
+                
+        except Exception as db_err:
+            print(f"[CacheClear] Erro Crítico no Delete: {db_err}")
+            session.rollback()
+            raise db_err
+        finally:
+            session.close()
+
         return {
             "success": True,
-            "message": "Todos os caches foram limpos (sessão + Steam API)"
+            "message": "Limpeza total concluída (Memória + Banco de Dados + Vacuum)"
         }
     except Exception as e:
+        print(f"[CacheClear] Erro crítico: {e}")
         return {
             "success": False,
             "error": str(e)
@@ -1336,9 +1825,10 @@ async def create_job(req: CreateJobReq):
         for existing_job in existing_jobs:
             existing_item = session.get(Item, existing_job.item_id) if existing_job.item_id else None
             if existing_item and existing_item.url == req.url:
+                status = existing_job.status
                 session.close()
-                print(f" Já existe um download ativo para essa URL: {req.url}")
-                raise HTTPException(status_code=400, detail="A download for this URL is already active or queued")
+                print(f" Já existe um download ({status}) para essa URL: {req.url}")
+                raise HTTPException(status_code=400, detail=f"DOWNLOAD_ALREADY_EXISTS:{status}")
         
         # create an item
         item = Item(source_id=None, name=req.name or req.url, url=req.url, size=req.size)
@@ -1394,9 +1884,40 @@ async def list_jobs():
     for j in q:
         prog = job_manager.get_progress(j.id) or {}
         item = session.get(Item, j.item_id) if j.item_id else None
-        items.append(dict(id=j.id, item_id=j.item_id, status=j.status, progress=j.progress or prog.get('progress'), created_at=j.created_at.isoformat(), updated_at=j.updated_at.isoformat(), last_error=j.last_error, item_name=(item.name if item else None), item_url=(item.url if item else None), dest=j.dest, downloaded=prog.get('downloaded'), total=prog.get('total') or j.size, speed=prog.get('speed'), size=j.size))
+        items.append(dict(
+            id=j.id, 
+            item_id=j.item_id, 
+            status=j.status, 
+            progress=j.progress or prog.get('progress'), 
+            created_at=j.created_at.isoformat(), 
+            updated_at=j.updated_at.isoformat(), 
+            last_error=j.last_error, 
+            status_reason=getattr(j, "status_reason", None), # DEFENSIVO
+            item_name=(item.name if item else None), 
+            name=(item.name if item else None), 
+            item_url=(item.url if item else None), 
+            dest=j.dest, 
+            downloaded=prog.get('downloaded') if prog.get('downloaded') is not None else (j.downloaded or 0), 
+            total=prog.get('total') or j.size, 
+            speed=prog.get('speed'), 
+            size=j.size,
+            free_space_at_pause=getattr(j, "free_space_at_pause", None), # DEFENSIVO
+            setup_executed=j.setup_executed,
+            is_installing=(j.id in active_installers),
+            started_at=j.started_at.isoformat() if j.started_at else None,
+            completed_at=j.completed_at.isoformat() if j.completed_at else None
+        ))
     session.close()
     return items
+
+
+@app.get("/api/jobs/{job_id}/integrity")
+async def check_job_integrity(job_id: int):
+    """
+    Verifica a integridade de um download concluído.
+    Busca instaladores (setup.exe) e valida sequência de volumes (.bin).
+    """
+    return integrity_service.check_job_integrity(job_id)
 
 
 @app.get("/api/sources")
@@ -1828,12 +2349,15 @@ async def pause_job(job_id: int):
     if not j:
         session.close()
         raise HTTPException(status_code=404, detail="Job not found")
+    if j.status == "paused":
+        session.close()
+        return {"ok": True, "message": "Already paused"}
     if j.status not in ("running", "queued"):
         session.close()
         raise HTTPException(status_code=400, detail=f"Cannot pause job in {j.status} state")
     # Mark as paused in DB FIRST
     j.status = "paused"
-    j.updated_at = datetime.utcnow()
+    j.updated_at = datetime.now()
     session.add(j)
     session.commit()
     print(f"[OK] Job {job_id} marked as paused in DB")
@@ -1866,7 +2390,7 @@ async def resume_job(job_id: int):
     # If aria2.session doesn't exist, aria2_wrapper will treat it as a fresh download.
     
     j.status = "queued"
-    j.updated_at = datetime.utcnow()
+    j.updated_at = datetime.now()
     session.add(j)
     session.commit()
     # capture the job id before closing the session to avoid DetachedInstanceError
@@ -1893,7 +2417,7 @@ async def cancel_job(job_id: int):
     
     # Mark as canceled immediately
     j.status = "canceled"
-    j.updated_at = datetime.utcnow()
+    j.updated_at = datetime.now()
     session.add(j)
     session.commit()
     print(f" CANCEL request for job {job_id} - Marked as canceled in DB")
@@ -2542,28 +3066,579 @@ async def open_folder(request_data: dict):
     if not path:
         raise HTTPException(status_code=400, detail="Path não fornecido")
     
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail=f"Caminho não encontrado: {path}")
+    # Normalizar caminho inicial
+    original_path = os.path.normpath(path)
+    current_path = original_path
     
-    print(f"\n [API] POST /api/jobs/open-folder - Abrindo: {path}")
+    # Fallback: Se o caminho não existe, tentar encontrar pasta similar no pai
+    if not os.path.exists(current_path):
+        parent = os.path.dirname(current_path)
+        if os.path.exists(parent) and os.path.isdir(parent):
+            try:
+                target_name = os.path.basename(current_path).lower()
+                # Facilitar matching removendo símbolos comuns
+                def normalize(n): return n.lower().replace('-', '').replace('_', '').replace(' ', '').replace('–', '')
+                normalized_target = normalize(target_name)
+                
+                candidates = []
+                for entry in os.scandir(parent):
+                    if entry.is_dir():
+                        if normalize(entry.name) == normalized_target:
+                            candidates.append(entry.path)
+                
+                if candidates:
+                    print(f"   [Fuzzy] Encontrada pasta similar: {candidates[0]}")
+                    current_path = candidates[0]
+            except Exception as e:
+                print(f"   [!] Erro no fuzzy match de pasta: {e}")
+
+    # Fallback Radical: Subir níveis até achar um existente
+    while not os.path.exists(current_path) and len(current_path) > 3: # >3 pra não loopar no C:\
+        print(f"   [!] Caminho ainda não existe: {current_path}, tentando pai...")
+        current_path = os.path.dirname(current_path)
+        
+    if not os.path.exists(current_path):
+        # Se nem o drive existe, desiste
+        raise HTTPException(status_code=404, detail=f"Caminho base não encontrado: {path}")
+
+    print(f"\n [API] POST /api/jobs/open-folder - Abrindo: {current_path} (Original: {original_path})")
     
     try:
         # Abrir a pasta dependendo do SO
         if platform.system() == "Windows":
-            # Normaliza e seleciona o arquivo no Explorer
-            path = os.path.normpath(path)
-            subprocess.Popen(['explorer', '/select,', path])
+            # Behavior requested: "Show in Folder" (Reveal)
+            # Just open parent dir and select the item (file OR folder)
+            path_to_open = os.path.normpath(current_path)
+            subprocess.Popen(['explorer', '/select,', path_to_open])
+            
+            # FOCO TOTAL CONQUEST: Forçar a janela do Explorer para a frente
+            try:
+                # Script PowerShell AVANÇADO para encontrar a janela do Explorer via COM e forçar foco
+                # O COM Shell.Application é muito mais preciso para o Windows Explorer
+                escaped_path = path_to_open.replace('\\', '\\\\')
+                focus_script = f"""
+                Add-Type @"
+                    using System;
+                    using System.Runtime.InteropServices;
+                    public class Win32 {{
+                        [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+                        [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
+                        [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+                        [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+                        [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+                        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr ProcessId);
+                        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+                        [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+                    }}
+"@
+                $HWND_TOPMOST = [IntPtr](-1)
+                $HWND_NOTOPMOST = [IntPtr](-2)
+                $SWP_NOSIZE = 0x0001
+                $SWP_NOMOVE = 0x0002
+                $SWP_SHOWWINDOW = 0x0040
+                $VK_MENU = 0x12 # Tecla ALT
+
+                # Aguardar o explorer criar a janela
+                Start-Sleep -Milliseconds 1000
+                
+                $stopTime = (Get-Date).AddSeconds(8)
+                while ((Get-Date) -lt $stopTime) {{
+                    $shell = New-Object -ComObject Shell.Application
+                    # Comparar caminho (URL format vs Windows path format)
+                    $window = $shell.Windows() | Where-Object {{ 
+                        try {{ 
+                            $p = $_.Document.Folder.Self.Path
+                            $p -eq "{escaped_path}" -or "{escaped_path}" -like "*$p*"
+                        }} catch {{ $false }}
+                    }} | Select-Object -First 1
+
+                    if ($window) {{
+                        $h = [IntPtr]$window.HWND
+                        if ($h -ne [IntPtr]::Zero) {{
+                            $fg = [Win32]::GetForegroundWindow()
+                            $fgThread = [Win32]::GetWindowThreadProcessId($fg, [IntPtr]::Zero)
+                            $targetThread = [Win32]::GetWindowThreadProcessId($h, [IntPtr]::Zero)
+                            
+                            # Simular ALT para destravar foreground permissions
+                            [Win32]::keybd_event($VK_MENU, 0, 0, [UIntPtr]::Zero)
+                            [Win32]::keybd_event($VK_MENU, 0, 2, [UIntPtr]::Zero)
+                            
+                            if ($fgThread -ne $targetThread) {{
+                                [Win32]::AttachThreadInput($fgThread, $targetThread, $true)
+                                [Win32]::ShowWindow($h, 6) # SW_MINIMIZE
+                                Start-Sleep -Milliseconds 100
+                                [Win32]::ShowWindow($h, 9) # SW_RESTORE
+                                [Win32]::SetWindowPos($h, $HWND_TOPMOST, 0, 0, 0, 0, $SWP_NOSIZE -bor $SWP_NOMOVE -bor $SWP_SHOWWINDOW)
+                                [Win32]::SetForegroundWindow($h)
+                                [Win32]::AttachThreadInput($fgThread, $targetThread, $false)
+                            }} else {{
+                                [Win32]::ShowWindow($h, 9)
+                                [Win32]::SetForegroundWindow($h)
+                            }}
+                            
+                            Start-Sleep -Milliseconds 250
+                            [Win32]::SetWindowPos($h, $HWND_NOTOPMOST, 0, 0, 0, 0, $SWP_NOSIZE -bor $SWP_NOMOVE)
+                            return
+                        }}
+                    }}
+                    Start-Sleep -Milliseconds 500
+                }}
+                """
+                subprocess.Popen(["powershell", "-NoProfile", "-Command", focus_script], creationflags=subprocess.CREATE_NO_WINDOW)
+            except Exception as fe:
+                print(f"   [!] Erro ao injetar foco no Explorer: {fe}")
+            
         elif platform.system() == "Darwin":  # macOS
-            subprocess.Popen(["open", "-R", path])
+            subprocess.Popen(["open", "-R", current_path])
         else:  # Linux
-            subprocess.Popen(["xdg-open", path])
+            subprocess.Popen(["xdg-open", current_path])
         
-        print(f"   [OK] Pasta aberta com sucesso")
-        return {"status": "success", "path": path}
+        print(f"   [OK] Comando de abertura enviado com sucesso")
+        return {"status": "success", "path": current_path}
     
     except Exception as e:
         print(f"Erro ao abrir pasta: {e}")
         raise ValueError(f"Erro ao abrir pasta: {str(e)}")
+
+
+@app.get("/api/jobs/{job_id}/setup-check")
+async def check_job_setup(job_id: int):
+    """Verifica se existe um instalador (setup.exe) na pasta do download."""
+    session = get_session()
+    j = session.get(Job, job_id)
+    if not j:
+        session.close()
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    path = j.dest
+    if not path or not os.path.exists(path):
+        session.close()
+        return {"found": False, "reason": "Path not found"}
+    
+    # CRITICAL FIX: If path points to a file (e.g. single RAR from magnet), use parent dir
+    if os.path.isfile(path):
+        print(f"[SetupCheck] Path refers to a file, using parent directory: {path}")
+        path = os.path.dirname(path)
+    
+    # Nomes comuns de instaladores
+    setup_names = ["setup.exe", "install.exe", "autorun.exe", "dodi-repack.exe", "installer.exe"]
+    
+    found_setup = None
+    
+    # 1. Verificar raiz
+    print(f"[SetupCheck] Verificando pasta raiz: {path}")
+    for name in setup_names:
+        full_path = os.path.join(path, name)
+        if os.path.exists(full_path):
+            size = os.path.getsize(full_path)
+            print(f"  • Encontrado: {name} - Tamanho: {size} bytes")
+            # VERIFICAÇÃO CRÍTICA: Deve ser arquivo e ter tamanho > 0 (evitar WinError 193)
+            if os.path.isfile(full_path) and size > 0:
+                found_setup = full_path
+                break
+            else:
+                print(f"  [X] Ignorado: Arquivo vazio ou pasta.")
+            
+    # 2. Se não achou na raiz, fazer busca rasa em subpastas (1 nível)
+    if not found_setup:
+        print(f"[SetupCheck] Não achou na raiz. Buscando em subpastas...")
+        try:
+            for entry in os.scandir(path):
+                if entry.is_dir():
+                    for name in setup_names:
+                        full_path = os.path.join(entry.path, name)
+                        if os.path.exists(full_path):
+                            size = os.path.getsize(full_path)
+                            print(f"    • Subpasta '{entry.name}' -> Encontrado: {name} - Tamanho: {size} bytes")
+                            # VERIFICAÇÃO CRÍTICA: Deve ser arquivo e ter tamanho > 0
+                            if os.path.isfile(full_path) and size > 0:
+                                found_setup = full_path
+                                break
+                            else:
+                                print(f"    [X] Ignorado: Arquivo vazio ou pasta.")
+                if found_setup: break
+        except Exception as e:
+            print(f"  [!] Erro ao varrer subpastas: {e}")
+            
+    # Buscar nome do item para verificações de keywords
+    item = session.get(Item, j.item_id) if j.item_id else None
+    item_name = item.name if item else ""
+    session.close()
+    
+    # 3. Detectar se é Instalação Manual (RuTracker / Online-Fix / No Installer)
+    is_manual = False
+    manual_type = None # 'rutracker', 'online-fix', 'generic'
+    
+    # Verificar keywords no caminho ou nome
+    name_check = item_name.lower()
+    path_lower = path.lower()
+    
+    # Lista negra de instaladores (falsos positivos)
+    blacklist = ["redist", "vc_redist", "dxsetup", "oalinst", "dotNetFx", "vcredist", "physx"]
+    
+    # Detectar se existem palavras-chave para rotular dicas (apenas label)
+    if "online-fix" in path_lower or "online-fix" in name_check:
+        manual_type = "online-fix"
+    elif "rutracker" in path_lower or ".rutracker." in path_lower or "rutracker" in name_check:
+        manual_type = "rutracker"
+        
+    # Se não achou instalador padrão, procurar por executáveis de jogo para habilitar modo manual
+    if not found_setup:
+        try:
+            for entry in os.scandir(path):
+                en_lower = entry.name.lower()
+                is_exe = en_lower.endswith(".exe")
+                is_uninst = en_lower in ["unins000.exe", "uninstall.exe"]
+                is_blacklisted = any(b in en_lower for b in blacklist)
+                
+                if entry.is_file() and is_exe and not is_uninst and not is_blacklisted:
+                    is_manual = True
+                    if not manual_type: manual_type = "generic"
+                    break
+        except: pass
+    
+    # Se o sistema identificou palavras-chave E não achou instalador, reforçamos o is_manual
+    if not found_setup and manual_type in ["online-fix", "rutracker"]:
+        is_manual = True
+
+    # REGRA DE OURO: Se um instalador automático foi encontrado, 
+    # desativamos o modo manual (o setup.exe real manda)
+    if found_setup:
+        is_manual = False
+        
+    return {
+        "found": bool(found_setup),
+        "setup_path": found_setup,
+        "job_id": job_id,
+        "is_manual": is_manual,
+        "manual_type": manual_type
+    }
+
+
+@app.post("/api/jobs/{job_id}/setup-run")
+async def run_job_setup(job_id: int, request_data: dict):
+    """Executa o instalador detectado."""
+    import platform
+    import subprocess
+    
+    setup_path = request_data.get("path")
+    if not setup_path or not os.path.exists(setup_path):
+        raise HTTPException(status_code=400, detail="Setup path not provided or invalid")
+    
+    # Segurança: Verificar se o path do setup está dentro do dest do job
+    session = get_session()
+    j = session.get(Job, job_id)
+    if not j:
+        session.close()
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Normalizar caminhos para comparação
+    abs_setup = os.path.abspath(setup_path).lower()
+    abs_dest = os.path.abspath(j.dest).lower()
+    
+    if not abs_setup.startswith(abs_dest):
+        session.close()
+        raise HTTPException(status_code=403, detail="Forbidden: Installer outside of download directory")
+    
+    session.close()
+    
+    print(f"\n [API] POST /api/jobs/{job_id}/setup-run - Executando: {setup_path}")
+    
+    try:
+        if platform.system() == "Windows":
+            # VERIFICAÇÃO FINAL: Evitar erro 193 (não é Win32 válido) por causa de 0 bytes
+            if not os.path.isfile(setup_path) or os.path.getsize(setup_path) == 0:
+                raise ValueError("Instalador incompleto ou corrompido (0 bytes). Verifique se o download terminou corretamente.")
+                
+            # Método Master: ShellExecuteExW com 'runas' + Captura de PID (Resolve Erro 740 e Foco)
+            try:
+                import ctypes
+                from ctypes import wintypes
+                
+                class SHELLEXECUTEINFOW(ctypes.Structure):
+                    _fields_ = [
+                        ("cbSize", wintypes.DWORD),
+                        ("fMask", ctypes.c_ulong),
+                        ("hwnd", wintypes.HWND),
+                        ("lpVerb", wintypes.LPCWSTR),
+                        ("lpFile", wintypes.LPCWSTR),
+                        ("lpParameters", wintypes.LPCWSTR),
+                        ("lpDirectory", wintypes.LPCWSTR),
+                        ("nShow", ctypes.c_int),
+                        ("hInstApp", wintypes.HINSTANCE),
+                        ("lpIDList", ctypes.c_void_p),
+                        ("lpClass", wintypes.LPCWSTR),
+                        ("hkeyClass", wintypes.HKEY),
+                        ("dwHotKey", wintypes.DWORD),
+                        ("hIconOrMonitor", wintypes.HANDLE),
+                        ("hProcess", wintypes.HANDLE),
+                    ]
+
+                SEE_MASK_NOCLOSEPROCESS = 0x00000040
+                
+                sei = SHELLEXECUTEINFOW()
+                sei.cbSize = ctypes.sizeof(sei)
+                sei.fMask = SEE_MASK_NOCLOSEPROCESS
+                sei.lpVerb = "runas"
+                sei.lpFile = setup_path
+                sei.lpDirectory = os.path.dirname(setup_path)
+                sei.nShow = 1 # SW_SHOWNORMAL
+
+                if ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(sei)):
+                    pid = ctypes.windll.kernel32.GetProcessId(sei.hProcess)
+                    print(f"  [OK] Instalador lançado com PID: {pid}. Iniciando FOCO TOTAL CONQUEST...")
+                    
+                    # Registrar como instalando
+                    active_installers[job_id] = pid
+                    
+                    # Disparar monitoramento e foco em paralelo
+                    import subprocess
+                    asyncio.create_task(monitor_installer_task(job_id, pid))
+                    
+                    focus_conquest_ps = f"""
+                    Add-Type @"
+                        using System;
+                        using System.Runtime.InteropServices;
+                        public class Win32 {{
+                            [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+                            [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
+                            [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+                            [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+                            [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+                        }}
+"@
+                    $HWND_TOPMOST = [IntPtr](-1)
+                    $HWND_NOTOPMOST = [IntPtr](-2)
+                    $SWP_NOSIZE = 0x0001
+                    $SWP_NOMOVE = 0x0002
+                    $SWP_SHOWWINDOW = 0x0040
+                    $VK_MENU = 0x12 # Tecla ALT
+
+                    $targetPid = {pid}
+                    $stopTime = (Get-Date).AddSeconds(12)
+
+                    while ((Get-Date) -lt $stopTime) {{
+                        # Simular ALT para desbloquear permissão de foreground
+                        [Win32]::keybd_event($VK_MENU, 0, 0, [UIntPtr]::Zero)
+                        [Win32]::keybd_event($VK_MENU, 0, 2, [UIntPtr]::Zero) # KeyUp
+
+                        # Pegar PID pai e todos os filhos
+                        $pids = @($targetPid)
+                        try {{
+                            $pids += (Get-CimInstance Win32_Process -Filter "ParentProcessId = $($targetPid)" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessId)
+                        }} catch {{}}
+                        
+                        foreach ($p_id in $pids) {{
+                            $proc = Get-Process -Id $p_id -ErrorAction SilentlyContinue
+                            if ($proc -and $proc.MainWindowHandle -ne 0) {{
+                                $h = $proc.MainWindowHandle
+                                [Win32]::ShowWindow($h, 9) # SW_RESTORE
+                                [Win32]::SetWindowPos($h, $HWND_TOPMOST, 0, 0, 0, 0, $SWP_NOSIZE -bor $SWP_NOMOVE -bor $SWP_SHOWWINDOW)
+                                [Win32]::SetForegroundWindow($h)
+                                [Win32]::SwitchToThisWindow($h, $true)
+                                Start-Sleep -Milliseconds 100
+                                [Win32]::SetWindowPos($h, $HWND_NOTOPMOST, 0, 0, 0, 0, $SWP_NOSIZE -bor $SWP_NOMOVE)
+                            }}
+                        }}
+                        Start-Sleep -Milliseconds 400
+                    }}
+                    """
+                    subprocess.Popen(["powershell", "-NoProfile", "-Command", focus_conquest_ps], creationflags=subprocess.CREATE_NO_WINDOW)
+                else:
+                    raise RuntimeError("ShellExecuteExW failed")
+            except Exception as e:
+                print(f"Erro ao lançar via ShellExecuteEx (tentando startfile): {e}")
+                os.startfile(setup_path)
+                pid = None
+            
+            return {"status": "success", "message": "Installer launched", "pid": pid}
+        else:
+            # Fallback para outros SOs (embora setups de games sejam quase todos Windows)
+            subprocess.Popen(["xdg-open" if platform.system() == "Linux" else "open", setup_path])
+            return {"status": "success", "message": "Installer launched"}
+    except Exception as e:
+        print(f"Erro ao executar instalador: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to launch installer: {str(e)}")
+
+
+async def monitor_installer_task(job_id: int, pid: int):
+    """Monitora o processo de instalação e atualiza o estado quando terminar."""
+    print(f" [Monitor] Iniciando vigília para Job #{job_id} (PID {pid})")
+    start_time = time.time()
+    try:
+        while True:
+            # Reutiliza lógica de check_process_status de forma eficiente
+            is_running = False
+            import subprocess
+            try:
+                # Checa PID e filhos
+                ps_cmd = f"Get-Process -Id {pid} -ErrorAction SilentlyContinue; Get-CimInstance Win32_Process -Filter 'ParentProcessId = {pid}'"
+                result = subprocess.check_output(["powershell", "-Command", ps_cmd], text=True, creationflags=subprocess.CREATE_NO_WINDOW).strip()
+                is_running = bool(result)
+            except:
+                is_running = False
+                
+            if not is_running:
+                break
+                
+            await asyncio.sleep(2.0)
+            
+        # Quando o processo parar, verificar quanto tempo durou
+        duration = time.time() - start_time
+        print(f" [Monitor] Job #{job_id} terminou após {duration:.1f}s")
+        
+        # Se durou mais de 15 segundos, consideramos que houve uma tentativa REAL de instalação
+        # (isso evita que o botão suma se o usuário cancelar o UAC ou der erro instantâneo)
+        if duration > 15.0:
+            session = get_session()
+            db_job = session.get(Job, job_id)
+            if db_job:
+                db_job.setup_executed = True
+                session.add(db_job)
+                session.commit()
+            session.close()
+            print(f" [Monitor] ✓ Status 'setup_executed' marcado para Job #{job_id}")
+        else:
+            print(f" [Monitor] ! Instalação muito curta ({duration:.1f}s). Mantendo botão 'Instalar' disponível.")
+            
+    except Exception as e:
+        print(f" [Monitor] Erro ao monitorar Job #{job_id}: {e}")
+    finally:
+        if job_id in active_installers:
+            del active_installers[job_id]
+
+
+@app.post("/api/system/process/{pid}/focus")
+async def focus_process(pid: int):
+    """Força o processo (ou qualquer filho dele com janela) para o primeiro plano."""
+    import platform
+    import subprocess
+    
+    if platform.system() != "Windows":
+        return {"success": False}
+        
+    ps_cmd = f"""
+    $parentPid = {pid}
+    # Pega o processo pai e todos os filhos recursivamente
+    $pids = @($parentPid)
+    $pids += Get-CimInstance Win32_Process -Filter "ParentProcessId = $parentPid" | Select-Object -ExpandProperty ProcessId
+    
+    $found = $false
+    foreach ($id in $pids) {{
+        $p = Get-Process -Id $id -ErrorAction SilentlyContinue
+        if ($p -and $p.MainWindowHandle -ne 0) {{
+            $type = @'
+            using System;
+            using System.Runtime.InteropServices;
+            public class Win32 {{
+                [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+                [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+                [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr ProcessId);
+                [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+                [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+            }}
+'@
+            if (-not ([System.Management.Automation.PSTypeName]'Win32').Type) {{ Add-Type -TypeDefinition $type }}
+            
+            $fg = [Win32]::GetForegroundWindow()
+            $fgThread = [Win32]::GetWindowThreadProcessId($fg, [IntPtr]::Zero)
+            $targetThread = [Win32]::GetWindowThreadProcessId($p.MainWindowHandle, [IntPtr]::Zero)
+            
+            [Win32]::AttachThreadInput($fgThread, $targetThread, $true)
+            [Win32]::ShowWindow($p.MainWindowHandle, 9) # SW_RESTORE
+            [Win32]::SetForegroundWindow($p.MainWindowHandle)
+            [Win32]::AttachThreadInput($fgThread, $targetThread, $false)
+            $found = $true
+            break
+        }}
+    }}
+    if ($found) {{ Write-Host "OK" }} else {{ Write-Host "NOT_FOUND" }}
+    """
+    try:
+        res = subprocess.check_output(["powershell", "-Command", ps_cmd], text=True, creationflags=subprocess.CREATE_NO_WINDOW).strip()
+        return {"success": "OK" in res}
+    except:
+        return {"success": False}
+
+@app.get("/api/system/process/{pid}")
+async def check_process_status(pid: int):
+    """Verifica se o processo ou qualquer um de seus filhos ainda está rodando."""
+    import platform
+    import subprocess
+    if platform.system() != "Windows": return {"running": False}
+    try:
+        # Verifica se o PID original existe OU se existe algum processo com ParentProcessId igual a ele
+        # Isso garante que o modal não feche se o "launcher" fechar mas o "setup real" continuar
+        ps_cmd = f"Get-Process -Id {pid} -ErrorAction SilentlyContinue; Get-CimInstance Win32_Process -Filter 'ParentProcessId = {pid}'"
+        result = subprocess.check_output(["powershell", "-Command", ps_cmd], text=True, creationflags=subprocess.CREATE_NO_WINDOW).strip()
+        return {"running": bool(result)}
+    except Exception:
+        return {"running": False}
+
+
+@app.post("/api/jobs/{job_id}/mark-installed")
+async def mark_job_installed(job_id: int):
+    """Marca o job como instalado manualmente (útil para fontes sem instalador like RuTracker/Online-Fix)."""
+    session = get_session()
+    j = session.get(Job, job_id)
+    if not j:
+        session.close()
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    j.setup_executed = True
+    session.add(j)
+    session.commit()
+    session.close()
+    return {"status": "success", "message": "Job marked as installed"}
+
+
+@app.post("/api/jobs/{job_id}/cleanup")
+async def cleanup_job_files(job_id: int):
+    """
+    Deleta os arquivos do instalador no disco para economizar espaço,
+    mas mantém o registro do download na biblioteca como 'Instalado'.
+    """
+    print(f"\n [API] POST /api/jobs/{job_id}/cleanup - Iniciando limpeza de arquivos")
+    session = get_session()
+    j = session.get(Job, job_id)
+    if not j:
+        session.close()
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    dest = j.dest
+    if not dest or not os.path.exists(dest):
+        # Se o arquivo já não existe, apenas removemos o job para limpar a UI
+        try:
+            session.delete(j)
+            session.commit()
+        except: pass
+        session.close()
+        return {"status": "success", "message": "Files already gone, job removed"}
+
+    # Obter nome do item para a deleção segura
+    job_name = None
+    if j.item_id:
+        it = session.get(Item, j.item_id)
+        if it: job_name = it.name
+
+    from backend.main import safe_delete_download
+    success, message = safe_delete_download(dest, job_name=job_name)
+    
+    if success:
+        # UX Improvement: Remove o job da lista ao limpar os arquivos
+        # O usuário não quer ver "lixo" na interface
+        try:
+            session.delete(j)
+            session.commit()
+        except Exception as e:
+            print(f"WARN: Could not delete job record after file cleanup: {e}")
+            
+        session.close()
+        return {"status": "success", "message": "Files cleaned and job removed"}
+    else:
+        session.close()
+        raise HTTPException(status_code=500, detail=f"Failed to delete files: {message}")
+
 
 
 # WebSocket manager for progress updates
@@ -2620,7 +3695,12 @@ async def broadcast_progress():
                         size=j.size,  # Ensure size is sent (critical for completed jobs)
                         total=prog.get('total') or j.size, # Fallback to size if total is missing
                         downloaded=prog.get('downloaded'),
-                        speed=prog.get('speed')
+                        speed=prog.get('speed'),
+                        setup_executed=j.setup_executed,
+                        is_installing=(j.id in active_installers),
+                        dest=j.dest,
+                        started_at=j.started_at.isoformat() if j.started_at else None,
+                        completed_at=j.completed_at.isoformat() if j.completed_at else None
                     )
                     p.update(prog)
 

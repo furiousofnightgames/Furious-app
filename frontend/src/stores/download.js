@@ -27,29 +27,26 @@ export const useDownloadStore = defineStore('download', () => {
   const lastKnownSpeed = ref({})
 
   const activeDownloads = computed(() =>
-    jobs.value.filter(j => ['queued', 'running'].includes(j.status))
+    jobs.value.filter(j => ['running', 'queued', 'pending'].includes(j.status))
   )
-
   const completedDownloads = computed(() =>
-    jobs.value.filter(j => j.status === 'completed')
+    jobs.value.filter(j => ['completed', 'completed_cleaned'].includes(j.status))
   )
-
   const failedDownloads = computed(() =>
     jobs.value.filter(j => j.status === 'failed')
   )
-
   const canceledDownloads = computed(() =>
     jobs.value.filter(j => j.status === 'canceled')
   )
 
-  const totalSpeed = computed(() => {
-    return activeDownloads.value.reduce((sum, job) => sum + (job.speed || 0), 0)
-  })
+  const totalSpeed = computed(() =>
+    activeDownloads.value.reduce((acc, j) => acc + (j.speed || 0), 0)
+  )
 
   const totalProgress = computed(() => {
     if (activeDownloads.value.length === 0) return 0
-    const avg = activeDownloads.value.reduce((sum, job) => sum + Math.min(job.progress || 0, 100), 0)
-    return Math.min(Math.round(avg / activeDownloads.value.length), 100)
+    const total = activeDownloads.value.reduce((acc, j) => acc + (j.progress || 0), 0)
+    return Math.round(total / activeDownloads.value.length)
   })
 
   // Helper to format progress to 1 decimal place
@@ -58,21 +55,32 @@ export const useDownloadStore = defineStore('download', () => {
     return Math.round(p * 10) / 10
   }
 
+  // Actions
   async function fetchJobs() {
     try {
       loading.value = true
       const response = await api.get('/api/jobs')
-      jobs.value = response.data.map(j => ({
-        ...j,
-        name: j.name || j.item_name || 'Download',
-        url: j.url || j.item_url,
-        error: j.last_error
-      }))
+      jobs.value = response.data
       error.value = null
     } catch (e) {
       error.value = e.message
     } finally {
       loading.value = false
+    }
+  }
+
+  async function cleanupJob(jobId) {
+    try {
+      const response = await api.post(`/api/jobs/${jobId}/cleanup`)
+      toastSuccess('Limpeza', 'Arquivos do instalador removidos, histórico preservado')
+      // Atualizar lista local
+      const job = jobs.value.find(j => j.id === jobId)
+      if (job) job.status = 'completed_cleaned'
+      return response.data
+    } catch (e) {
+      const msg = e.response?.data?.detail || e.message
+      toastError('Erro na limpeza', msg)
+      throw e
     }
   }
 
@@ -605,6 +613,9 @@ export const useDownloadStore = defineStore('download', () => {
     }
   }
 
+  const reconnectAttempts = ref(0)
+  const maxReconnectDelay = 30000 // 30 seconds
+
   function connectWebSocket(force = false) {
     // Forced reconnect: close any existing socket and start a new connection.
     if (force) {
@@ -623,8 +634,8 @@ export const useDownloadStore = defineStore('download', () => {
             existing.onmessage = null
             existing.onerror = null
             existing.onclose = null
-          } catch (e) {}
-          try { existing.close() } catch (e) {}
+          } catch (e) { }
+          try { existing.close() } catch (e) { }
         }
 
         ws.value = null
@@ -632,7 +643,7 @@ export const useDownloadStore = defineStore('download', () => {
         window.__wsConnecting = false
         isConnected.value = false
         isConnecting.value = false
-      } catch (e) {}
+      } catch (e) { }
     } else {
       // Prevent multiple simultaneous connection attempts
       if (isConnected.value || window.__wsConnecting) {
@@ -645,6 +656,7 @@ export const useDownloadStore = defineStore('download', () => {
         console.log('[WebSocket] Reusing existing global WebSocket instance')
         ws.value = window.__wsInstance
         isConnected.value = true
+        reconnectAttempts.value = 0
         return
       }
     }
@@ -664,13 +676,14 @@ export const useDownloadStore = defineStore('download', () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = `${protocol}//${wsHost}/ws`
 
-    console.log('[WebSocket] Creating new connection to:', wsUrl)
+    console.log(`[WebSocket] Creating new connection to: ${wsUrl} (Attempt ${reconnectAttempts.value + 1})`)
     ws.value = new WebSocket(wsUrl)
     window.__wsInstance = ws.value
 
     ws.value.onopen = () => {
       isConnected.value = true
       window.__wsConnecting = false
+      reconnectAttempts.value = 0 // Reset attempts on success
       console.log('[WebSocket] Connected')
     }
 
@@ -714,24 +727,31 @@ export const useDownloadStore = defineStore('download', () => {
       isConnected.value = false
       window.__wsConnecting = false
       console.log('[WebSocket] Disconnected')
+
       // Only try to reconnect if not manually disconnected
       if (!manuallyDisconnected) {
-        console.log('[WebSocket] Will attempt reconnection in 5s...')
+        // Calculate delay with exponential backoff (1s, 2s, 4s, 8s, 16s, 30s max)
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value), maxReconnectDelay)
+        reconnectAttempts.value++
+
+        console.log(`[WebSocket] Will attempt reconnection in ${delay}ms... (Attempt ${reconnectAttempts.value})`)
+
         // Clear any existing timeout
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
-        // Schedule reconnection with delay to avoid rapid reconnect attempts
+
         reconnectTimeout = setTimeout(() => {
           if (!isConnected.value && !manuallyDisconnected) {
             console.log('[WebSocket] Attempting reconnection...')
             connectWebSocket()
           }
-        }, 1000)  // 1 segundo - equilíbrio entre responsividade e estabilidade
+        }, delay)
       }
     }
   }
 
   function disconnectWebSocket() {
     manuallyDisconnected = true
+    reconnectAttempts.value = 0
     if (reconnectTimeout) clearTimeout(reconnectTimeout)
     if (ws.value) {
       ws.value.close()
@@ -740,6 +760,70 @@ export const useDownloadStore = defineStore('download', () => {
       window.__wsConnecting = false
       isConnected.value = false
       isConnecting.value = false
+    }
+  }
+
+  async function checkSetup(jobId) {
+    try {
+      const response = await api.get(`/api/jobs/${jobId}/setup-check`)
+      return response.data
+    } catch (e) {
+      console.error(`[Store] checkSetup(${jobId}) - Erro:`, e)
+      return { found: false, error: e.message }
+    }
+  }
+
+  async function runSetup(jobId, setupPath) {
+    try {
+      const response = await api.post(`/api/jobs/${jobId}/setup-run`, { path: setupPath })
+      toastSuccess('Instalação', 'Instalador iniciado com sucesso')
+      return response.data
+    } catch (e) {
+      const msg = e.response?.data?.detail || e.message
+      console.error(`[Store] runSetup(${jobId}) - Erro:`, msg)
+      toastError('Erro ao iniciar instalador', msg)
+      throw e
+    }
+  }
+
+  async function getDiskSpace(path = '') {
+    try {
+      const response = await api.get('/api/system/disk-space', { params: { path } })
+      return response.data
+    } catch (e) {
+      console.error('[Store] getDiskSpace erro:', e)
+      return { free: 0, status: 'error' }
+    }
+  }
+
+  async function markInstalled(jobId) {
+    try {
+      await api.post(`/api/jobs/${jobId}/mark-installed`)
+      toastSuccess('Instalação', 'Item marcado como instalado manualmente')
+      const job = jobs.value.find(j => j.id === jobId)
+      if (job) job.setup_executed = true
+    } catch (e) {
+      toastError('Erro', e.message)
+      throw e
+    }
+  }
+
+  async function cleanupJob(jobId) {
+    try {
+      console.log(`[Store] cleanupJob(${jobId}) - Iniciando limpeza...`)
+      const response = await api.post(`/api/jobs/${jobId}/cleanup`)
+
+      if (response.data && response.data.status === 'success') {
+        console.log(`[Store] Limpeza confirmada. Removendo job ${jobId} da lista local.`)
+        // Remover job da lista local imediatamente para atualizar a UI
+        jobs.value = jobs.value.filter(j => j.id !== jobId)
+        toastSuccess('Limpeza', 'Arquivos removidos e download finalizado')
+      }
+      return response.data
+    } catch (e) {
+      console.error(`[Store] Erro ao limpar job ${jobId}:`, e)
+      toastError('Erro na limpeza', e.message || 'Falha ao remover arquivos')
+      throw e
     }
   }
 
@@ -776,6 +860,11 @@ export const useDownloadStore = defineStore('download', () => {
     fetchApi,
     connectWebSocket,
     disconnectWebSocket,
-    formatProgress
+    formatProgress,
+    checkSetup,
+    runSetup,
+    markInstalled,
+    getDiskSpace,
+    cleanupJob
   }
 })

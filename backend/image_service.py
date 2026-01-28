@@ -29,13 +29,22 @@ class SteamGridDBProvider(ImageProvider):
         if not self.api_key or "YOUR_KEY" in self.api_key:
             return None
             
+        # Usamos um dict para evitar problemas de escopo/UnboundLocalError no Python
+        # Isso garante que todas as chaves existam antes de qualquer lógica complexa
+        res = {
+            "header": None,
+            "capsule": None,
+            "hero": None,
+            "logo": None,
+            "background": None
+        }
+
         print(f"[SteamGridDB] Searching for: {query}")
         try:
             # 1. Search for Game ID
             q = quote(str(query), safe="")
             search_resp = await self.client.get(f"{self.base_url}/search/autocomplete/{q}")
             if search_resp.status_code != 200:
-                print(f"[SteamGridDB] Search failed: {search_resp.status_code}")
                 return None
             
             data = search_resp.json()
@@ -47,9 +56,7 @@ class SteamGridDBProvider(ImageProvider):
             print(f"[SteamGridDB] Found Game: {game_name} (ID: {game_id})")
             
             # 2. Fetch Assets (Grids, Heroes, Logos)
-            # Parallel requests (compatible with Python 3.10)
-            # REMOVED dimensions filter to ensure we get ANY art if available
-            t_grids = asyncio.create_task(self.client.get(f"{self.base_url}/grids/game/{game_id}?styles=alternate,blurred,material,no_logo"))
+            t_grids = asyncio.create_task(self.client.get(f"{self.base_url}/grids/game/{game_id}"))
             t_heroes = asyncio.create_task(self.client.get(f"{self.base_url}/heroes/game/{game_id}"))
             t_logos = asyncio.create_task(self.client.get(f"{self.base_url}/logos/game/{game_id}"))
 
@@ -60,51 +67,36 @@ class SteamGridDBProvider(ImageProvider):
             def get_url(items):
                 return items[0]["url"] if items else None
 
-            # Map to our standard format
-            # SteamGridDB "grid" 600x900 -> equivalent to capsule/header logic but different aspect ratio
-            # We map "hero" -> "hero" & "background"
-            # We map "logo" -> "logo"
+            res["hero"] = get_url(heroes)
+            res["logo"] = get_url(logos)
+            res["background"] = res["hero"]
             
-            hero_url = get_url(heroes)
-            logo_url = get_url(logos)
-            
-            # Grids come in many shapes. 
-            # 460x215 is closest to Steam "header"
-            # 600x900 is vertical capsule
-            
-            header_url = None
-            capsule_url = None
-            
-            # Prioridade 1: Dimensões exatas Steam
+            # Prioridade 1: Dimensões Steam (Favoritas)
             for g in grids:
                 w, h = g.get("width"), g.get("height")
-                if w == 460 and h == 215:
-                    header_url = g["url"]
-                if w == 600 and h == 900:
-                    capsule_url = g["url"]
-            
-            # Prioridade 2: Dimensões próximas ou populares
-            # 920x430 (2x header)
-            if not header_url:
+                if w == 460 and h == 215: res["header"] = g["url"]
+                if w == 600 and h == 900: res["capsule"] = g["url"]
+
+            # Prioridade 2: Qualquer Horizontal para Header (o que garante a "capa bonita")
+            if not res["header"]:
                 for g in grids:
-                    if g.get("width") == 920 and g.get("height") == 430:
-                        header_url = g["url"]
+                    if g.get("width", 0) > g.get("height", 0):
+                        res["header"] = g["url"]
                         break
             
-            # Fallback final: Qualquer grid
-            if not header_url and grids:
-                 header_url = grids[0]["url"]
-            if not capsule_url and grids:
-                 capsule_url = grids[0]["url"]
+            # Fallback final: Hero (Alta Resolução) ganha de grid genérico para Header/Background
+            res["header"] = res["header"] or res["hero"] or (grids[0]["url"] if grids else None)
+            res["capsule"] = res["capsule"] or res["header"] or (grids[0]["url"] if grids else None)
+            res["background"] = res["hero"] or res["header"]
 
             return {
                 "id": game_id,
                 "name": game_name,
-                "header": header_url or hero_url,
-                "capsule": capsule_url or header_url,
-                "hero": hero_url,
-                "logo": logo_url,
-                "background": hero_url # SGDB doesnt have specific backgrounds usually, heroes work
+                "header": res["header"],
+                "capsule": res["capsule"],
+                "hero": res["hero"],
+                "logo": res["logo"],
+                "background": res["background"]
             }
 
         except Exception as e:
