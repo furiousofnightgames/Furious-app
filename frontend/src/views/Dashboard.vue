@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <!-- Main Stats with SVG Icons -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="p-4 bg-gradient-to-br from-sky-50 dark:from-sky-900/30 to-sky-50/50 dark:to-sky-900/10 rounded-lg border border-sky-200 dark:border-sky-500/20 hover:border-sky-300 dark:hover:border-sky-500/50 transition">
         <div class="flex items-center gap-3 mb-2">
           <div class="w-10 h-10">

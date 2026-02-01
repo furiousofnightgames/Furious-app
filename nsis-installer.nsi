@@ -98,7 +98,7 @@ Section "Instalar Furious App"
     ; Adiciona entrada no Painel de Controle (Adicionar/Remover Programas)
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayName" "Furious App"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "UninstallString" "$INSTDIR\Uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayVersion" "2.6.0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "DisplayVersion" "3.3.1"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "Publisher" "Diego's Apps"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "InstallLocation" "$INSTDIR"
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp" "NoModify" 1
@@ -110,7 +110,7 @@ Section "Instalar Furious App"
     FileWrite $0 "Furious App - Informacoes de Instalacao$\r$\n"
     FileWrite $0 "====================================$\r$\n"
     FileWrite $0 "$\r$\n"
-    FileWrite $0 "Versao: 2.6.0$\r$\n"
+    FileWrite $0 "Versao: 3.3.1$\r$\n"
     FileWrite $0 "Local: $INSTDIR$\r$\n"
     FileWrite $0 "$\r$\n"
     FileWrite $0 "Componentes Instalados:$\r$\n"
@@ -139,8 +139,22 @@ Section "Uninstall"
     Delete "$SMPROGRAMS\$StartMenuFolder\Desinstalar.lnk"
     Delete "$SMPROGRAMS\$StartMenuFolder\Pasta de Instalacao.lnk"
     RMDir "$SMPROGRAMS\$StartMenuFolder"
+    
+    ; Remove arquivos e pasta de instalacao
     RMDir /r "$INSTDIR"
+
+    ; --- LIMPEZA DE DADOS DO USUARIO (ROAMING) ---
+    SetShellVarContext current
+    RMDir /r "$APPDATA\furiousapp"
+    RMDir /r "$LOCALAPPDATA\furiousapp"
+    ; Limpeza legado
+    RMDir /r "$APPDATA\furious-app"
+    RMDir /r "$LOCALAPPDATA\furious-app"
+    SetShellVarContext all
+    
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FuriousApp"
+    
+    MessageBox MB_OK "Furious App foi desinstalado com sucesso!"
     
 SectionEnd
 

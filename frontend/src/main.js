@@ -4,8 +4,11 @@ import App from './App.vue'
 import router from './router'
 import { useDownloadStore } from './stores/download'
 import './styles/globals.css'
+import './styles/themes.css'
 import './styles/cyberpunk.css'
 import './styles/tailwind.css'
+
+import { useThemeStore } from './stores/theme'
 
 const pinia = createPinia()
 
@@ -19,6 +22,14 @@ if (!window.__appInitialized) {
 
   app.use(pinia)
   app.use(router)
+
+  // Initialize Theme immediately after pinning (before mount)
+  try {
+    const themeStore = useThemeStore()
+    themeStore.initTheme()
+  } catch (e) {
+    console.error('Failed to init theme:', e)
+  }
 
   // call aria2 status check and connect websocket after app boot
   setTimeout(() => {

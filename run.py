@@ -79,6 +79,7 @@ def main():
         env.setdefault("DB_PATH", os.path.join(dev_data_dir, "data.db"))
         env.setdefault("ARIA2_SESSION_FILE", os.path.join(dev_data_dir, "aria2.session"))
         env.setdefault("ARIA2_DHT_FILE", os.path.join(dev_data_dir, "dht.dat"))
+        env.setdefault("VERBOSE_TERMINAL", "0") # Keep terminal clean by default
 
         args = [
             sys.executable, "-m", "uvicorn",
@@ -90,13 +91,15 @@ def main():
             args.insert(4, "--reload")
 
         # Executa o uvicorn com Popen para ter controle do processo
+        # Use simple Popen without capturing signals, let uvicorn handle its own SIGINT
         process = subprocess.Popen(args, env=env)
         
         # Aguarda o processo terminar
         process.wait()
 
     except KeyboardInterrupt:
-        print("\n\n👋 Interrupção recebida! Encerrando...")
+        # Just a visual tip, uvicorn will catch its own SIGINT
+        pass
     except Exception as e:
         print(f"\n❌ Erro ao iniciar servidor: {e}")
         print("\n💡 Certifique-se de que o uvicorn está instalado:")
@@ -107,16 +110,17 @@ def main():
         if 'process' in locals() and process:
             try:
                 if process.poll() is None:
-                    print("🔪 Matando processos órfãos...")
-                    process.terminate()
-                    try:
-                        process.wait(timeout=3)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                    print("✅ Processos limpos.")
+                    # Let it breathe for 1 second to finish logging etc.
+                    time.sleep(0.5)
+                    if process.poll() is None:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
             except Exception:
                 pass
-        print("👋 Servidor encerrado!")
+        print("\n👋 Servidor encerrado!")
 
 if __name__ == "__main__":
     main()

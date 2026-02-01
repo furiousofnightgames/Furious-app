@@ -62,8 +62,13 @@ export default {
         'fadeIn': 'fadeIn 0.3s ease-out',
         'slideUp': 'slideUp 0.3s ease-out',
         'pulse-subtle': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'wiggle': 'wiggle 0.3s ease-in-out infinite',
       },
       keyframes: {
+        wiggle: {
+          '0%, 100%': { transform: 'rotate(-3deg)' },
+          '50%': { transform: 'rotate(3deg)' },
+        },
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },

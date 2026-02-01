@@ -1,27 +1,4 @@
-/* Cyberpunk Theme */
-
-:root {
-  /* Primary Colors - Cyan & Purple */
-  --cyan-primary: #06b6d4;
-  --cyan-dark: #082f4d;
-  --purple-primary: #a855f7;
-  --purple-dark: #581c87;
-  
-  /* Accent Colors */
-  --pink-accent: #ec4899;
-  --blue-accent: #2563eb;
-  --lime-accent: #84cc16;
-  
-  /* Neutrals */
-  --black: #000000;
-  --slate-900: #0f172a;
-  --slate-800: #1e293b;
-  --slate-700: #334155;
-  
-  /* Shadows */
-  --shadow-glow-cyan: 0 0 20px rgba(6, 182, 212, 0.5);
-  --shadow-glow-purple: 0 0 20px rgba(168, 85, 247, 0.5);
-}
+/* Cyberpunk Theme (Base Styles consuming variables) */
 
 /* Layout */
 #app {
@@ -29,9 +6,11 @@
   flex-direction: column;
   width: 100%;
   height: 100vh;
-  background: linear-gradient(135deg, #0f0f0f 0%, #1a0f2e 50%, #0f1f2e 100%);
+  background: var(--bg-gradient);
   position: relative;
   overflow: hidden;
+  transition: background 0.5s ease;
+  /* Smooth transition when switching themes */
 }
 
 #app::before {
@@ -41,22 +20,26 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: 
-    repeating-linear-gradient(
-      0deg,
-      rgba(6, 182, 212, 0.03) 0px,
-      rgba(6, 182, 212, 0.03) 1px,
+  background:
+    repeating-linear-gradient(0deg,
+      var(--scanline-color) 0px,
+      var(--scanline-color) 1px,
       transparent 1px,
-      transparent 2px
-    );
+      transparent 2px);
   pointer-events: none;
   z-index: 1;
   animation: scan-lines 8s linear infinite;
+  transition: background 0.3s ease;
 }
 
 /* Typography */
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Orbitron', sans-serif;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -64,68 +47,70 @@ h1, h2, h3, h4, h5, h6 {
 
 h1 {
   font-size: 2.5rem;
-  background: linear-gradient(135deg, #06b6d4, #2563eb);
+  background: var(--text-gradient-primary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   text-shadow: 0 0 30px rgba(6, 182, 212, 0.4);
-  filter: drop-shadow(0 0 20px rgba(6, 182, 212, 0.3));
+  /* Keep specific shadow or make variable? Keeping specifically styled for now but could be var(--glow-primary) */
+  filter: drop-shadow(var(--glow-primary));
 }
 
 h2 {
   font-size: 1.875rem;
-  color: #06b6d4;
+  color: var(--primary);
 }
 
 h3 {
   font-size: 1.25rem;
-  color: #a855f7;
+  color: var(--secondary);
 }
 
 /* Glassmorphism Effect */
 .glass {
-  background: rgba(30, 41, 59, 0.5);
+  background: var(--glass-bg);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(6, 182, 212, 0.2);
-  box-shadow: 0 8px 32px rgba(6, 182, 212, 0.1);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px var(--glass-shadow);
+  transition: all 0.3s ease;
 }
 
 .glass-dark {
   background: rgba(15, 15, 15, 0.7);
+  /* Keep fixed or make variable? Fixed for now as 'dark' specific */
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(6, 182, 212, 0.15);
+  border: 1px solid var(--glass-border);
 }
 
 /* Neon Effect */
 .neon {
-  text-shadow: 
-    0 0 7px #06b6d4,
-    0 0 10px #06b6d4,
-    0 0 21px #06b6d4,
-    0 0 42px #2563eb,
-    0 0 82px #2563eb;
+  text-shadow: var(--text-shadow-neon);
 }
 
 .neon-purple {
-  text-shadow: 
-    0 0 7px #a855f7,
-    0 0 10px #a855f7,
-    0 0 21px #a855f7,
-    0 0 42px #ec4899,
-    0 0 82px #ec4899;
+  text-shadow:
+    0 0 7px var(--secondary),
+    0 0 10px var(--secondary),
+    0 0 21px var(--secondary),
+    0 0 42px var(--accent-pink),
+    0 0 82px var(--accent-pink);
 }
 
 .neon-box {
-  box-shadow: 
-    0 0 10px rgba(6, 182, 212, 0.5),
+  box-shadow:
+    0 0 10px var(--glass-shadow),
     0 0 20px rgba(6, 182, 212, 0.3),
+    /* Hard to variable-ize perfectly without more vars, but ok */
     inset 0 0 10px rgba(6, 182, 212, 0.1);
-  border: 1px solid rgba(6, 182, 212, 0.4);
+  border: 1px solid var(--glass-border);
 }
 
 /* Interactive Elements */
-button, input, select, textarea {
-  font-family: 'Space Mono', monospace;
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -137,31 +122,33 @@ button:active:not(:disabled) {
   transform: translateY(0);
 }
 
-input:focus, select:focus, textarea:focus {
+input:focus,
+select:focus,
+textarea:focus {
   outline: none;
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.5), inset 0 0 10px rgba(6, 182, 212, 0.1);
+  box-shadow: var(--glow-primary), inset 0 0 10px var(--glass-shadow);
 }
 
 /* Utility Classes */
 .border-neon {
-  border: 2px solid var(--cyan-primary);
-  box-shadow: var(--shadow-glow-cyan);
+  border: 2px solid var(--primary);
+  box-shadow: var(--glow-primary);
 }
 
 .border-neon-purple {
-  border: 2px solid var(--purple-primary);
-  box-shadow: var(--shadow-glow-purple);
+  border: 2px solid var(--secondary);
+  box-shadow: var(--glow-secondary);
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #06b6d4, #2563eb);
+  background: var(--text-gradient-primary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-purple {
-  background: linear-gradient(135deg, #a855f7, #ec4899);
+  background: var(--text-gradient-secondary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -169,11 +156,12 @@ input:focus, select:focus, textarea:focus {
 
 /* Grid Background Effect */
 .grid-bg {
-  background-image: 
-    linear-gradient(rgba(6, 182, 212, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(6, 182, 212, 0.1) 1px, transparent 1px);
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
   background-size: 50px 50px;
   position: relative;
+  transition: background-image 0.3s ease;
 }
 
 /* Floating Animation */

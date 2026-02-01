@@ -2,7 +2,7 @@ import shutil
 import subprocess
 import os
 from collections import deque
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, Callable
 import sys
 import time
 import httpx
@@ -14,10 +14,13 @@ import xml.etree.ElementTree as ET
 import re
 
 
-def _get_aria2_paths() -> tuple[Path, Path]:
+def _get_aria2_paths(job_id: Optional[int] = None) -> tuple[Path, Path]:
     session_env = os.environ.get("ARIA2_SESSION_FILE")
     dht_env = os.environ.get("ARIA2_DHT_FILE")
     app_data_dir = os.environ.get("APP_DATA_DIR")
+    
+    suffix = f"_{job_id}" if job_id is not None else ""
+    
     if session_env:
         session_file = Path(session_env)
     elif app_data_dir:
@@ -25,16 +28,16 @@ def _get_aria2_paths() -> tuple[Path, Path]:
             os.makedirs(app_data_dir, exist_ok=True)
         except Exception:
             pass
-        session_file = Path(app_data_dir) / "aria2.session"
+        session_file = Path(app_data_dir) / f"aria2{suffix}.session"
     else:
-        session_file = Path("aria2.session")
+        session_file = Path(f"aria2{suffix}.session")
 
     if dht_env:
         dht_file = Path(dht_env)
     elif app_data_dir:
-        dht_file = Path(app_data_dir) / "dht.dat"
+        dht_file = Path(app_data_dir) / f"dht{suffix}.dat"
     else:
-        dht_file = Path("dht.dat")
+        dht_file = Path(f"dht{suffix}.dat")
 
     return session_file, dht_file
 
@@ -42,48 +45,152 @@ def _get_aria2_paths() -> tuple[Path, Path]:
 # Lista de trackers públicos confiáveis para maximizar peers/seeders
 # Estes trackers são injetados automaticamente em todos os downloads magnet
 TRACKERS_EXTRAS = [
-    # Tier 1: Trackers mais populares e estáveis
+    # Tier 1: BEST Performance (ngosang/trackerslist best_ip + newtrackon stable)
     "udp://tracker.opentrackr.org:1337/announce",
+    "http://tracker.opentrackr.org:1337/announce",
+    "udp://9.rarbg.com:2810/announce",
+    "udp://open.demonii.com:1337/announce",
+    "udp://tracker.openbittorrent.com:80/announce",
+    "udp://tracker.coppersurfer.tk:6969/announce",
+    "udp://tracker.leechers-paradise.org:6969/announce",
+    "udp://p4p.arenabg.com:1337/announce",
+    "udp://tracker.internetwarriors.net:1337/announce",
     "udp://open.stealth.si:80/announce",
+    "udp://tracker.tiny-vps.com:6969/announce",
     "udp://tracker.torrent.eu.org:451/announce",
     "udp://exodus.desync.com:6969/announce",
-    "udp://tracker.moeking.me:6969/announce",
-    
-    # Tier 2: Trackers públicos bem estabelecidos
-    "udp://tracker.openbittorrent.com:6969/announce",
-    "udp://opentracker.i2p.rocks:6969/announce",
-    "udp://tracker.internetwarriors.net:1337/announce",
+    "udp://tracker.theoks.net:6969/announce",
     "udp://explodie.org:6969/announce",
     "udp://tracker.cyberia.is:6969/announce",
-    
-    # Tier 3: Trackers adicionais confiáveis
-    "udp://tracker.birkenwald.de:6969/announce",
-    "udp://tracker.tiny-vps.com:6969/announce",
-    "udp://retracker.lanta-net.ru:2710/announce",
     "udp://ipv4.tracker.harry.lu:80/announce",
-    "udp://tracker.theoks.net:6969/announce",
-    "udp://tracker.ccp.ovh:6969/announce",
+    "udp://retracker.lanta-net.ru:2710/announce",
+    "udp://tracker.moeking.me:6969/announce",
+    "udp://opentracker.i2p.rocks:6969/announce",
     
-    # Tier 4: Internet Archive (sem fins lucrativos)
-    "udp://bt1.archive.org:6969/announce",
-    "udp://bt2.archive.org:6969/announce",
-    
-    # Tier 5: Trackers extras de alta qualidade
-    "udp://tracker.filemail.com:6969/announce",
-    "udp://tracker1.bt.moack.co.kr:80/announce",
-    "udp://9.rarbg.com:2810/announce",
-    "udp://tracker.uw0.xyz:6969/announce",
-    "udp://tracker.dler.org:6969/announce",
+    # Tier 2: Public Stable
+    "udp://tracker.zerobytes.xyz:1337/announce",
+    "udp://finportal.ru:6969/announce",
+    "udp://tracker.leech.ie:1337/announce",
+    "udp://wambo.club:1337/announce",
+    "udp://tracker.doko.moe:6969/announce",
+    "udp://tracker.sbsub.com:2710/announce",
+    "udp://tracker.reboot.chat:6969/announce",
+    "udp://tracker.auctor.tv:6969/announce",
+    "udp://tracker.swateam.org.uk:2710/announce",
     "udp://tracker.lelux.fi:6969/announce",
+    "udp://tracker.bittor.pw:1337/announce",
+    "udp://tracker.0x7c0.com:6969/announce",
+    
+    # Tier 3: IPv6 & Backup
+    "udp://tracker.dler.org:6969/announce",
+    "udp://tracker.uw0.xyz:6969/announce",
     "udp://movies.zsw.ca:6969/announce",
     "udp://tracker1.myporn.club:9337/announce",
     "udp://open.tracker.cl:1337/announce",
     "udp://tracker.dump.cl:6969/announce",
-    "udp://tracker.auctor.tv:6969/announce",
     "udp://tracker.srv00.com:6969/announce",
+    "udp://tracker.qu.ax:6969/announce",
+    "udp://tracker2.dler.org:80/announce",
+    
+    # Tier 4: WebSeeds / HTTP / HTTPS (Failsafes)
+    "https://tracker.tamersunion.org:443/announce",
+    "https://tracker.nanoha.org:443/announce",
+    "https://tr.burnabyhighstar.com:443/announce",
+    "http://tracker.gbitt.info:80/announce",
+    "http://tracker.files.fm:6969/announce",
+    "http://tracker2.dler.org:80/announce",
+    "http://tracker1.bt.moack.co.kr:80/announce",
+    "http://tracker.dler.org:6969/announce",
+    "http://tr.kxmp.cf:80/announce",
+    
+    # Tier 5: Archive & Others
+    "udp://bt1.archive.org:6969/announce",
+    "udp://bt2.archive.org:6969/announce",
+    "udp://tracker.ccp.ovh:6969/announce",
+    "udp://tracker.birkenwald.de:6969/announce",
+    "udp://retracker01-msk-virt.corbina.net:80/announce",
+    "udp://opentracker.io:6969/announce",
+    "udp://open.free-tracker.ga:6969/announce",
+    "udp://new-line.net:6969/announce",
+    "udp://moonburrow.club:6969/announce",
+    "udp://leet-tracker.moe:1337/announce",
+    "udp://u.peer-exchange.download:6969/announce",
+    "udp://ttk2.nbaonlineservice.com:6969/announce",
+    "udp://tracker.tryhackx.org:6969/announce",
+    "udp://tracker.skynetcloud.site:6969/announce",
+    "udp://tracker.jamesthebard.net:6969/announce",
+    "udp://tracker.fnix.net:6969/announce",
+    "udp://tracker.filemail.com:6969/announce",
+    "udp://tracker.farted.net:6969/announce",
+    "udp://tracker.edkj.club:6969/announce",
+    "udp://tracker.deadorbit.nl:6969/announce",
+    "udp://tracker.darkness.services:6969/announce",
+    "udp://tamas3.ynh.fr:6969/announce",
+    "udp://ryjer.com:6969/announce",
+    "udp://run.publictracker.xyz:6969/announce",
+    "udp://public.tracker.vraphim.com:6969/announce",
+    "udp://p2p.publictracker.xyz:6969/announce",
+    "udp://open.u-p.pw:6969/announce",
+    "udp://open.publictracker.xyz:6969/announce",
+    "udp://open.dstud.io:6969/announce",
+    "udp://open.demonoid.ch:6969/announce",
+    "udp://odd-hd.fr:6969/announce",
+    "udp://martin-gebhardt.eu:25/announce",
+    "udp://jutone.com:6969/announce",
+    "udp://isk.richardsw.club:6969/announce",
+    "udp://evan.im:6969/announce",
+    "udp://epider.me:6969/announce",
+    "udp://d40969.acod.regrucolo.ru:6969/announce",
+    "udp://bt.rer.lol:6969/announce",
+    "udp://amigacity.xyz:6969/announce",
+    "udp://1c.premierzal.ru:6969/announce",
+    "https://trackers.run:443/announce",
+    "https://tracker.yemekyedim.com:443/announce",
+    "https://tracker.renfei.net:443/announce",
+    "https://tracker.pmman.tech:443/announce",
+    "https://tracker.lilithraws.org:443/announce",
+    "https://tracker.imgoingto.icu:443/announce",
+    "https://tracker.cloudit.top:443/announce",
+    "https://tracker-zhuqiy.dgj055.icu:443/announce",
+    "http://tracker.renfei.net:8080/announce",
+    "http://tracker.mywaifu.best:6969/announce",
+    "http://tracker.ipv6tracker.org:80/announce",
+    "http://tracker.files.fm:6969/announce",
+    "http://tracker.edkj.club:6969/announce",
+    "http://tracker.bt4g.com:2095/announce",
+    "http://tracker-zhuqiy.dgj055.icu:80/announce",
+    "http://t1.aag.moe:17715/announce",
+    "http://t.overflow.biz:6969/announce",
+    "http://bittorrent-tracker.e-n-c-r-y-p-t.net:1337/announce",
+    "udp://torrents.artixlinux.org:6969/announce",
+    "udp://mail.artixlinux.org:6969/announce",
+    "udp://ipv4.rer.lol:2710/announce",
+    "udp://concen.org:6969/announce",
+    "udp://bt.rer.lol:2710/announce",
+    "udp://aegir.sexy:6969/announce",
+    "https://www.peckservers.com:9443/announce",
+    "https://tracker.ipfsscan.io:443/announce",
+    "https://tracker.gcrenwp.top:443/announce",
+    "http://www.peckservers.com:9000/announce",
+    "http://tracker1.itzmx.com:8080/announce",
+    "http://ch3oh.ru:6969/announce",
+    "http://bvarf.tracker.sh:2086/announce",
+    "udp://tracker.moeking.me:6969/announce",
+    "udp://tracker.openbittorrent.com:6969/announce",
+    "udp://opentracker.i2p.rocks:6969/announce",
+    "udp://tracker.internetwarriors.net:1337/announce",
+    "udp://tracker.cyberia.is:6969/announce",
+    "udp://tracker.birkenwald.de:6969/announce",
+    "udp://retracker.lanta-net.ru:2710/announce",
+    "udp://ipv4.tracker.harry.lu:80/announce",
+    "udp://tracker.uw0.xyz:6969/announce",
+    "udp://tracker.lelux.fi:6969/announce",
+    "udp://movies.zsw.ca:6969/announce",
+    "udp://tracker.auctor.tv:6969/announce",
     "udp://tracker.doko.moe:6969/announce",
     "udp://tracker.qu.ax:6969/announce",
     "udp://tracker.swateam.org.uk:2710/announce",
+    "udp://9.rarbg.com:2810/announce",
 ]
 
 
@@ -109,6 +216,9 @@ def find_aria2_binary(project_root: Optional[str] = None) -> Optional[str]:
         alt = os.path.join(project_root, "aria2c")
         if os.path.exists(alt):
             return alt
+        portable = os.path.join(project_root, "portables", "aria2-1.37.0", "aria2c.exe")
+        if sys.platform == "win32" and os.path.exists(portable):
+            return portable
 
         # search a bit deeper: look for aria2c inside immediate subfolders (depth 2)
         try:
@@ -131,7 +241,7 @@ def find_aria2_binary(project_root: Optional[str] = None) -> Optional[str]:
     return path
 
 
-async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Optional[callable] = None, stop_event: Optional[asyncio.Event] = None, aria2_path: Optional[str] = None, project_root: Optional[str] = None, total_size_hint: Optional[int] = None, job_id: Optional[int] = None, job_manager: Optional[object] = None) -> tuple[str, str]:
+async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Optional[Callable[[int, int, int, int, float, str, str, float, str], Any]] = None, stop_event: Optional[asyncio.Event] = None, aria2_path: Optional[str] = None, project_root: Optional[str] = None, total_size_hint: Optional[int] = None, job_id: Optional[int] = None, job_manager: Optional[object] = None) -> tuple[str, str]:
     """
     Download magnet using aria2c CLI (like v0).
     Monitors file size while aria2 is running with robust progress detection.
@@ -182,8 +292,13 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
     # CRITICAL: Session handling MUST be done BEFORE any directory manipulation
     # This preserves aria2's .aria2 metadata and GID references
     
-    session_file, dht_file = _get_aria2_paths()
+    session_file, dht_file = _get_aria2_paths(job_id)
     load_session = False
+    try:
+        dht_file.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    print(f"DHT file path: {dht_file}")
     saved_gid = None  # Will be loaded from session if resuming
     
     # Check if session file exists
@@ -332,7 +447,7 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--check-integrity=false',
             '--log-level=debug',
             '--bt-tracker-connect-timeout=10',
-            '--bt-tracker-interval=15',  # Atualiza a cada 15s (mais agressivo)
+            '--bt-tracker-interval=30',
             '--dht-listen-port=6881-6889',
             '--enable-dht=true',
             '--enable-dht6=true',  # IPv6 DHT ativado para mais seeders
@@ -351,6 +466,10 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--bt-request-peer-speed=1',
             '--input-file=' + str(session_file)
         ]
+        if TRACKERS_EXTRAS:
+            trackers_str = ','.join(TRACKERS_EXTRAS)
+            cmd.append(f'--bt-tracker={trackers_str}')
+            print(f" TRACKERS EXTRAS INJETADOS: {len(TRACKERS_EXTRAS)} trackers adicionados")
         print(f" Session loaded - continuing download with existing GID and folder")
     else:
         #  FRESH START: Full command with magnet URL and all parameters
@@ -381,8 +500,8 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--max-concurrent-downloads=1',
             '--check-integrity=false',
             '--log-level=debug',
-            '--bt-tracker-connect-timeout=3',  # Timeout 3s (mais agressivo)
-            '--bt-tracker-interval=15',  # Atualiza a cada 15s (mais agressivo para seeders)
+            '--bt-tracker-connect-timeout=10',
+            '--bt-tracker-interval=30',
             '--dht-listen-port=6881-6889',
             '--dht-entry-point=dht.transmissionbt.com:6881',  # DHT bootstrap para descoberta rápida
             '--dht-entry-point6=dht.transmissionbt.com:6881',  # DHT bootstrap IPv6
@@ -445,6 +564,8 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
     final_download_path = None  # Track the actual path where files were downloaded
     last_progress_update_time = time.time()
     last_reported_size = 0
+    log_size = 0  # CRITICAL: Always initialize to prevent NameError
+    last_fs_scan_ts = 0.0
     
     # GID Tracking: Detect and capture the REAL download GID (not metadata GID)
     metadata_gid = saved_gid[:6] if saved_gid else None  # Normalize to 6-char short form
@@ -492,22 +613,40 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                 if not aria2_log_buffer:
                     return None
                 
-                # Search from most recent to oldest
+                # Priority 1: Official completion notice (Absolute Truth for Root Folder)
+                # Matches: [NOTICE] Download complete: C:/Users/diego/Downloads/Hytale
+                for log_line in reversed(aria2_log_buffer[-100:]):
+                    if "[NOTICE] Download complete:" in log_line:
+                        match = re.search(r'Download complete:\s*(.+)$', log_line)
+                        if match:
+                            path_str = match.group(1).strip()
+                            path_str = path_str.replace('/', '\\')
+                            candidate = Path(path_str)
+                            if candidate.exists():
+                                print(f"DEBUG: Found ROOT download path from completion notice: {candidate}")
+                                return candidate
+
+                # Priority 2: File logs (Heuristic for mid-download)
                 recent_lines = aria2_log_buffer[-50:] if len(aria2_log_buffer) > 50 else aria2_log_buffer
-                
                 for log_line in reversed(recent_lines):
-                    # Look for FILE: patterns in logs
                     if "FILE:" in log_line:
-                        # Extract path from FILE: to the last /filename
-                        # Use greedy .+ to capture the full path, then strip the last component
                         match = re.search(r'FILE:\s*(.+)/[^/]+(?:\s|$)', log_line)
                         if match:
                             path_str = match.group(1).strip()
-                            # Convert forward slashes to backslashes for Windows
                             path_str = path_str.replace('/', '\\')
                             candidate = Path(path_str)
-                            # Verify the directory exists
+                            
+                            # CRITICAL: If this is a multifile torrent, the actual root is likely one or two levels up
+                            # We check if choosing the parent directory contains .aria2 metadata
                             if candidate.exists():
+                                parent = candidate.parent
+                                aria2_meta = Path(str(candidate) + ".aria2")
+                                parent_aria2_meta = Path(str(parent) + ".aria2")
+                                
+                                if parent_aria2_meta.exists() and parent != candidate:
+                                    # Detected subfolder, using root
+                                    return parent
+                                    
                                 return candidate
         except Exception:
             pass
@@ -627,9 +766,10 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
         """
         try:
             # Match pattern: [#HASH DOWNLOADED/TOTAL(%)...]
-            match = re.search(r'\[#[a-f0-9]+ ([\d.]+)(B|KiB|MiB|GiB)/([\d.]+)(B|KiB|MiB|GiB)', log_line)
+            match = re.search(r'\[#([a-f0-9]{6,}) ([\d.]+)(B|KiB|MiB|GiB)/([\d.]+)(B|KiB|MiB|GiB)', log_line)
             if match:
-                down_val, down_unit, total_val, total_unit = match.groups()
+                gid, down_val, down_unit, total_val, total_unit = match.groups()
+                gid = gid[:6]
                 
                 multipliers = {'B': 1, 'KiB': 1024, 'MiB': 1024**2, 'GiB': 1024**3}
                 
@@ -655,6 +795,7 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                     speed_bytes_per_sec = int(float(speed_val) * multipliers.get(speed_unit, 1))
                 
                 return {
+                    'gid': gid,
                     'downloaded': downloaded_bytes,
                     'total': total_bytes,
                     'percentage': percentage,
@@ -666,8 +807,8 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             pass
         return None
     
-    def get_latest_progress_from_logs() -> Optional[Dict[str, Any]]:
-        """Extract latest progress information from log buffer"""
+    def get_latest_progress_from_logs(allowed_gids=None) -> Optional[Dict[str, Any]]:
+        """Extract latest progress information from log buffer, filtered by GID if provided"""
         with log_lock:
             if not aria2_log_buffer:
                 return None
@@ -678,6 +819,8 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             for log_line in reversed(recent_lines):
                 result = parse_aria2_progress(log_line)
                 if result:
+                    if allowed_gids and result.get('gid') not in allowed_gids:
+                        continue
                     return result
         return None
     
@@ -731,6 +874,7 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                     return 0
                 
                 candidates.sort(key=get_item_size, reverse=True)
+                print(f"DEBUG: Detected candidate path from filesystem scan: {candidates[0]}")
                 return candidates[0]
         except Exception:
             pass
@@ -836,7 +980,9 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                         break
 
             # -------------------- PROGRESS / SIZE --------------------
-            progress_data = get_latest_progress_from_logs()
+            # PRIORITY GID: Use real_gid if detected, otherwise fallback to metadata_gid
+            active_gids = [real_gid] if real_gid_detected else ([metadata_gid] if metadata_gid else None)
+            progress_data = get_latest_progress_from_logs(allowed_gids=active_gids)
             current_size_bytes = 0
 
             if progress_data:
@@ -846,33 +992,71 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                     print(f" Session loaded! aria2 is continuing download ({current_size_bytes} bytes detected)")
                 if not final_download_path:
                     actual_path = extract_download_path_from_logs()
-                    final_download_path = actual_path or (dest if dest.exists() else None)
+                    if actual_path:
+                        final_download_path = actual_path
+                        print(f"DEBUG: final_download_path set from logs: {final_download_path}")
+                    elif dest.exists():
+                        final_download_path = dest
+                else:
+                    # CRITICAL FIX: If we already have a path (e.g. from filesystem scan), 
+                    # but logs provide a BETTER one (e.g. [NOTICE] Root Folder), prefer the logs.
+                    # This fixes the resume bug where it locks onto a single RAR file instead of the folder.
+                    newer_path = extract_download_path_from_logs()
+                    if newer_path and str(newer_path) != str(final_download_path):
+                        # If the log path is a parent of the scan path, definitely take it (it's the root)
+                        try:
+                            if Path(final_download_path).parent == newer_path or len(str(newer_path)) < len(str(final_download_path)):
+                                final_download_path = newer_path
+                        except: pass
                 # Disk checks previously caused progress jumps on sparse files (e.g. with tail prioritization).
                 # We trust Aria2 logs for progress data.
                 pass
             else:
-                if dest.exists():
-                    current_size_bytes = sum_directory_size(dest) if dest.is_dir() else dest.stat().st_size
-                    if current_size_bytes > 0 and not final_download_path:
-                        final_download_path = dest
+                now_ts = time.time()
+                if (now_ts - last_fs_scan_ts) >= 2.0:
+                    last_fs_scan_ts = now_ts
+                    if dest.exists():
+                        current_size_bytes = sum_directory_size(dest) if dest.is_dir() else dest.stat().st_size
+                        if current_size_bytes > 0 and not final_download_path:
+                            final_download_path = dest
+                            print(f"DEBUG: final_download_path set to initial dest (fallback): {final_download_path}")
+                    else:
+                        alt_path = detect_aria2_created_path()
+                        if alt_path:
+                            current_size_bytes = sum_directory_size(alt_path) if alt_path.is_dir() else alt_path.stat().st_size
+                            detected_candidate = alt_path
+                            if not final_download_path:
+                                final_download_path = alt_path
+                                print(f"DEBUG: final_download_path set from detected candidate: {final_download_path}")
                 else:
-                    alt_path = detect_aria2_created_path()
-                    if alt_path:
-                        current_size_bytes = sum_directory_size(alt_path) if alt_path.is_dir() else alt_path.stat().st_size
-                        detected_candidate = alt_path
-                        final_download_path = alt_path
+                    current_size_bytes = last_reported_size
 
             # -------------------- TOTAL SIZE DETECTION --------------------
+            # Logic: If we are in metadata phase, trust logs (usually small).
+            # If we are in real phase, trust logs/meta files (usually large).
+            # NEVER stick to the 'hint' if aria2 explicitly tells us a different size for the current GID.
+            log_size = try_extract_total_from_logs()
+            
+            # Ensure variables are safe for comparison
+            safesize = total_size_bytes or 0
+            safehint = total_size_hint or 0
+
             if not total_size_detected:
-                total_size_bytes = try_get_total_size_from_metadata() or try_extract_total_from_logs() or total_size_hint
-                if not total_size_bytes and current_size_bytes > 1_000_000:
-                    total_size_bytes = estimate_total_size(current_size_bytes)
+                # Initial detection
+                # CRITICAL FIX: Ensure we never result in None
+                total_size_bytes = int(try_get_total_size_from_metadata() or log_size or safehint or 0)
                 total_size_detected = total_size_bytes > 0
             else:
-                log_size = try_extract_total_from_logs()
-                if log_size > total_size_bytes:
-                    total_size_bytes = log_size
-                    print(f"Refined total size from logs: {total_size_bytes / 1024 / 1024 / 1024:.2f}GB")
+                # Refinement: 
+                # If we detected a new REAL size and it's significantly different, or if the current one is just a hint
+                if log_size > 0 and log_size != safesize:
+                    # During metadata phase, we switch to log_size even if smaller than hint
+                    if not real_gid_detected:
+                        total_size_bytes = log_size
+                    # During real phase, we trust larger size or explicit meta files
+                    elif log_size > safesize or safesize == safehint:
+                        total_size_bytes = log_size
+                        print(f"Refined total size from logs: {total_size_bytes / 1024 / 1024 / 1024:.2f}GB")
 
             # -------------------- PROGRESS CALCULATION --------------------
             # PRIORITY: Use Aria2's reported percentage if available (avoids rounding errors from "0.9GiB" logs)
@@ -958,14 +1142,22 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                 else:
                     print(f"Progress: {progress_pct*100:.1f}% ({current_size_bytes/1024/1024/1024:.2f}GB) "
                         f"speed={speed_mb_per_sec:.2f}MB/s")
-                if progress_cb:
-                    await progress_cb(current_size_bytes, total_size_bytes if total_size_detected else None,
-                                    peers=progress_data.get('peers', 0) if progress_data else 0,
-                                    seeders=progress_data.get('seeders', 0) if progress_data else 0,
-                                    speed=int(speed_mb_per_sec * 1024 * 1024),
-                                    phase=phase,
-                                    phase_label=phase_label,
-                                    phase_progress=phase_progress)
+                try:
+                    if progress_cb:
+                        # Pass final_download_path as a new argument if available
+                        await progress_cb(
+                            current_size_bytes, 
+                            total_size_bytes if total_size_detected else 0, # Ensure total_size_bytes is int
+                            peers=progress_data.get('peers', 0) if progress_data else 0, 
+                            seeders=progress_data.get('seeders', 0) if progress_data else 0, 
+                            speed=int(speed_mb_per_sec * 1024 * 1024), # Convert to bytes/s (int)
+                            phase=phase,
+                            phase_label=phase_label,
+                            phase_progress=phase_progress,
+                            real_path=str(final_download_path) if final_download_path else None
+                        )
+                except Exception as e:
+                    print(f"Error calling progress_cb: {e}")
                 last_reported_size = current_size_bytes
                 last_reported_speed = speed_mb_per_sec
                 last_reported_progress_pct = progress_pct * 100
@@ -1039,24 +1231,45 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
                         aria2_meta_inside.unlink()
             except Exception as e:
                 print(f"Error managing .aria2 metadata: {e}")
-        elif canceled:
-            print(f"Download CANCELED - cleaning up files and metadata")
+        elif canceled or (final_status == "completed"):
+            print(f"Download {final_status.upper()} - cleaning up control files and residuals")
             try:
-                session_file, _ = _get_aria2_paths()
-                if session_file.exists():
-                    session_file.unlink()
+                # Use job_id for unique session cleanup
+                s_file, d_file = _get_aria2_paths(job_id)
+                for f in [s_file]:
+                    if f.exists():
+                        f.unlink()
+                        print(f"   [OK] Removed control file: {f}")
             except Exception as e:
-                print(f"Could not remove aria2.session: {e}")
-        else:
+                print(f"Could not remove aria2 control files: {e}")
+                
             try:
-                for pattern in ['.aria2', '.aria2c']:
-                    meta_file = Path(str(dest) + pattern)
-                    if meta_file.exists():
-                        meta_file.unlink()
-                for item in dest.parent.glob('*.torrent'):
-                    item.unlink()
-            except Exception:
-                pass
+                # Standard residual cleanup using the actual detected path
+                actual_root = final_download_path or detected_candidate or dest
+                parent_dir = actual_root.parent
+                base_name = actual_root.name.lower()
+                
+                # Clean specific patterns linked to this download
+                for pattern in ['.aria2', '.aria2c', '.torrent']:
+                    # 1. Direct match (Path + pattern)
+                    target = Path(str(actual_root) + pattern)
+                    if target.exists():
+                        target.unlink()
+                        print(f"   [OK] Removed direct residual: {target.name}")
+                    
+                    # 2. Aggressive substring match in parent dir (Online-Fix fix)
+                    # Search for any file.aria2 that contains the download's base name
+                    if parent_dir.exists():
+                        for item in parent_dir.iterdir():
+                            if item.is_file() and item.name.lower().endswith(pattern):
+                                # If filename matches or is contained within our root name (e.g. hytale.aria2 vs Hytale folder)
+                                if base_name in item.name.lower() or item.name.lower().replace(pattern, '') in base_name:
+                                    try:
+                                        item.unlink()
+                                        print(f"   [OK] Removed orphan residual via name matching: {item.name}")
+                                    except: pass
+            except Exception as cleanup_err:
+                print(f"Error during aggressive cleanup: {cleanup_err}")
 
         try:
             proc.wait(timeout=10)

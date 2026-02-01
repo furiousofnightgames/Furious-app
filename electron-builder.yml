@@ -25,6 +25,9 @@ win:
   signingHashAlgorithms:
     - sha256
   artifactName: ${productName}.${ext}
+  extraResources:
+    - from: data_seed/steam_applist.json
+      to: steam_applist.json
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
