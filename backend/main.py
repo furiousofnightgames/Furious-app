@@ -2396,6 +2396,9 @@ async def resume_job(job_id: int):
     # If aria2.session doesn't exist, aria2_wrapper will treat it as a fresh download.
     
     j.status = "queued"
+    j.status_reason = None
+    j.last_error = None
+    j.free_space_at_pause = None
     j.updated_at = datetime.now()
     session.add(j)
     session.commit()

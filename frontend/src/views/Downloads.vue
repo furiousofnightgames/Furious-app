@@ -1208,15 +1208,16 @@ watch(() => downloadStore.jobs.map(j => `${j.id}:${j.total}`), async (newVals, o
       if (total > oldTotal * 2 && total > 1024 * 1024 * 50) {
         console.log(`[Downloads] Tamanho do job ${id} aumentou drasticamente: ${oldTotal} -> ${total}`)
         const job = downloadStore.jobs.find(j => j.id === parseInt(id))
-        if (job) {
-          const disk = await downloadStore.getDiskSpace(job.dest)
-          if (disk && disk.free < total * 1.5) { // 1.5x por segurança pra baixar + unpack inicial
-            spaceWarnings.value[id] = `⚠️ O tamanho real foi detectado (${formatBytes(total)}). Seu disco pode não ter espaço suficiente.`
-            toastStore.push('Aviso de Espaço', `O download de "${job.name}" foi pausado pois o tamanho real (${formatBytes(total)}) excede o espaço seguro disponível.`)
-            // INTERROMPER O DOWNLOAD IMEDIATAMENTE
-            downloadStore.pauseJob(job.id)
+          if (job) {
+            const disk = await downloadStore.getDiskSpace(job.dest)
+            const remaining = total - (job.downloaded || 0)
+            if (disk && disk.free < remaining) { 
+              spaceWarnings.value[id] = `⚠️ O tamanho real foi detectado (${formatBytes(total)}). Seu disco não possui espaço suficiente para baixar o restante (${formatBytes(remaining)}).`
+              toastStore.push('Aviso de Espaço', `O download de "${job.name}" foi pausado pois o espaço necessário para o restante (${formatBytes(remaining)}) excede o disponível.`)
+              // INTERROMPER O DOWNLOAD IMEDIATAMENTE
+              downloadStore.pauseJob(job.id)
+            }
           }
-        }
       }
     }
   }
@@ -1376,6 +1377,7 @@ async function deleteJobFile(jobId) {
 
 async function pauseDownload(jobId) {
   try {
+    delete spaceWarnings.value[jobId]
     await downloadStore.pauseJob(jobId)
   } catch (e) {
     console.error('Erro ao pausar:', e)
@@ -1384,6 +1386,7 @@ async function pauseDownload(jobId) {
 
 async function resumeDownload(jobId) {
   try {
+    delete spaceWarnings.value[jobId]
     await downloadStore.resumeJob(jobId)
   } catch (e) {
     console.error('Erro ao continuar:', e)
@@ -1429,6 +1432,7 @@ async function retryDownload(jobId) {
     
     retryingJobId.value = jobId
     console.log(`[Downloads] Retrying job #${jobId}`)
+    delete spaceWarnings.value[jobId]
     await downloadStore.retryJob(jobId)
   } catch (e) {
     console.error('Erro ao tentar novamente:', e)

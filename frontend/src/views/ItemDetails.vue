@@ -786,7 +786,9 @@ const isRepackDetected = computed(() => {
 const estimatedRequiredSpace = computed(() => {
   const size = item.value?.size || modalInfo.value.size || 0
   if (!size) return 0
-  return isRepackDetected.value ? size * 2.5 : size * 1.1
+  // FIX: Reduced from 2.5 to 1.25 to avoid blocking users with tight but sufficient space.
+  // Although installation needs more, the download itself should be allowed.
+  return isRepackDetected.value ? size * 1.25 : size * 1.1
 })
 
 const isPlaceholderSize = computed(() => {

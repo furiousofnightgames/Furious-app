@@ -41,7 +41,7 @@
         <div class="relative p-6 flex items-center justify-between h-full">
           <div>
             <p class="text-purple-400/80 text-xs font-bold uppercase tracking-wider mb-1">Categorias</p>
-            <h3 class="text-4xl font-black text-purple-100 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">{{ libraryStats.total_groups }}</h3>
+            <h3 class="text-4xl font-black text-purple-100 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">{{ libraryStore.groups.length }}</h3>
           </div>
           <div class="w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.15)] group-hover:scale-110 transition-transform duration-300">
              <svg viewBox="0 0 24 24" fill="none" class="w-8 h-8 text-purple-400">
@@ -307,8 +307,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useDownloadStore } from '../stores/download'
+import { useLibraryStore } from '../stores/library'
+import { storeToRefs } from 'pinia'
 import api from '../services/api'
 import Card from '../components/Card.vue'
 import Button from '../components/Button.vue'
@@ -318,6 +320,9 @@ import Toggle from '../components/Toggle.vue'
 import { useToastStore } from '../stores/toast'
 
 const downloadStore = useDownloadStore()
+const libraryStore = useLibraryStore()
+const { stats: libraryStats } = storeToRefs(libraryStore)
+
 const sources = ref([])
 const showJsonPaste = ref(false)
 const newSourceUrl = ref('')
@@ -326,8 +331,19 @@ const downloadVerifySsl = ref({})
 const isAddingSource = ref(false)
 const addError = ref('')
 
-const libraryStats = ref({ total_items: 0, total_groups: 0 })
-const librarySourceCounts = ref({})
+// Computed counts based on global store groups
+const librarySourceCounts = computed(() => {
+  const counts = {}
+  libraryStore.groups.forEach(g => {
+    const versions = Array.isArray(g?.versions) ? g.versions : []
+    versions.forEach(it => {
+      if (it?.source_id != null) {
+        counts[it.source_id] = (counts[it.source_id] || 0) + 1
+      }
+    })
+  })
+  return counts
+})
 
 const showDeleteModal = ref(false)
 const sourceToDelete = ref(null)
@@ -335,37 +351,14 @@ const sourceToDelete = ref(null)
 onMounted(async () => {
   await downloadStore.fetchSources()
   sources.value = downloadStore.sources
-  await refreshLibraryInfo(false)
+  // Carregar biblioteca no background se não estiver carregada
+  if (!libraryStore.isLoaded) {
+    libraryStore.fetchLibrary()
+  }
 })
 
 const getSourceItemCount = (sourceId) => {
-  const v = librarySourceCounts.value?.[sourceId]
-  return typeof v === 'number' ? v : 0
-}
-
-async function refreshLibraryInfo(refresh) {
-  try {
-    const resp = await api.get('/api/library' + (refresh ? '?refresh=true' : ''))
-    const data = resp.data || {}
-    const groups = Array.isArray(data.groups) ? data.groups : []
-    libraryStats.value = {
-      total_items: data.total_items || 0,
-      total_groups: groups.length
-    }
-
-    const counts = {}
-    for (const g of groups) {
-      const versions = Array.isArray(g?.versions) ? g.versions : []
-      for (const it of versions) {
-        const sid = it?.source_id
-        if (sid == null) continue
-        counts[sid] = (counts[sid] || 0) + 1
-      }
-    }
-    librarySourceCounts.value = counts
-  } catch (e) {
-    // ignore; keep last known stats
-  }
+  return librarySourceCounts.value?.[sourceId] || 0
 }
 
 // Extrai nome amigável da URL da fonte
@@ -424,7 +417,11 @@ async function handleAddSource() {
 
     const result = await downloadStore.loadJsonFromUrl(newSourceUrl.value)
     sources.value = downloadStore.sources
-    await refreshLibraryInfo(true)
+    
+    // Marcar como não carregado para que a tela de Biblioteca atualize ao voltar
+    libraryStore.isLoaded = false
+    // Opcionalmente disparar sync silenciada em background
+    libraryStore.fetchLibrary(true).catch(() => {})
     
     newSourceUrl.value = ''
     
@@ -451,7 +448,11 @@ async function handleAddRawJson() {
     const data = JSON.parse(jsonPasteContent.value)
     const result = await downloadStore.loadJsonRaw(data)
     sources.value = downloadStore.sources
-    await refreshLibraryInfo(true)
+    
+    // Marcar como não carregado para que a tela de Biblioteca atualize ao voltar
+    libraryStore.isLoaded = false
+    libraryStore.fetchLibrary(true).catch(() => {})
+    
     jsonPasteContent.value = ''
     showJsonPaste.value = false
     
@@ -495,7 +496,10 @@ async function confirmDeleteSource() {
     const itemsAntes = downloadStore.items.length
     downloadStore.items = downloadStore.items.filter(i => i.source_id !== sourceId)
     console.log(`✓ [Sources] Items removidos: ${itemsAntes - downloadStore.items.length} items deletados`)
-    await refreshLibraryInfo(true)
+    
+    // Marcar como não carregado para que a tela de Biblioteca atualize ao voltar
+    libraryStore.isLoaded = false
+    libraryStore.fetchLibrary(true).catch(() => {})
     
     console.log(`✅ [Sources] Fonte #${sourceId} deletada com sucesso`)
     try { const ts = useToastStore(); ts.push('Fonte deletada', 'A fonte foi removida com sucesso') } catch (e) {}

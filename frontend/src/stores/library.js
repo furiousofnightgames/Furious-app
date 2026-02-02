@@ -73,6 +73,9 @@ export const useLibraryStore = defineStore('library', {
         this.isLoaded = true
         console.log(`[LibraryStore] Fetch complete. Loaded ${this.groups.length} groups. isLoaded set to TRUE.`)
 
+        // Automatic Optimizer Sync: Re-scan candidates and update queue
+        this.startBackgroundEnrichment().catch(() => { })
+
         // HYDRATION PASS: Pre-populate imageCache from DB items to avoid reactive delays
         // This ensures SteamGameCard finds the image in localStorage AT THE MOMENT of creation.
         try {
@@ -194,9 +197,6 @@ export const useLibraryStore = defineStore('library', {
         this._maxConcurrency = this.isTurbo ? 5 : 1
       }
 
-      if (this.isEnriching) {
-        return
-      }
       if (!this.groups.length) return
 
       // Identify candidates: Not already resolved AND (No genres OR no images)
@@ -209,12 +209,20 @@ export const useLibraryStore = defineStore('library', {
       })
 
       if (candidates.length === 0) {
-        console.log('[Enricher] Library already fully enriched.')
+        if (!this.isEnriching) console.log('[Enricher] Library already fully enriched.')
+        this.enrichmentQueue = []
+        return
+      }
+
+      // Update the queue with new candidates
+      this.enrichmentQueue = candidates.map(c => ({ name: c.name, appId: c.appId }))
+
+      if (this.isEnriching) {
+        console.log(`[Enricher] Queue updated while active (${candidates.length} items total)`)
         return
       }
 
       console.log(`[Enricher] Starting background sync for ${candidates.length} items. Concurrency: ${this._maxConcurrency}`)
-      this.enrichmentQueue = candidates.map(c => ({ name: c.name, appId: c.appId }))
       this.isEnriching = true
       this._activeWorkers = 0
 

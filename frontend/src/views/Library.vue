@@ -807,9 +807,8 @@ const isRepackDetected = computed(() => {
 const estimatedRequiredSpace = computed(() => {
   const size = selectedItem.value?.size || modalInfo.value.size || 0
   if (!size) return 0
-  // Para repacks (FitGirl, DODI), estimamos 2.5x o tamanho do download para a instalação
-  // Para outros, 1.1x (margem de segurança)
-  return isRepackDetected.value ? size * 2.5 : size * 1.1
+  // FIX: Reduzido para 1.25x conforme pedido do usuário (para evitar bloqueios falsos).
+  return isRepackDetected.value ? size * 1.25 : size * 1.1
 })
 
 const isPlaceholderSize = computed(() => {
@@ -869,11 +868,6 @@ async function fetchLibrary(refresh = false) {
   }
   
   finishLoadingProgress()
-
-  // Proactive Enrichment: Gently resolve all items in background
-  nextTick(() => {
-    libraryStore.startBackgroundEnrichment()
-  })
 }
 
 function refreshLibrary() {

@@ -195,6 +195,8 @@ class JobManager:
         # set status running
         j.status = "running"
         j.last_error = None
+        j.status_reason = None
+        j.free_space_at_pause = None
         j.updated_at = datetime.now()
         if not j.started_at:
             j.started_at = datetime.now()
@@ -351,9 +353,10 @@ class JobManager:
                     check_p = dest or str(Path.home() / "Downloads")
                     if os.path.exists(check_p):
                         _, _, free = shutil.disk_usage(check_p)
-                        # Threshold: Total size + 10% safety margin (for repacks, frontend handles the 2.5x estimate)
-                        if free < total * 1.1:
-                            print(f"[BLOQUEIO-BACKEND] Job {job_id} pausado por falta de espaço: Total={total}, Free={free}")
+                        # Threshold: Exact remaining size (user requested no margin after metadata resolution)
+                        needed_to_finish = total - downloaded
+                        if free < needed_to_finish:
+                            print(f"[BLOQUEIO-BACKEND] Job {job_id} pausado por falta de espaço real: Restante={needed_to_finish}, Free={free}")
                             try:
                                 # Usar a própria sessão do loop se possível para evitar conflitos
                                 j.status_reason = "insufficient_space"
@@ -365,7 +368,8 @@ class JobManager:
                             except Exception as db_err:
                                 print(f"[DiskCheck-DB-Error] Ocorreu um erro ao salvar o bloqueio: {db_err}")
                             
-                            stop_event.set() # This will cause aria2_wrapper to stop and return 'paused'
+                            # Use o mesmo fluxo de parada que o usuário usaria manualmente
+                            self.stop_job(job_id, pause=True)
                 except Exception as e:
                     print(f"[DiskCheck-Error] {e}")
 

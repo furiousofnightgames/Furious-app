@@ -437,40 +437,46 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--bt-save-metadata=true',
             '--bt-metadata-only=false',
             '--bt-load-saved-metadata=true',
-            '--bt-detach-seed-only=false',  # NUNCA desconectar de seeders!
+            '--bt-detach-seed-only=false',
             '--file-allocation=trunc',
             '--seed-time=0',
-            '--bt-max-peers=1000',
-            '--bt-max-open-files=256',
+            '--bt-max-peers=0',
+            '--bt-max-open-files=1024',
             '--max-connection-per-server=16',
             '--max-concurrent-downloads=1',
             '--check-integrity=false',
             '--log-level=debug',
             '--bt-tracker-connect-timeout=10',
-            '--bt-tracker-interval=30',
+            '--bt-tracker-interval=40',
             '--dht-listen-port=6881-6889',
             '--enable-dht=true',
-            '--enable-dht6=true',  # IPv6 DHT ativado para mais seeders
+            '--enable-dht6=true',
             '--bt-enable-lpd=true',
             '--dht-file-path=' + str(dht_file),
             '--summary-interval=1',
             '--max-tries=5',
             '--retry-wait=1',
-            # === OTIMIZAÇÕES SEGURAS (adicionadas) ===
             '--use-head=false',
             '--allow-piece-length-change=true',
-            '--max-upload-limit=300K',
+            '--max-upload-limit=0',
             '--bt-request-peer-speed-limit=0',
-            '--connect-timeout=15',
+            '--connect-timeout=5',
             '--min-split-size=1M',
             '--bt-request-peer-speed=1',
+            '--bt-require-crypto=false',
+            '--bt-min-crypto-level=plain',
+            '--peer-id-prefix=-qB4390-',
+            '--user-agent=qBittorrent/4.5.0',
+            '--listen-port=6881-6889',
+            '--enable-peer-exchange=true',
+            '--bt-hash-check-seed=false',
             '--input-file=' + str(session_file)
         ]
         if TRACKERS_EXTRAS:
             trackers_str = ','.join(TRACKERS_EXTRAS)
             cmd.append(f'--bt-tracker={trackers_str}')
             print(f" TRACKERS EXTRAS INJETADOS: {len(TRACKERS_EXTRAS)} trackers adicionados")
-        print(f" Session loaded - continuing download with existing GID and folder")
+        print(f" Session loaded - continuing download with aggressive optimizations")
     else:
         #  FRESH START: Full command with magnet URL and all parameters
         print(f"FRESH START: Creating new download session")
@@ -491,40 +497,41 @@ async def download_magnet_cli(magnet_url: str, dest_path: str, progress_cb: Opti
             '--bt-save-metadata=true',
             '--bt-metadata-only=false',
             '--bt-load-saved-metadata=true',
-            '--bt-detach-seed-only=false',  # NUNCA desconectar de seeders!
+            '--bt-detach-seed-only=false',
             '--file-allocation=trunc',
             '--seed-time=0',
-            '--bt-max-peers=0',  # Sem limite de peers
-            '--bt-max-open-files=256',  # Mais conexões simultâneas para seeders
+            '--bt-max-peers=0',
+            '--bt-max-open-files=1024',
             '--max-connection-per-server=16',
             '--max-concurrent-downloads=1',
             '--check-integrity=false',
             '--log-level=debug',
             '--bt-tracker-connect-timeout=10',
-            '--bt-tracker-interval=30',
+            '--bt-tracker-interval=40',
             '--dht-listen-port=6881-6889',
-            '--dht-entry-point=dht.transmissionbt.com:6881',  # DHT bootstrap para descoberta rápida
-            '--dht-entry-point6=dht.transmissionbt.com:6881',  # DHT bootstrap IPv6
+            '--dht-entry-point=dht.transmissionbt.com:6881',
+            '--dht-entry-point6=dht.transmissionbt.com:6881',
             '--enable-dht=true',
-            '--enable-dht6=true',  # IPv6 DHT ativado para mais seeders
+            '--enable-dht6=true',
             '--bt-enable-lpd=true',
             '--dht-file-path=' + str(dht_file),
             '--summary-interval=1',
             '--max-tries=5',
             '--retry-wait=1',
-            # === OTIMIZAÇÕES AGRESSIVAS PARA MÁXIMA PERFORMANCE ===
             '--use-head=false',
             '--allow-piece-length-change=true',
-            '--max-upload-limit=0',  # SEM LIMITE de upload (era 300K)
+            '--max-upload-limit=0',
             '--bt-request-peer-speed-limit=0',
-            '--connect-timeout=5',  # Reduzido de 15 para 5 (conecta mais rápido)
+            '--connect-timeout=5',
             '--min-split-size=1M',
             '--bt-request-peer-speed=1',
-            '--peer-id-prefix=-qB4390-',  # Simula qBittorrent para melhor aceitação
-            '--user-agent=qBittorrent/4.5.0',  # User agent qBittorrent (versão mais recente)
-            '--listen-port=6881-6889',  # Porta de escuta para conexões incoming
-            '--enable-peer-exchange=true',  # PEX para descobrir mais peers
-            '--bt-hash-check-seed=false',  # Não verifica hash ao retomar (mais rápido)
+            '--bt-require-crypto=false',
+            '--bt-min-crypto-level=plain',
+            '--peer-id-prefix=-qB4390-',
+            '--user-agent=qBittorrent/4.5.0',
+            '--listen-port=6881-6889',
+            '--enable-peer-exchange=true',
+            '--bt-hash-check-seed=false',
         ]
         
         # Injetar trackers extras para maximizar peers/seeders
