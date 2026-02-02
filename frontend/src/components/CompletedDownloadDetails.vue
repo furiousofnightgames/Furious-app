@@ -123,7 +123,7 @@
           </div>
           <div class="space-y-1">
             <p class="text-[9px] font-black text-slate-600 uppercase tracking-widest">Finalização</p>
-            <p class="text-xs font-black text-emerald-400">{{ formatDate(job.updated_at || job.completed_at) }}</p>
+            <p class="text-xs font-black text-emerald-400">{{ formatDate(job.completed_at || job.updated_at) }}</p>
           </div>
         </div>
       </div>

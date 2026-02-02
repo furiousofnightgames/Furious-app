@@ -1895,8 +1895,10 @@ async def list_jobs():
             item_id=j.item_id, 
             status=j.status, 
             progress=j.progress or prog.get('progress'), 
-            created_at=j.created_at.isoformat(), 
-            updated_at=j.updated_at.isoformat(), 
+            created_at=j.created_at.isoformat() if j.created_at else None, 
+            updated_at=j.updated_at.isoformat() if j.updated_at else None, 
+            started_at=j.started_at.isoformat() if j.started_at else None,
+            completed_at=j.completed_at.isoformat() if j.completed_at else None,
             last_error=j.last_error, 
             status_reason=getattr(j, "status_reason", None), # DEFENSIVO
             item_name=(item.name if item else None), 
@@ -1909,9 +1911,7 @@ async def list_jobs():
             size=j.size,
             free_space_at_pause=getattr(j, "free_space_at_pause", None), # DEFENSIVO
             setup_executed=j.setup_executed,
-            is_installing=(j.id in active_installers),
-            started_at=j.started_at.isoformat() if j.started_at else None,
-            completed_at=j.completed_at.isoformat() if j.completed_at else None
+            is_installing=(j.id in active_installers)
         ))
     session.close()
     return items
@@ -2329,7 +2329,19 @@ async def get_job(job_id: int):
         if not j:
             raise HTTPException(status_code=404, detail="Job not found")
         prog = job_manager.get_progress(job_id) or {}
-        out = dict(id=j.id, item_id=j.item_id, status=j.status, progress=j.progress or prog.get('progress'), updated_at=j.updated_at.isoformat(), last_error=j.last_error, downloaded=prog.get('downloaded'), total=prog.get('total'), speed=prog.get('speed'), resume_on_start=j.resume_on_start, verify_ssl=j.verify_ssl)
+        out = dict(
+            id=j.id, 
+            item_id=j.item_id, 
+            status=j.status, 
+            progress=j.progress or prog.get('progress'), 
+            created_at=j.created_at.isoformat() if j.created_at else None,
+            updated_at=j.updated_at.isoformat() if j.updated_at else None,
+            started_at=j.started_at.isoformat() if j.started_at else None,
+            completed_at=j.completed_at.isoformat() if j.completed_at else None,
+            last_error=j.last_error, 
+            verify_ssl=j.verify_ssl,
+            resume_on_start=j.resume_on_start
+        )
         # include item details
         if j.item_id:
             it = session.get(Item, j.item_id)
@@ -3709,6 +3721,7 @@ async def broadcast_progress():
                         is_installing=(j.id in active_installers),
                         dest=j.dest,
                         started_at=j.started_at.isoformat() if j.started_at else None,
+                        updated_at=j.updated_at.isoformat() if j.updated_at else None,
                         completed_at=j.completed_at.isoformat() if j.completed_at else None
                     )
                     p.update(prog)
