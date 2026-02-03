@@ -1,5 +1,10 @@
-=======
-# 🚀 Furious App - Acelerador de Downloads Profissional v3.3.1
+<div align="center">
+  <img src="launcher/images/icone.png" alt="Furious App Logo" width="120" height="120" style="border-radius: 50%;">
+
+  # 🚀 Furious App - Acelerador de Downloads Profissional v3.3.1
+
+  [**🌐 BAIXAR AGORA (Landing Page)**](https://furiousofnightgames.github.io/Furiousapp/)
+</div>
 
 Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.
 
@@ -175,10 +180,13 @@ Observação:
 ```bash
 # 1. Clonar o repositório
 git clone [URL_DO_REPOSITORIO]
-cd aplicacao-pessoal-json
+cd Furious-app
 
 # 2. Instalar dependências do backend
 pip install -r requirements.txt
+
+> [!IMPORTANT]
+> **Configuração da API Key**: Para que as capas e imagens dos jogos funcionem, você deve obter sua chave em [SteamGridDB API](https://www.steamgriddb.com/profile/api) e inseri-la no arquivo `backend/config.py` (variável `STEAMGRIDDB_API_KEY`).
 
 # 3. Instalar dependências do frontend
 cd frontend
@@ -263,7 +271,7 @@ Este projeto está licenciado sob a licença MIT. Veja o arquivo [LICENSE](LICEN
 ## ✉️ Contato
 
 Para suporte ou dúvidas, entre em contato:
-- Email: [seu-email@exemplo.com]
+- Email: furiousofnightgames@gmail.com
 - Issues do GitHub: [URL do repositório]/issues
 - Leia a documentação existente em [COMECE_AQUI_ELECTRON.md](COMECE_AQUI_ELECTRON.md), [SETUP_ELECTRON.md](SETUP_ELECTRON.md) e [ELECTRON_GUIDE.md](ELECTRON_GUIDE.md) para obter ajuda.
 - O cache do aplicativo está localizado em `%LOCALAPPDATA%\furious-app\Cache`.
@@ -373,7 +381,7 @@ portables/
 
 ```bash
 # 1. Clone ou extraia o projeto
-cd aplicacao-pessoal-json
+cd Furious-app
 
 # 2. Backend
 pip install -r requirements.txt
@@ -414,7 +422,7 @@ Test-Path "C:\Program Files (x86)\NSIS\makensis.exe"
 ## 📁 Estrutura de Pastas
 
 ```
-aplicacao-pessoal-json/
+Furious-app/
 ├── portables/
 │   ├── python-64bits/                (Python portátil)
 │   ├── node-v18.16.1-win-x64/        (Node.js portátil)

@@ -15,7 +15,7 @@ Bem-vindo ao Furious App, um gerenciador de downloads avançado com suporte a UR
 ```powershell
 # Clonar o repositório (se ainda não tiver feito)
 git clone [URL_DO_REPOSITORIO]
-cd aplicacao-pessoal-json
+cd Furious-app
 
 # Instalar dependências do backend
 pip install -r requirements.txt
@@ -127,7 +127,7 @@ python --version
 ### "Frontend não carrega"
 → Execute: `cd frontend && npm run build && cd ..`
 
-## 📊 O que Você Tem Agora (v3.4.0)
+## 📊 O que Você Tem Agora (v3.3.1)
 ```
 ✅ Aplicação Desktop (Electron) - Modo Game Hub
 ✅ Integridade Blindada (Quick-Check físico)
@@ -141,11 +141,9 @@ python --version
 
 ## 🎬 Começar Agora
 
-### Passo 1: Abra PowerShell
-
 ```powershell
 # Navegue até a pasta do projeto
-cd "c:\Users\diego\OneDrive\Documentos\aplicacao-json-versoes\aplicacao-pessoal-json"
+cd "caminho/para/Furious-app"
 ```
 
 ### Passo 2: Instale Dependências
@@ -201,8 +199,8 @@ Sua aplicação está pronta para ser distribuída como .exe!
 
 ---
 
-**Versão:** 3.1  
-**Data:** Janeiro 2026  
+**Versão:** 3.3.1  
+**Data:** Fevereiro 2026  
 **Status:** ✅ Pronto para Produção
 
 ## 📁 Onde ficam os dados (AppData)

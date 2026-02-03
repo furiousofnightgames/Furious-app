@@ -62,7 +62,7 @@ O Furious App evoluiu de um downloader para um **Hub de Gaming Premium**, oferec
 ## 📁 Estrutura do Projeto
 
 ```
-aplicacao-pessoal-json/
+Furious-app/
 ├── 📁 backend/                   # Backend Python (FastAPI)
 │   ├── main.py                 # Ponto de entrada da API
 │   ├── database/               # Modelos e migrações do banco de dados
@@ -140,7 +140,7 @@ aplicacao-pessoal-json/
 1. **Clonar o repositório**
    ```bash
    git clone [URL_DO_REPOSITORIO]
-   cd aplicacao-json-versoes
+   cd Furious-app
    ```
 
 2. **Instalar dependências do backend**
@@ -179,7 +179,7 @@ Isso irá:
    npm run build:installer
    ```
 
-O instalador será gerado na pasta `dist/`.
+O instalador será gerado na pasta `launcher/`.
 
 ## 🛠️ Solução de Problemas Comuns
 
@@ -199,7 +199,7 @@ O instalador será gerado na pasta `dist/`.
 
 1. Atualize a versão no `package.json`
 2. Execute `npm run build:installer`
-3. O instalador será gerado em `dist/Furious App Setup X.Y.Z.exe`
+3. O instalador será gerado em `launcher/Furious App Setup X.Y.Z.exe`
 
 ### 🆕 Atualizando o Banco de Dados Rico (Bundle)
 

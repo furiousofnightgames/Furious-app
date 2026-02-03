@@ -21,7 +21,7 @@ Guia completo para configurar o ambiente de desenvolvimento e produção do Furi
 
 ```bash
 git clone [URL_DO_REPOSITORIO]
-cd aplicacao-json-versoes
+cd Furious-app
 ```
 
 ### 2. Instalar Dependências do Backend
@@ -43,7 +43,7 @@ cd ..
 Certifique-se que a estrutura de diretórios está correta:
 
 ```
-📦 aplicacao-pessoal-json
+📦 furiousapp
 ├── backend/                  # API FastAPI
 │   ├── main.py
 │   ├── db.py
@@ -219,7 +219,7 @@ Gera: `frontend/dist/` com arquivos otimizados
 npm run build:electron
 ```
 
-Resultado: `dist/Furious App.exe` (executável portátil)
+Resultado: `launcher/win-unpacked/Furious App.exe` (executável portátil)
 
 ### Build com Instalador NSIS (.exe installer)
 
@@ -460,6 +460,6 @@ Para problemas:
 
 ---
 
-**Versão:** 3.1  
+**Versão:** 3.3.1  
 **Data:** Janeiro 2026  
 **Status:** ✅ Pronto para Produção

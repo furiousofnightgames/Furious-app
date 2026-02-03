@@ -12,8 +12,7 @@ Bem-vindo ao Furious App, um poderoso gerenciador de downloads com suporte a mú
 - 2GB de espaço livre em disco
 
 ### Passo a Passo
-1. Baixe o instalador mais recente da nossa página de lançamentos
-2. Execute o arquivo `Furious App Setup.exe`
+1. Execute o arquivo `launcher/Furious App Setup.exe` (gerado pelo build)
 3. Siga as instruções na tela
 4. O Furious App será instalado e um atalho será criado na área de trabalho
 

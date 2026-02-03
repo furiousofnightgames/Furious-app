@@ -14,8 +14,8 @@
 
 1. **Clonar o repositório**
    ```bash
-   git clone https://github.com/seu-usuario/aplicacao-pessoal-json.git
-   cd aplicacao-pessoal-json
+   git clone [URL_DO_REPOSITORIO]
+   cd Furious-app
    ```
 
 2. **Configurar Ambiente Virtual Python**
@@ -208,8 +208,8 @@ npm run build
 
 ## Contribuição
 
-1. Leia o [Código de Conduta](CODE_OF_CONDUCT.md)
-2. Abra uma issue para discutir sua proposta
+1. Consulte a documentação existente.
+2. Abra uma issue para discutir sua proposta.
 3. Envie um Pull Request com suas alterações
 4. Aguarde a revisão e feedback
 

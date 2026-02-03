@@ -29,5 +29,5 @@ else:
 DEFAULT_N_CONNS = int(os.environ.get("DEFAULT_N_CONNS", "4"))
 DEFAULT_CONCURRENCY = int(os.environ.get("DEFAULT_CONCURRENCY", "2"))
 
-# External Services
-STEAMGRIDDB_API_KEY = os.environ.get("STEAMGRIDDB_API_KEY", "7bc101bec7908e8671f505a6612c4868")
+# External Services (Obtenha sua chave em https://www.steamgriddb.com/profile/api)
+STEAMGRIDDB_API_KEY = os.environ.get("STEAMGRIDDB_API_KEY", "SUA_CHAVE_AQUI")
