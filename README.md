@@ -1,14 +1,32 @@
- # 🚀 Furious App - Acelerador de Downloads Profissional v3.3.1
-
 <div align="center">
-  <img src="launcher/images/icone.png" alt="Furious App Logo" width="160" height="160" style="border-radius: 50%;">
+  <br />
+  <img src="launcher/images/icone.png" alt="Furious App Logo" width="150" height="150" style="border-radius: 20%; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
 
-  [**🌐 BAIXAR AGORA (Landing Page)**](https://furiousofnightgames.github.io/Furiousapp/)
+  <h1 align="center">Furious App</h1>
+
+  **O Acelerador de Downloads Definitivo para Gamers.**
+  
+  *Gerencie sua biblioteca, descubra jogos e baixe com velocidade máxima.*
+
+  [![Version](https://img.shields.io/badge/version-3.3.1-blue.svg?style=for-the-badge)](https://github.com/furiousofnightgames/Furiousapp/releases)
+  [![Platform](https://img.shields.io/badge/platform-Windows-00a2ed.svg?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com)
+  [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
+  [![Stack](https://img.shields.io/badge/stack-Electron%20%2B%20Vue%20%2B%20Python-orange.svg?style=for-the-badge)](ELECTRON_GUIDE.md)
+
+  <br />
+
+  <h3>
+    <a href="https://furiousofnightgames.github.io/Furiousapp/">🌐 DOWNLOAD (Landing Page)</a>
+    <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+    <a href="COMECE_AQUI_ELECTRON.md">📚 GUIA DE INÍCIO</a>
+    <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+    <a href="https://github.com/furiousofnightgames/Furiousapp/issues">🐛 REPORTAR BUG</a>
+  </h3>
+  <br />
 </div>
 
-Sistema completo de gerenciamento de downloads com interface web moderna. Suporta URLs diretas, magnets, torrents e JSON com fontes customizadas.
-
-**Versão 3.3 estável disponível!** - Com suporte completo a Windows e interface otimizada.
+> [!NOTE]
+> **Versão 3.3.1 Estável Disponível!** Agora com suporte total a detecção de Repacks, verificação de integridade pós-download e interface "Glassmorphic" premium.
 
 ## 🆕 Novidades na Versão 3.3.1
 - ✅ **Repacks e Placeholders**: Detecção automática de jogos Repack e arquivos "Placeholder" para evitar erros de espaço em disco.
