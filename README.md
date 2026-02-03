@@ -1,7 +1,7 @@
-<div align="center">
-  <img src="launcher/images/icone.png" alt="Furious App Logo" width="120" height="120" style="border-radius: 50%;">
+ # 🚀 Furious App - Acelerador de Downloads Profissional v3.3.1
 
-  # 🚀 Furious App - Acelerador de Downloads Profissional v3.3.1
+<div align="center">
+  <img src="launcher/images/icone.png" alt="Furious App Logo" width="160" height="160" style="border-radius: 50%;">
 
   [**🌐 BAIXAR AGORA (Landing Page)**](https://furiousofnightgames.github.io/Furiousapp/)
 </div>
@@ -16,7 +16,7 @@ Sistema completo de gerenciamento de downloads com interface web moderna. Suport
 - ✅ **Interface Refinada**: Novos modais com design premium, animações e feedback visual melhorado.
 - ✅ **Gerenciamento de Cache**: Melhorias na limpeza automática e persistência de dados.
 
-## 🌟 Destaques da Versão 3.1.0
+## 🌟 Destaques da Versão 3.3.1
 - ✅ **Biblioteca Global Unificada**: Nova interface "Biblioteca" que agrega todos os itens de todas as fontes JSON. Inclui busca rápida, paginação otimizada, agrupamento inteligente de versões e cache de imagens.
 - ✅ **Pré-flight Check (Sondagem)**: Analisador pré-download que verifica saúde do link, disponibilidade do aria2, status HTTP e conta seeds/peers reais (UDP) antes de iniciar o download.
 - ✅ **Engine de Download Ultra-Robusto**: Sistema aprimorado com fallback automático e headers de navegador
