@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="fixed inset-0 z-50">
+  <div v-if="open" class="fixed inset-0 z-[10000]">
     <div class="absolute inset-0 bg-black/60" @click="$emit('close')" />
 
     <aside
